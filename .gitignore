@@ -1,0 +1,5 @@
+# Output directories
+e2e/logs
+# Build artifacts
+build/
+faro
