@@ -20,11 +20,12 @@ type LogMessage struct {
 
 // Logger provides channel-based logging for all components
 type Logger struct {
-	logChan chan LogMessage
-	logFile *os.File
-	ctx     context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	logChan    chan LogMessage
+	logFile    *os.File
+	ctx        context.Context
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	bufferSize int // Configurable buffer size
 }
 
 // NewLogger creates a new channel-based logger that uses klog for console and custom file output
@@ -45,11 +46,14 @@ func NewLogger(logDir string) (*Logger, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	
+	bufferSize := 100000 // Default 100K buffer size
+	
 	logger := &Logger{
-		logChan: make(chan LogMessage, 1000), // Buffered channel for performance
-		logFile: logFile,
-		ctx:     ctx,
-		cancel:  cancel,
+		logChan:    make(chan LogMessage, bufferSize),
+		logFile:    logFile,
+		ctx:        ctx,
+		cancel:     cancel,
+		bufferSize: bufferSize,
 	}
 	
 	// Start log processing goroutine
@@ -143,7 +147,7 @@ func (l *Logger) Log(level int, component, message string) {
 		// Message sent successfully
 	default:
 		// Channel full - use klog directly to avoid blocking
-		klog.Errorf("[OVERFLOW] [%s] %s", component, message)
+		klog.Errorf("[FARO-LOG-BUFFER-FULL] [%s] %s", component, message)
 	}
 }
 
