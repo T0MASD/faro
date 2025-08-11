@@ -1,16 +1,17 @@
 # Faro Architecture
 
-Kubernetes resource observation tool with dynamic discovery and configuration-driven informer management.
+Kubernetes resource observation tool and Go library with dynamic discovery and configuration-driven informer management.
 
 ## System Overview
 
-**Purpose**: Monitor Kubernetes resource lifecycle events (ADDED/UPDATED/DELETED) across namespaced and cluster-scoped resources using dynamic informer creation.
+**Purpose**: Monitor Kubernetes resource lifecycle events (ADDED/UPDATED/DELETED) across namespaced and cluster-scoped resources using dynamic informer creation. Available as CLI tool and Go library.
 
 **Key Characteristics**:
 - Configuration-driven informer creation
 - Real-time API discovery
 - Work queue-based event processing
 - Dual configuration format support
+- Event handler interface for library consumption
 
 ## Core Components
 
@@ -28,13 +29,14 @@ Kubernetes resource observation tool with dynamic discovery and configuration-dr
 
 ### Controller Architecture
 ```
-Event Flow: Resource Change → Informer → Work Queue → Worker → Reconcile → Log
+Event Flow: Resource Change → Informer → Work Queue → Worker → Reconcile → Log + Event Handlers
 ```
 
 **Components**:
 - **Controller**: Main orchestrator with work queue pattern
 - **Informer Management**: Dynamic creation/destruction of resource informers
 - **Worker Pool**: Asynchronous event processing with rate limiting and retries
+- **Event Handlers**: Callback interface for library consumers
 - **Lister Management**: Cached object retrieval for DELETED event validation
 
 ### Work Queue System
@@ -52,6 +54,19 @@ type WorkItem struct {
     GVRString string             // group/version/resource
     Configs   []NormalizedConfig // applicable filtering rules
     EventType string             // ADDED/UPDATED/DELETED
+}
+
+type MatchedEvent struct {
+    EventType string                      // ADDED/UPDATED/DELETED
+    Object    *unstructured.Unstructured  // Full Kubernetes object
+    GVR       string                      // Group/Version/Resource identifier
+    Key       string                      // namespace/name or name
+    Config    NormalizedConfig            // Configuration that matched
+    Timestamp time.Time                   // When processed
+}
+
+type EventHandler interface {
+    OnMatched(event MatchedEvent) error
 }
 
 type NormalizedConfig struct {
@@ -114,6 +129,29 @@ resources:
 4. **Worker Processing**: Pull from queue, validate against configuration
 5. **Business Logic**: Execute filtering, logging, and state tracking
 
+## Library Interface
+
+### Event Handler Registration
+```go
+// Register handlers for matched events
+controller.AddEventHandler(&MyHandler{})
+
+// Handler receives filtered events
+type MyHandler struct{}
+func (h *MyHandler) OnMatched(event MatchedEvent) error {
+    // Process matched Kubernetes resource event
+    return nil
+}
+```
+
+### Library vs CLI
+- **CLI**: Uses built-in logging handler for file output
+- **Library**: Event handlers receive `MatchedEvent` structs
+- **Configuration**: Same YAML configs for both CLI and library
+- **Filtering**: Identical logic applies events to registered handlers
+
+**See**: [Library Usage Guide](library-usage.md) for comprehensive examples and patterns.
+
 ## Key Design Decisions
 
 ### Informer Deduplication
@@ -127,7 +165,7 @@ resources:
 - **Benefits**: Non-blocking event detection, unified error handling
 
 ### Configuration Architecture
-- **Dual Support**: Both legacy and modern configuration formats supported
+- **Dual Support**: Both namespace-centric and resource-centric configuration formats
 - **Normalization**: Single internal processing path regardless of input format
 - **Validation**: Server-side label selector application for efficiency
 
@@ -154,9 +192,15 @@ resources:
 pkg/
 ├── client.go     # Kubernetes client initialization
 ├── config.go     # Configuration parsing and normalization  
-├── controller.go # Main controller and informer management
-├── logger.go     # Asynchronous logging system
-└── main.go       # Entry point and lifecycle management
+├── controller.go # Controller, informer management, event handlers
+├── logger.go     # Callback-based logging system
+main.go           # CLI entry point
+examples/
+├── library-usage.go         # Basic library usage example
+└── worker-dispatcher.go     # Worker dispatcher pattern example
+e2e/
+├── test8.go      # Library-based test implementation
+└── test*.sh      # CLI and library test suite
 ```
 
 ## Concurrency Model

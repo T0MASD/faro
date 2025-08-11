@@ -1,4 +1,4 @@
-module github.com/kubetube/faro
+module github.com/T0MASD/faro
 
 go 1.24.0
 

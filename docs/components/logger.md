@@ -1,23 +1,25 @@
 # Logger Component
 
-Asynchronous channel-based logging system with dual output streams.
+Callback-based logging system with pluggable handlers.
 
 ## Core Structure
 
 ```go
 type Logger struct {
-    logChan chan LogMessage     // Buffered channel for async processing
-    logFile *os.File           // File handle for log output
-    ctx     context.Context    // Cancellation context
-    cancel  context.CancelFunc // Shutdown control
-    wg      sync.WaitGroup     // Goroutine coordination
+    handlers []LogHandler
+    mu       sync.RWMutex
 }
 
-type LogMessage struct {
-    Level     int    // klog levels: -1=Debug, 0=Info, 1=Warning, 2=Error, 3=Fatal
-    Component string // Component identifier (e.g., "controller", "main")
-    Message   string // Log message content
-    Timestamp time.Time // Message creation time
+type LogHandler interface {
+    WriteLog(level int, component, message string, timestamp time.Time) error
+    Name() string
+    Close() error
+}
+
+type ConsoleLogHandler struct{}
+type FileLogHandler struct {
+    file *os.File
+    mu   sync.Mutex
 }
 ```
 
@@ -25,25 +27,21 @@ type LogMessage struct {
 
 ```mermaid
 graph TD
-    A[Component] --> B[Logger Method]
-    B --> C[Create LogMessage]
-    C --> D{Channel Available?}
-    D -->|Yes| E[Send to Channel]
-    D -->|No| F[Overflow Protection]
+    A[Component] --> B[Logger.Log()]
+    B --> C[Create Message]
+    C --> D[Iterate Handlers]
     
-    E --> G[Log Processing Goroutine]
-    F --> H[Direct klog Output]
+    D --> E[ConsoleLogHandler]
+    D --> F[FileLogHandler]
+    D --> G[Custom Handlers...]
     
-    G --> I[Console Output via klog]
-    G --> J[File Output]
+    E --> H[klog Output]
+    F --> I[File Output]
+    G --> J[External Systems]
     
-    I --> K[Standard klog Format]
-    J --> L[Custom File Format]
-    
-    subgraph "Dual Output"
-        K --> M[Terminal/Console]
-        L --> N[Timestamped Log File]
-    end
+    H --> K[Terminal/Console]
+    I --> L[Timestamped Log File]
+    J --> M[Monitoring/Alerts]
 ```
 
 ## Message Flow
@@ -72,32 +70,28 @@ sequenceDiagram
 ### Logger Creation
 ```go
 func NewLogger(logDir string) (*Logger, error) {
-    // Create log directory
-    if err := os.MkdirAll(logDir, 0755); err != nil {
-        return nil, fmt.Errorf("failed to create log directory: %v", err)
-    }
-    
-    // Generate timestamped filename
-    timestamp := time.Now().Format("20060102-150405")
-    logPath := fmt.Sprintf("%s/faro-%s.log", logDir, timestamp)
-    
-    // Open file for writing
-    logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create log file: %v", err)
-    }
-    
-    // Initialize logger with buffered channel
     logger := &Logger{
-        logChan: make(chan LogMessage, 1000), // Buffer size: 1000 messages
-        logFile: logFile,
-        ctx:     ctx,
-        cancel:  cancel,
+        handlers: make([]LogHandler, 0),
     }
     
-    // Start processing goroutine
-    logger.wg.Add(1)
-    go logger.processLogs()
+    // Always add console handler
+    logger.AddHandler(&ConsoleLogHandler{})
+    
+    // Add file handler if logDir specified
+    if logDir != "" {
+        if err := os.MkdirAll(logDir, 0755); err != nil {
+            return nil, fmt.Errorf("failed to create log directory: %v", err)
+        }
+        
+        timestamp := time.Now().Format("20060102-150405")
+        logPath := fmt.Sprintf("%s/faro-%s.log", logDir, timestamp)
+        
+        fileHandler, err := NewFileLogHandler(logPath)
+        if err != nil {
+            return nil, fmt.Errorf("failed to create file handler: %v", err)
+        }
+        logger.AddHandler(fileHandler)
+    }
     
     return logger, nil
 }
@@ -110,46 +104,40 @@ func NewLogger(logDir string) (*Logger, error) {
 
 ## Message Processing
 
-### Asynchronous Processing Loop
+### Handler Processing
 ```go
-func (l *Logger) processLogs() {
-    defer l.wg.Done()
+func (l *Logger) Log(level int, component, message string) {
+    timestamp := time.Now()
     
-    for {
-        select {
-        case <-l.ctx.Done():
-            // Graceful shutdown: drain remaining messages
-            for {
-                select {
-                case msg := <-l.logChan:
-                    l.writeLog(msg)
-                default:
-                    return
-                }
-            }
-        case msg := <-l.logChan:
-            l.writeLog(msg)
+    l.mu.RLock()
+    handlers := l.handlers
+    l.mu.RUnlock()
+    
+    for _, handler := range handlers {
+        if err := handler.WriteLog(level, component, message, timestamp); err != nil {
+            klog.Errorf("Log handler '%s' failed: %v", handler.Name(), err)
         }
     }
 }
 ```
 
-### Overflow Protection
+### Handler Management
 ```go
-func (l *Logger) Log(level int, component, message string) {
-    msg := LogMessage{
-        Level:     level,
-        Component: component,
-        Message:   message,
-        Timestamp: time.Now(),
-    }
-    
-    select {
-    case l.logChan <- msg:
-        // Success: message queued
-    default:
-        // Channel full: use direct klog to prevent blocking
-        klog.Errorf("[OVERFLOW] [%s] %s", component, message)
+func (l *Logger) AddHandler(handler LogHandler) {
+    l.mu.Lock()
+    defer l.mu.Unlock()
+    l.handlers = append(l.handlers, handler)
+}
+
+func (l *Logger) RemoveHandler(name string) {
+    l.mu.Lock()
+    defer l.mu.Unlock()
+    for i, handler := range l.handlers {
+        if handler.Name() == name {
+            l.handlers = append(l.handlers[:i], l.handlers[i+1:]...)
+            handler.Close()
+            break
+        }
     }
 }
 ```
@@ -242,70 +230,69 @@ logger.Error("client", fmt.Sprintf("Failed to connect: %v", err))
 [component] message content
 ```
 
-**Example**: `[controller] Starting sophisticated multi-layered informer controller`
+**Example**: `[controller] Starting multi-layered informer controller`
 
 ## Performance Characteristics
 
-### Channel Buffering
-- **Buffer Size**: 1000 messages
-- **Overflow Behavior**: Direct klog output
-- **Memory Usage**: ~100KB for full buffer (assuming 100 bytes per message)
+### Handler Processing
+- **Synchronous**: Direct handler calls (no buffering/channels)
+- **Reliability**: No message loss from buffer overflows
+- **Thread Safety**: RWMutex protects handler list
 
 ### I/O Operations
 - **File Sync**: Immediate sync after each write
 - **Console Output**: Managed by klog buffering
-- **Async Processing**: Non-blocking for application components
+- **Error Handling**: Handler failures logged but don't block
 
 ## Graceful Shutdown
 
 ### Shutdown Sequence
 ```mermaid
 graph TD
-    A[Shutdown() Called] --> B[Cancel Context]
-    B --> C[Signal Processor to Stop]
-    C --> D[Drain Remaining Messages]
-    D --> E[Wait for Processor Goroutine]
-    E --> F[Close Channel]
-    F --> G[Close Log File]
-    G --> H[Flush klog Buffers]
+    A[Shutdown() Called] --> B[Close All Handlers]
+    B --> C[Flush klog Buffers]
+    C --> D[Complete]
 ```
 
 ### Implementation
 ```go
 func (l *Logger) Shutdown() {
-    l.cancel()        // Stop accepting new messages
-    l.wg.Wait()       // Wait for processor to finish
-    close(l.logChan)  // Clean up channel
-    if l.logFile != nil {
-        l.logFile.Close()  // Close file handle
+    l.mu.Lock()
+    defer l.mu.Unlock()
+    
+    for _, handler := range l.handlers {
+        if err := handler.Close(); err != nil {
+            klog.Errorf("Failed to close handler '%s': %v", handler.Name(), err)
+        }
     }
-    klog.Flush()      // Ensure all console output written
+    
+    klog.Flush()  // Ensure all console output written
 }
 ```
 
 ## Error Handling
 
-### Channel Overflow
-- **Detection**: Channel buffer full
-- **Response**: Direct klog output with `[OVERFLOW]` prefix
-- **Recovery**: Automatic when buffer space available
+### Handler Failures
+- **Isolation**: Individual handler failures don't affect others
+- **Logging**: Handler errors logged via klog.Errorf
+- **Continuation**: Failed handlers don't block message processing
 
 ### File Write Errors
-- **Silent Failure**: File write errors not propagated
-- **Console Fallback**: klog output continues regardless
+- **Error Reporting**: File write errors returned and logged
+- **Console Fallback**: Console handler continues independently
 - **File Sync**: Explicit sync ensures data persistence
 
 ## Thread Safety
 
 ### Concurrent Access
-- **Channel Operations**: Thread-safe Go channel
-- **File Writing**: Single goroutine writer
+- **Handler List**: Protected by RWMutex
+- **Handler Calls**: Individual handlers must be thread-safe
 - **klog Integration**: Thread-safe klog operations
 
 ### Synchronization
-- **WaitGroup**: Ensures processor goroutine completion
-- **Context Cancellation**: Coordinated shutdown signaling
-- **Channel Closure**: Prevents writes after shutdown
+- **RWMutex**: Reader-writer lock for handler list access
+- **Handler Design**: Each handler manages its own synchronization
+- **No Channels**: Eliminates channel-related race conditions
 
 ## Integration Points
 

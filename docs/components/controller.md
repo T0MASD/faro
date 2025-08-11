@@ -1,6 +1,6 @@
 # Controller Component
 
-Multi-layered Kubernetes informer controller with work queue-based event processing.
+Multi-layered Kubernetes informer controller with work queue-based event processing and library interface.
 
 ## Core Structure
 
@@ -18,6 +18,10 @@ type Controller struct {
     // Work queue system
     workQueue workqueue.RateLimitingInterface
     workers   int
+    
+    // Event handler interface
+    eventHandlers []EventHandler
+    handlersMu    sync.RWMutex
     
     // API discovery
     discoveredResources map[string]*ResourceInfo
@@ -88,13 +92,26 @@ sequenceDiagram
     W->>Q: Done(item)
 ```
 
-### WorkItem Structure
+### Event Structures
 ```go
 type WorkItem struct {
     Key       string             // namespace/name or name
     GVRString string             // group/version/resource
     Configs   []NormalizedConfig // filtering rules
     EventType string             // ADDED/UPDATED/DELETED
+}
+
+type MatchedEvent struct {
+    EventType string                      // ADDED/UPDATED/DELETED
+    Object    *unstructured.Unstructured  // Full Kubernetes object
+    GVR       string                      // Group/Version/Resource
+    Key       string                      // namespace/name or name
+    Config    NormalizedConfig            // Matched configuration
+    Timestamp time.Time                   // Processing timestamp
+}
+
+type EventHandler interface {
+    OnMatched(event MatchedEvent) error
 }
 ```
 
@@ -356,6 +373,43 @@ func (c *Controller) Stop() {
 }
 ```
 
+## Library Interface
+
+### Event Handler Registration
+```go
+func (c *Controller) AddEventHandler(handler EventHandler) {
+    c.handlersMu.Lock()
+    defer c.handlersMu.Unlock()
+    c.eventHandlers = append(c.eventHandlers, handler)
+}
+```
+
+### Event Processing Pipeline
+```go
+// In processObject() after filtering match:
+matchedEvent := MatchedEvent{
+    EventType: eventType,
+    Object:    obj,
+    GVR:       gvrString,
+    Key:       key,
+    Config:    config,
+    Timestamp: time.Now(),
+}
+
+// Call registered handlers concurrently
+c.handlersMu.RLock()
+handlers := c.eventHandlers
+c.handlersMu.RUnlock()
+
+for _, handler := range handlers {
+    go func(h EventHandler, event MatchedEvent) {
+        if err := h.OnMatched(event); err != nil {
+            c.logger.Warning("controller", fmt.Sprintf("Event handler failed: %v", err))
+        }
+    }(handler, matchedEvent)
+}
+```
+
 ## Concurrency Model
 
 ### Thread Safety
@@ -363,6 +417,7 @@ func (c *Controller) Stop() {
 - **Sync.Map**: Concurrent access to informer metadata
 - **Context Cancellation**: Safe informer lifecycle management
 - **Wait Groups**: Coordinated goroutine shutdown
+- **Library Handlers**: Called asynchronously in separate goroutines
 
 ### Worker Pool Management
 - **Default Workers**: 3 goroutines

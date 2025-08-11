@@ -35,6 +35,21 @@ type WorkItem struct {
 	EventType string             // ADDED, UPDATED, DELETED
 }
 
+// MatchedEvent represents a filtered event that matched configuration patterns
+type MatchedEvent struct {
+	EventType string                      // ADDED, UPDATED, DELETED
+	Object    *unstructured.Unstructured  // Full Kubernetes object
+	GVR       string                      // Group/Version/Resource identifier
+	Key       string                      // namespace/name or name
+	Config    NormalizedConfig            // Configuration that matched this event
+	Timestamp time.Time                   // When the event was processed
+}
+
+// EventHandler interface for handling matched events via callbacks
+type EventHandler interface {
+	OnMatched(event MatchedEvent) error
+}
+
 // Controller implements the sophisticated multi-layered informer architecture
 type Controller struct {
 	client *KubernetesClient
@@ -60,6 +75,10 @@ type Controller struct {
 
 	// Track builtin informer count
 	builtinCount int
+
+	// Event handlers for library usage
+	eventHandlers []EventHandler
+	handlersMu    sync.RWMutex
 }
 
 // NewController creates a new informer-based controller
@@ -75,7 +94,15 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 		workQueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "faro-controller"),
 		workers:             3, // Start with 3 worker goroutines
 		discoveredResources: make(map[string]*ResourceInfo),
+		eventHandlers:       make([]EventHandler, 0),
 	}
+}
+
+// AddEventHandler registers an event handler for matched events
+func (c *Controller) AddEventHandler(handler EventHandler) {
+	c.handlersMu.Lock()
+	defer c.handlersMu.Unlock()
+	c.eventHandlers = append(c.eventHandlers, handler)
 }
 
 // Start initializes and starts the multi-layered informer architecture
@@ -1026,7 +1053,36 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 	for _, config := range configs {
 		// Check if this object matches the config's patterns
 		if c.matchesConfig(obj, config) {
-			// Log the matched event
+			// Create matched event for handlers
+			matchedEvent := MatchedEvent{
+				EventType: eventType,
+				Object:    obj,
+				GVR:       gvrString,
+				Key:       obj.GetNamespace() + "/" + obj.GetName(),
+				Config:    config,
+				Timestamp: time.Now(),
+			}
+			
+			// For cluster-scoped resources, key is just the name
+			if resourceNamespace == "" {
+				matchedEvent.Key = resourceName
+			}
+			
+			// Call event handlers (non-blocking)
+			c.handlersMu.RLock()
+			handlers := c.eventHandlers
+			c.handlersMu.RUnlock()
+			
+			for _, handler := range handlers {
+				// Call handler in goroutine to avoid blocking Faro
+				go func(h EventHandler, event MatchedEvent) {
+					if err := h.OnMatched(event); err != nil {
+						c.logger.Warning("controller", fmt.Sprintf("Event handler failed: %v", err))
+					}
+				}(handler, matchedEvent)
+			}
+			
+			// Log the matched event (preserve existing behavior)
 			if resourceNamespace != "" {
 				c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s, pattern: %s)",
 					eventType, gvrString, resourceNamespace, resourceName, resourceUID, config.GVR))
@@ -1034,7 +1090,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 				c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, pattern: %s)",
 					eventType, gvrString, resourceName, resourceUID, config.GVR))
 			}
-			break // Only log once per object
+			break // Only process once per object
 		}
 	}
 

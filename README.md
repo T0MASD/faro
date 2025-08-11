@@ -8,11 +8,11 @@
 
 # Faro
 
-Kubernetes resource observation tool with dynamic discovery and configuration-driven informer management, was rapidly developed in a single day. The project's efficiency is a testament to the power of meticulous prompt engineering.
+Kubernetes resource observation tool and Go library with dynamic discovery and configuration-driven informer management.
 
 ## System Overview
 
-**Purpose**: Monitor Kubernetes resource lifecycle events (ADDED/UPDATED/DELETED) across namespaced and cluster-scoped resources using dynamic informer creation.
+**Purpose**: Monitor Kubernetes resource lifecycle events (ADDED/UPDATED/DELETED) across namespaced and cluster-scoped resources using dynamic informer creation. Available as both CLI tool and Go library.
 
 **Key Characteristics**:
 - Configuration-driven informer creation
@@ -21,6 +21,7 @@ Kubernetes resource observation tool with dynamic discovery and configuration-dr
 - Dual configuration format support (namespace-centric and resource-centric)
 - Server-side label selector filtering
 - Regex pattern matching for resource and namespace names
+- Library interface with event handler callbacks
 
 ## Architecture
 
@@ -30,7 +31,8 @@ Kubernetes resource observation tool with dynamic discovery and configuration-dr
 - **Discovery Engine**: Runtime API enumeration with automatic scope detection and CRD monitoring  
 - **Controller Architecture**: Multi-layered informer management with work queue pattern
 - **Event Processing**: Asynchronous processing with exponential backoff and graceful shutdown
-- **Logging System**: Structured async logging with overflow protection and dual output streams
+- **Logging System**: Callback-based logging with pluggable handlers
+- **Library Interface**: Event handler registration for external consumption
 
 ### Processing Flow
 
@@ -89,24 +91,49 @@ resources:
 - **Async Processing**: Non-blocking log operations with channel-based queueing
 - **Auto-Shutdown**: Configurable timeout for testing and automation scenarios
 
-## Build and Test
+## Usage
 
+### CLI Tool
 ```bash
-# Build
+# Build and run
 make build
+./faro --config config.yaml
+```
 
-# Run E2E tests
+### Go Library
+```go
+import "github.com/T0MASD/faro/pkg"
+
+// Load config and create components
+config, _ := faro.LoadFromYAML("config.yaml")
+client, _ := faro.NewKubernetesClient()
+logger, _ := faro.NewLogger(config.GetLogDir())
+controller := faro.NewController(client, logger, config)
+
+// Register event handler
+controller.AddEventHandler(&MyHandler{})
+
+// Start monitoring
+controller.Start()
+```
+
+### Examples
+```bash
+# Run library examples
+make examples             # All examples
+make example-library      # Basic usage
+make example-worker       # Worker dispatcher
+
+# Run all E2E tests (includes library tests)
 make test-e2e
-
-# Development setup
-make dev-setup
 ```
 
 ## Documentation
 
 - [Architecture Overview](docs/architecture.md) - Complete system design
+- [Library Usage Guide](docs/library-usage.md) - Comprehensive Go library examples and patterns
 - [Component Reference](docs/components/) - Detailed component documentation
   - [Client](docs/components/client.md) - Kubernetes API client management
   - [Config](docs/components/config.md) - Configuration processing and validation
-  - [Controller](docs/components/controller.md) - Informer lifecycle management
-  - [Logger](docs/components/logger.md) - Async logging system
+  - [Controller](docs/components/controller.md) - Event handler interface and informer lifecycle
+  - [Logger](docs/components/logger.md) - Callback-based logging system

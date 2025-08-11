@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
-	faro "github.com/kubetube/faro/pkg"
+	faro "github.com/T0MASD/faro/pkg"
 )
 
 func main() {
