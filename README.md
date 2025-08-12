@@ -8,20 +8,32 @@
 
 # Faro
 
-Kubernetes resource observation tool and Go library with dynamic discovery and configuration-driven informer management.
+**Smart Kubernetes resource monitoring** with dual label filtering, dynamic discovery, and flexible configuration formats.
+
+> 🎯 **Perfect for**: CI/CD pipeline monitoring, production workload tracking, security compliance, and custom resource management
+
+## Why Faro?
+
+| **Feature** | **Faro** | **kubectl get --watch** | **Custom Controllers** |
+|-------------|----------|-------------------------|------------------------|
+| **Configuration-Driven** | ✅ YAML configs | ❌ CLI only | ❌ Code-based |
+| **Dual Label Filtering** | ✅ Server + Regex | ❌ Basic only | ⚠️ Manual implementation |
+| **Multi-Resource** | ✅ Single config | ❌ One command per resource | ⚠️ Complex setup |
+| **CRD Auto-Discovery** | ✅ Real-time | ❌ Manual | ⚠️ Manual implementation |
+| **Go Library** | ✅ Event handlers | ❌ Not available | ✅ Full control |
+| **Production Ready** | ✅ Rate limiting, graceful shutdown | ❌ Basic watching | ⚠️ DIY reliability |
 
 ## System Overview
 
 **Purpose**: Monitor Kubernetes resource lifecycle events (ADDED/UPDATED/DELETED) across namespaced and cluster-scoped resources using dynamic informer creation. Available as both CLI tool and Go library.
 
 **Key Characteristics**:
-- Configuration-driven informer creation
-- Real-time API discovery and CRD monitoring
-- Work queue-based event processing with rate limiting
-- Dual configuration format support (namespace-centric and resource-centric)
-- Server-side label selector filtering
-- Regex pattern matching for resource and namespace names
-- Library interface with event handler callbacks
+- **Smart Filtering**: Dual label filtering (Kubernetes selectors + regex patterns)
+- **Configuration-Driven**: Namespace-centric and resource-centric YAML formats
+- **Real-Time Discovery**: API discovery and CRD monitoring with dynamic informer creation
+- **Production-Ready**: Work queue processing with rate limiting and graceful shutdown
+- **High Performance**: Server-side filtering for efficiency, client-side regex for flexibility
+- **Developer-Friendly**: Go library interface with event handler callbacks
 
 ## Architecture
 
@@ -48,26 +60,53 @@ Monitor specific namespaces and their contained resources:
 namespaces:
   - name_pattern: "prod-.*"
     resources:
+      "v1/pods":
+        name_pattern: "web-.*"
+        label_selector: "app=nginx,tier=frontend"  # Server-side filtering
       "v1/configmaps":
-        name_pattern: "app-config"
-        label_selector: "env=production"
+        name_pattern: ".*"
+        label_pattern: "app=^web-.*$"             # Regex pattern matching
 ```
 
 ### Resource-Centric  
 Monitor specific resource types across namespace patterns:
 ```yaml
 resources:
-  - gvr: "v1/configmaps"
+  - gvr: "v1/pods"
     scope: "Namespaced"
     namespace_patterns: ["prod-.*", "staging-.*"]
-    name_pattern: "app-.*"
-    label_selector: "managed-by=faro"
+    name_pattern: "web-.*"
+    label_selector: "app=nginx"                   # Pre-filter for performance
+    label_pattern: "version=^v[0-9]+\\.[0-9]+$"   # Regex for semantic versions
+```
+
+## Smart Label Filtering 🎯
+
+Faro provides two complementary label filtering approaches for optimal performance and flexibility:
+
+### **Label Selector** (Kubernetes Standard)
+- ✅ **Server-side filtering** - reduces network traffic
+- ✅ **High performance** for large clusters  
+- ✅ **Standard syntax**: `app=nginx,tier=frontend`
+
+### **Label Pattern** (Regex Matching)
+- ✅ **Full regex power** for complex patterns
+- ✅ **Flexible matching** - `app=^web-.*$`, `version=v\\d+\\.\\d+`
+- ✅ **Perfect for CI/CD** naming patterns and version matching
+
+### **Combined Usage**
+```yaml
+# Best of both worlds: pre-filter + refine
+resources:
+  - gvr: "v1/pods"
+    label_selector: "app=nginx"              # Server-side pre-filter
+    label_pattern: "version=^v[0-9]+\\.[0-9]+$"  # Client-side regex refinement
 ```
 
 ## Event Processing
 
 - **Work Queue Pattern**: Standard Kubernetes controller pattern with rate limiting
-- **Filtering Logic**: Multi-level filtering (namespace patterns, name patterns, label selectors)
+- **Smart Filtering**: Multi-level filtering (namespace → labels → name patterns)
 - **Event Correlation**: Consistent key-based resource identification
 - **Error Handling**: Exponential backoff with maximum retry limits
 
@@ -91,6 +130,39 @@ resources:
 - **Async Processing**: Non-blocking log operations with channel-based queueing
 - **Auto-Shutdown**: Configurable timeout for testing and automation scenarios
 
+## Real-World Use Cases 🚀
+
+### **CI/CD Pipeline Monitoring**
+Monitor OpenShift CI clusters with complex naming patterns:
+```yaml
+namespaces:
+  - name_pattern: "^ocm-staging-[a-z0-9]{32}$"
+    resources:
+      "hypershift.openshift.io/v1beta1/hostedclusters":
+        name_pattern: ".*"
+        label_pattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-.*$"
+```
+
+### **Production Workload Tracking**
+Monitor specific application versions across environments:
+```yaml
+resources:
+  - gvr: "v1/pods"
+    namespace_patterns: ["prod-.*", "staging-.*"]
+    label_selector: "app=nginx"                    # Performance pre-filter
+    label_pattern: "version=^v[2-9]\\.[0-9]+$"     # Only v2.x+ versions
+```
+
+### **Security Compliance**
+Track resources without required security labels:
+```yaml
+resources:
+  - gvr: "v1/secrets"
+    label_selector: "!security-reviewed"          # Missing security label
+  - gvr: "v1/configmaps"
+    label_pattern: "classification=^(public|internal|confidential)$"
+```
+
 ## Usage
 
 ### CLI Tool
@@ -98,6 +170,10 @@ resources:
 # Build and run
 make build
 ./faro --config config.yaml
+
+# Quick example configs
+./faro --config examples/ocm-staging.yaml     # CI/CD monitoring
+./faro --config examples/production.yaml     # Production workloads
 ```
 
 ### Go Library
@@ -110,7 +186,7 @@ client, _ := faro.NewKubernetesClient()
 logger, _ := faro.NewLogger(config.GetLogDir())
 controller := faro.NewController(client, logger, config)
 
-// Register event handler
+// Register event handler for custom processing
 controller.AddEventHandler(&MyHandler{})
 
 // Start monitoring
