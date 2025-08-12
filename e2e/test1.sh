@@ -97,6 +97,13 @@ main() {
         error "ConfigMap ADDED event not found"
     fi
 
+    # Verify test-config-2 is filtered out (negative test case)
+    if grep -q "CONFIG \[ADDED\].*faro-test-1/test-config-2" "$log_file"; then
+        error "ConfigMap test-config-2 ADDED event should have been filtered out (name doesn't match pattern)!"
+    else
+        success "ConfigMap test-config-2 correctly filtered out (name doesn't match pattern)"
+    fi
+
     # Update ConfigMap
     log "Updating ConfigMap..."
     kubectl patch configmap test-config-1 -n faro-test-1 --patch='{"data":{"test-action":"UPDATED"}}'
@@ -109,6 +116,13 @@ main() {
         success "ConfigMap UPDATED event detected!"
     else
         error "ConfigMap UPDATED event not found"
+    fi
+
+    # Verify test-config-2 UPDATE is filtered out (negative test case)
+    if grep -q "CONFIG \[UPDATED\].*faro-test-1/test-config-2" "$log_file"; then
+        error "ConfigMap test-config-2 UPDATED event should have been filtered out (name doesn't match pattern)!"
+    else
+        success "ConfigMap test-config-2 UPDATED event correctly filtered out (name doesn't match pattern)"
     fi
 
     # Delete ConfigMap
@@ -124,6 +138,13 @@ main() {
         success "ConfigMap DELETED event detected!"
     else
         error "ConfigMap DELETED event not found"
+    fi
+
+    # Verify test-config-2 DELETE is filtered out (negative test case)
+    if grep -q "CONFIG \[DELETED\].*faro-test-1/test-config-2" "$log_file"; then
+        error "ConfigMap test-config-2 DELETED event should have been filtered out (name doesn't match pattern)!"
+    else
+        success "ConfigMap test-config-2 DELETED event correctly filtered out (name doesn't match pattern)"
     fi
 
     # Show log

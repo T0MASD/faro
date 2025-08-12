@@ -106,6 +106,14 @@ else
     exit 1
 fi
 
+# Verify test-config-2 is filtered out (negative test case)
+if grep -q "CONFIG \[ADDED\].*test-config-2" $log_file; then
+    echo "❌ ConfigMap test-config-2 ADDED event should have been filtered out (name doesn't match pattern)!"
+    exit 1
+else
+    echo "✅ ConfigMap test-config-2 correctly filtered out (name doesn't match pattern)"
+fi
+
 log "Updating ConfigMap..."
 kubectl patch configmap test-config-1 -n faro-test-1 --patch '{"data":{"updated":"true"}}'
 
@@ -120,6 +128,14 @@ else
     exit 1
 fi
 
+# Verify test-config-2 UPDATE is filtered out (negative test case)
+if grep -q "CONFIG \[UPDATED\].*test-config-2" $log_file; then
+    echo "❌ ConfigMap test-config-2 UPDATED event should have been filtered out (name doesn't match pattern)!"
+    exit 1
+else
+    echo "✅ ConfigMap test-config-2 UPDATED event correctly filtered out (name doesn't match pattern)"
+fi
+
 log "Deleting ConfigMap test-config-1..."
 kubectl delete configmap test-config-1 -n faro-test-1
 
@@ -132,6 +148,14 @@ if grep -q "CONFIG \[DELETED\].*test-config-1" $log_file; then
 else
     echo "❌ ConfigMap DELETED event not found"
     exit 1
+fi
+
+# Verify test-config-2 DELETE is filtered out (negative test case)
+if grep -q "CONFIG \[DELETED\].*test-config-2" $log_file; then
+    echo "❌ ConfigMap test-config-2 DELETED event should have been filtered out (name doesn't match pattern)!"
+    exit 1
+else
+    echo "✅ ConfigMap test-config-2 DELETED event correctly filtered out (name doesn't match pattern)"
 fi
 
 # Show log

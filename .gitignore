@@ -3,4 +3,5 @@ e2e/logs
 examples/logs
 # Build artifacts
 build/
+scratch/
 faro

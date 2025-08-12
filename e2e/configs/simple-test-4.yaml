@@ -9,4 +9,4 @@ resources:
     namespace_patterns:
       - "faro-test-1"
     name_pattern: "test-config-1"
-    label_selector: "app=faro-test"
+    label_pattern: "app=^faro-test$"

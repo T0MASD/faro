@@ -11,6 +11,7 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -48,6 +49,16 @@ type MatchedEvent struct {
 // EventHandler interface for handling matched events via callbacks
 type EventHandler interface {
 	OnMatched(event MatchedEvent) error
+}
+
+// InformerConfig holds configuration for creating a generic informer
+type InformerConfig struct {
+	GVR         schema.GroupVersionResource
+	Scope       apiextensionsv1.ResourceScope
+	GVRString   string
+	Context     context.Context
+	HandlerFunc func(eventType string, obj *unstructured.Unstructured)
+	Name        string // For logging purposes
 }
 
 // Controller implements the sophisticated multi-layered informer architecture
@@ -103,6 +114,110 @@ func (c *Controller) AddEventHandler(handler EventHandler) {
 	c.handlersMu.Lock()
 	defer c.handlersMu.Unlock()
 	c.eventHandlers = append(c.eventHandlers, handler)
+}
+
+// createGenericInformer creates a generic informer with consistent setup
+func (c *Controller) createGenericInformer(config InformerConfig) (cache.SharedIndexInformer, error) {
+	// Handle namespace scope logic
+	var namespace string
+	if config.Scope == apiextensionsv1.NamespaceScoped {
+		namespace = "" // Watch all namespaces, filter in event handler
+	}
+
+	// Create factory
+	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
+		c.client.Dynamic, 10*time.Minute, namespace, nil)
+	
+	// Get informer
+	informer := factory.ForResource(config.GVR).Informer()
+	if informer == nil {
+		return nil, fmt.Errorf("failed to create informer for %s", config.GVRString)
+	}
+
+	// Add generic event handlers
+	informer.AddEventHandler(c.createEventHandlers(config.HandlerFunc, config.GVRString))
+	
+	return informer, nil
+}
+
+// createEventHandlers creates consistent event handlers with error checking
+func (c *Controller) createEventHandlers(handlerFunc func(string, *unstructured.Unstructured), gvrString string) cache.ResourceEventHandlerFuncs {
+	return cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
+				handlerFunc("ADDED", unstructuredObj)
+			} else {
+				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in AddFunc for %s", gvrString))
+			}
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {
+			if unstructuredObj, ok := newObj.(*unstructured.Unstructured); ok {
+				handlerFunc("UPDATED", unstructuredObj)
+			} else {
+				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in UpdateFunc for %s", gvrString))
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
+				handlerFunc("DELETED", unstructuredObj)
+			} else {
+				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in DeleteFunc for %s", gvrString))
+			}
+		},
+	}
+}
+
+// runInformerWithLogging runs an informer with consistent logging
+func (c *Controller) runInformerWithLogging(informer cache.SharedIndexInformer, ctx context.Context, description string) {
+	c.logger.Info("controller", fmt.Sprintf("Starting %s", description))
+	c.logger.Info("controller", fmt.Sprintf("Running %s", description))
+	informer.Run(ctx.Done())
+	c.logger.Info("controller", fmt.Sprintf("Stopped %s", description))
+}
+
+// createLabelSelectorInformer creates an informer with label selector support for the normalized config path
+func (c *Controller) createLabelSelectorInformer(config InformerConfig, normalizedConfigs []NormalizedConfig) (cache.SharedIndexInformer, error) {
+	// Handle namespace scope logic
+	var namespace string
+	if config.Scope == apiextensionsv1.NamespaceScoped {
+		namespace = "" // Watch all namespaces, filter in event handler
+	}
+
+	// Determine the label selector to use for this GVR (for server-side filtering)
+	var labelSelector string
+	for _, nConfig := range normalizedConfigs {
+		if nConfig.LabelSelector != "" {
+			labelSelector = nConfig.LabelSelector
+			break // Use first label selector found
+		}
+	}
+
+	// Create a tweakListOptions function to apply the label selector
+	tweakListOptions := func(options *metav1.ListOptions) {
+		if labelSelector != "" {
+			options.LabelSelector = labelSelector
+			c.logger.Debug("controller", fmt.Sprintf("Applying label selector '%s' to informer for %s", labelSelector, config.GVRString))
+		}
+	}
+
+	// Create dynamic informer factory with label selector filtering
+	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
+		c.client.Dynamic, 10*time.Minute, namespace, tweakListOptions)
+	
+	// Get informer
+	informer := factory.ForResource(config.GVR).Informer()
+	if informer == nil {
+		return nil, fmt.Errorf("failed to create informer for %s", config.GVRString)
+	}
+
+	// Store the lister for later retrieval by workers
+	lister := factory.ForResource(config.GVR).Lister()
+	c.listers.Store(config.GVRString, lister)
+
+	// Add generic event handlers
+	informer.AddEventHandler(c.createEventHandlers(config.HandlerFunc, config.GVRString))
+	
+	return informer, nil
 }
 
 // Start initializes and starts the multi-layered informer architecture
@@ -585,8 +700,6 @@ func (c *Controller) reconcileStartupCRDs() error {
 func (c *Controller) startDynamicCRDInformer(crdName string, gvr schema.GroupVersionResource, scope apiextensionsv1.ResourceScope, gvrString string, nsConfig NamespaceConfig) {
 	defer c.wg.Done()
 
-	c.logger.Info("controller", fmt.Sprintf("Starting dynamic informer for CRD %s (%s)", crdName, gvrString))
-
 	// Create context for this specific informer
 	ctx, cancel := context.WithCancel(c.ctx)
 	defer cancel()
@@ -596,31 +709,27 @@ func (c *Controller) startDynamicCRDInformer(crdName string, gvr schema.GroupVer
 	c.cancellers.Store(gvrKey, cancel)
 	defer c.cancellers.Delete(gvrKey)
 
-	var namespace string
-	if scope == apiextensionsv1.NamespaceScoped {
-		namespace = "" // Watch all namespaces, filter in event handler
+	// Create generic informer config
+	config := InformerConfig{
+		GVR:       gvr,
+		Scope:     scope,
+		GVRString: gvrString,
+		Context:   ctx,
+		Name:      crdName,
+		HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
+			c.handleConfigDrivenEvent(eventType, obj, gvrString, nsConfig)
+		},
 	}
-
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
-		c.client.Dynamic, 10*time.Minute, namespace, nil)
-
-	informer := factory.ForResource(gvr).Informer()
-
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			c.handleConfigDrivenEvent("ADDED", obj.(*unstructured.Unstructured), gvrString, nsConfig)
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			c.handleConfigDrivenEvent("UPDATED", newObj.(*unstructured.Unstructured), gvrString, nsConfig)
-		},
-		DeleteFunc: func(obj interface{}) {
-			c.handleConfigDrivenEvent("DELETED", obj.(*unstructured.Unstructured), gvrString, nsConfig)
-		},
-	})
-
-	c.logger.Info("controller", fmt.Sprintf("Running dynamic informer for CRD %s", crdName))
-	informer.Run(ctx.Done())
-	c.logger.Info("controller", fmt.Sprintf("Dynamic informer for CRD %s stopped", crdName))
+	
+	// Create informer using generic factory
+	informer, err := c.createGenericInformer(config)
+	if err != nil {
+		c.logger.Error("controller", fmt.Sprintf("Failed to create CRD informer: %v", err))
+		return
+	}
+	
+	// Run with consistent logging
+	c.runInformerWithLogging(informer, ctx, fmt.Sprintf("dynamic informer for CRD %s", crdName))
 }
 
 // stopCRDInformer stops the informer for a specific CRD
@@ -769,46 +878,33 @@ func (c *Controller) startDefaultInformers() error {
 // startBuiltinInformer starts a single builtin informer in its own goroutine
 func (c *Controller) startBuiltinInformer(gvr schema.GroupVersionResource, scope apiextensionsv1.ResourceScope, name string) {
 	defer c.wg.Done()
-
-	c.logger.Info("controller", fmt.Sprintf("Starting builtin informer for %s", name))
-
-	// Determine namespace scope
-	var namespace string
-	if scope == apiextensionsv1.NamespaceScoped {
-		namespace = "" // All namespaces
+	
+	// Create generic informer config
+	config := InformerConfig{
+		GVR:       gvr,
+		Scope:     scope,
+		GVRString: name,
+		Context:   c.ctx,
+		Name:      name,
+		HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
+			c.handleBuiltinEvent(eventType, obj, name)
+		},
 	}
-
-	// Create dynamic informer factory
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
-		c.client.Dynamic, 10*time.Minute, namespace, nil)
-
-	informer := factory.ForResource(gvr).Informer()
-
-	// Add event handlers
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			c.handleBuiltinEvent("ADDED", obj.(*unstructured.Unstructured), name)
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			c.handleBuiltinEvent("UPDATED", newObj.(*unstructured.Unstructured), name)
-		},
-		DeleteFunc: func(obj interface{}) {
-			c.handleBuiltinEvent("DELETED", obj.(*unstructured.Unstructured), name)
-		},
-	})
-
-	// Start the informer
-	c.logger.Info("controller", fmt.Sprintf("Running builtin informer for %s", name))
-	informer.Run(c.ctx.Done())
-	c.logger.Info("controller", fmt.Sprintf("Builtin informer for %s stopped", name))
+	
+	// Create informer using generic factory
+	informer, err := c.createGenericInformer(config)
+	if err != nil {
+		c.logger.Error("controller", fmt.Sprintf("Failed to create builtin informer: %v", err))
+		return
+	}
+	
+	// Run with consistent logging
+	c.runInformerWithLogging(informer, c.ctx, fmt.Sprintf("builtin informer for %s", name))
 }
 
 // startDynamicInformer starts a dynamic informer for a specific CRD
 func (c *Controller) startDynamicInformer(crdName, group, version, resource string, scope apiextensionsv1.ResourceScope) {
 	defer c.wg.Done()
-
-	c.logger.Info("controller", fmt.Sprintf("Starting dynamic informer for CRD: %s (%s/%s/%s)",
-		crdName, group, version, resource))
 
 	// Create child context for this specific informer with cancel function
 	ctx, cancel := context.WithCancel(c.ctx)
@@ -821,12 +917,6 @@ func (c *Controller) startDynamicInformer(crdName, group, version, resource stri
 		c.logger.Info("controller", fmt.Sprintf("Dynamic informer for %s (GVR: %s) stopped", crdName, gvrString))
 	}()
 
-	// Determine namespace scope
-	var namespace string
-	if scope == apiextensionsv1.NamespaceScoped {
-		namespace = "" // All namespaces
-	}
-
 	// Create GVR for this custom resource
 	gvr := schema.GroupVersionResource{
 		Group:    group,
@@ -834,28 +924,27 @@ func (c *Controller) startDynamicInformer(crdName, group, version, resource stri
 		Resource: resource,
 	}
 
-	// Create dynamic informer factory
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
-		c.client.Dynamic, 10*time.Minute, namespace, nil)
-
-	informer := factory.ForResource(gvr).Informer()
-
-	// Add event handlers for custom resources
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			c.handleCustomResourceEvent("ADDED", obj.(*unstructured.Unstructured), crdName)
+	// Create generic informer config
+	config := InformerConfig{
+		GVR:       gvr,
+		Scope:     scope,
+		GVRString: gvrString,
+		Context:   ctx,
+		Name:      crdName,
+		HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
+			c.handleCustomResourceEvent(eventType, obj, crdName)
 		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			c.handleCustomResourceEvent("UPDATED", newObj.(*unstructured.Unstructured), crdName)
-		},
-		DeleteFunc: func(obj interface{}) {
-			c.handleCustomResourceEvent("DELETED", obj.(*unstructured.Unstructured), crdName)
-		},
-	})
-
-	// Start the informer
-	c.logger.Info("controller", fmt.Sprintf("Running dynamic informer for %s", crdName))
-	informer.Run(ctx.Done())
+	}
+	
+	// Create informer using generic factory
+	informer, err := c.createGenericInformer(config)
+	if err != nil {
+		c.logger.Error("controller", fmt.Sprintf("Failed to create dynamic informer: %v", err))
+		return
+	}
+	
+	// Run with consistent logging
+	c.runInformerWithLogging(informer, ctx, fmt.Sprintf("dynamic informer for %s", crdName))
 }
 
 // handleBuiltinEvent processes events from builtin resource informers
@@ -1102,7 +1191,72 @@ func (c *Controller) matchesConfig(obj *unstructured.Unstructured, config Normal
 	resourceName := obj.GetName()
 	resourceNamespace := obj.GetNamespace()
 
-	return c.matchesConfigByKey(resourceNamespace, resourceName, config)
+	// First check namespace and name patterns
+	if !c.matchesConfigByKey(resourceNamespace, resourceName, config) {
+		return false
+	}
+
+	// Check label selector if specified (Kubernetes-style: app=faro-test)
+	if config.ResourceDetails.LabelSelector != "" {
+		if !c.matchesLabelFilter(obj, config.ResourceDetails.LabelSelector, false) {
+			return false
+		}
+	}
+
+	// Check label pattern if specified (regex-style: app=^faro-.*$)
+	if config.ResourceDetails.LabelPattern != "" {
+		if !c.matchesLabelFilter(obj, config.ResourceDetails.LabelPattern, true) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// matchesLabelFilter checks if an object matches a label filter using Kubernetes label selector parsing
+func (c *Controller) matchesLabelFilter(obj *unstructured.Unstructured, labelFilter string, isPattern bool) bool {
+	objLabels := obj.GetLabels()
+	if objLabels == nil {
+		objLabels = make(map[string]string)
+	}
+	
+	if !isPattern {
+		// For label_selector: use standard Kubernetes label selector matching
+		selector, err := labels.Parse(labelFilter)
+		if err != nil {
+			c.logger.Warning("controller", fmt.Sprintf("Invalid label selector '%s': %v", labelFilter, err))
+			return false
+		}
+		return selector.Matches(labels.Set(objLabels))
+	} else {
+		// For label_pattern: parse manually to allow regex patterns in values
+		// Format: "key=regex_pattern"
+		if strings.Contains(labelFilter, "=") {
+			parts := strings.SplitN(labelFilter, "=", 2)
+			if len(parts) != 2 {
+				c.logger.Warning("controller", fmt.Sprintf("Invalid label pattern format '%s': expected 'key=pattern'", labelFilter))
+				return false
+			}
+			
+			key := strings.TrimSpace(parts[0])
+			pattern := strings.TrimSpace(parts[1])
+			
+			actualValue, exists := objLabels[key]
+			if !exists {
+				return false
+			}
+			
+			matched, err := regexp.MatchString(pattern, actualValue)
+			if err != nil {
+				c.logger.Warning("controller", fmt.Sprintf("Invalid regex pattern '%s' for label %s: %v", pattern, key, err))
+				return false
+			}
+			return matched
+		}
+		
+		c.logger.Warning("controller", fmt.Sprintf("Invalid label pattern format '%s': expected 'key=pattern'", labelFilter))
+		return false
+	}
 }
 
 // matchesConfigByKey checks if a resource key (namespace/name) matches a normalized config.
@@ -1119,11 +1273,6 @@ func (c *Controller) matchesConfigByKey(namespace, name string, config Normalize
 	if namespace != "" && len(config.NamespacePatterns) > 0 {
 		namespaceMatched := false
 		for _, nsPattern := range config.NamespacePatterns {
-			// Handle cluster-scoped resources where the pattern might be empty
-			if nsPattern == "" && namespace == "" {
-				namespaceMatched = true
-				break
-			}
 			if matched, err := regexp.MatchString(nsPattern, namespace); err == nil && matched {
 				namespaceMatched = true
 				break
@@ -1142,57 +1291,27 @@ func (c *Controller) startUnifiedConfigDrivenInformer(gvr schema.GroupVersionRes
 	defer c.wg.Done()
 	defer c.activeInformers.Delete(gvrString) // Remove from active tracking when stopped
 
-	c.logger.Info("controller", fmt.Sprintf("Starting unified config-driven informer for %s", gvrString))
-
-	// For namespace-scoped resources, we need to watch all namespaces and filter
-	// For cluster-scoped resources, watch globally
-	var namespace string
-	if scope == apiextensionsv1.NamespaceScoped {
-		namespace = "" // Watch all namespaces, filter in event handler
+	// Create generic informer config
+	config := InformerConfig{
+		GVR:       gvr,
+		Scope:     scope,
+		GVRString: gvrString,
+		Context:   c.ctx,
+		Name:      gvrString,
+		HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
+			c.handleUnifiedConfigDrivenEvent(eventType, obj, gvrString, nsConfigs)
+		},
 	}
-
-	// Create dynamic informer factory with error handling
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
-		c.client.Dynamic, 10*time.Minute, namespace, nil)
-
-	// Get informer with error handling
-	informer := factory.ForResource(gvr).Informer()
-
-	// Validate that the informer was created successfully
-	if informer == nil {
-		c.logger.Error("controller", fmt.Sprintf("Failed to create informer for GVR %s", gvrString))
+	
+	// Create informer using generic factory
+	informer, err := c.createGenericInformer(config)
+	if err != nil {
+		c.logger.Error("controller", fmt.Sprintf("Failed to create unified config-driven informer: %v", err))
 		return
 	}
-
-	// Add event handlers with unified config-based filtering and error handling
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-				c.handleUnifiedConfigDrivenEvent("ADDED", unstructuredObj, gvrString, nsConfigs)
-			} else {
-				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in AddFunc for %s", gvrString))
-			}
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			if unstructuredObj, ok := newObj.(*unstructured.Unstructured); ok {
-				c.handleUnifiedConfigDrivenEvent("UPDATED", unstructuredObj, gvrString, nsConfigs)
-			} else {
-				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in UpdateFunc for %s", gvrString))
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-				c.handleUnifiedConfigDrivenEvent("DELETED", unstructuredObj, gvrString, nsConfigs)
-			} else {
-				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in DeleteFunc for %s", gvrString))
-			}
-		},
-	})
-
-	// Start the informer
-	c.logger.Info("controller", fmt.Sprintf("Running unified config-driven informer for %s", gvrString))
-	informer.Run(c.ctx.Done())
-	c.logger.Info("controller", fmt.Sprintf("Unified config-driven informer for %s stopped", gvrString))
+	
+	// Run with consistent logging
+	c.runInformerWithLogging(informer, c.ctx, fmt.Sprintf("unified config-driven informer for %s", gvrString))
 }
 
 // handleConfigDrivenEvent processes events with config-based filtering
@@ -1225,10 +1344,7 @@ func (c *Controller) handleConfigDrivenEvent(eventType string, obj *unstructured
 		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s)",
 			eventType, gvrString, resourceNamespace, resourceName, resourceUID))
 
-		// Special handling for namespace deletion detection
-		if eventType == "DELETED" && gvrString == "v1/namespaces" {
-			c.logger.Warning("controller", fmt.Sprintf("NAMESPACE DELETED: %s - all resources in this namespace will be automatically cleaned up", resourceName))
-		}
+
 	} else {
 		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s)",
 			eventType, gvrString, resourceName, resourceUID))
@@ -1280,10 +1396,7 @@ func (c *Controller) handleUnifiedConfigDrivenEvent(eventType string, obj *unstr
 		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s, pattern: %s)",
 			eventType, gvrString, resourceNamespace, resourceName, resourceUID, matchedConfig.NamePattern))
 
-		// Special handling for namespace deletion detection
-		if eventType == "DELETED" && gvrString == "v1/namespaces" {
-			c.logger.Warning("controller", fmt.Sprintf("NAMESPACE DELETED: %s - all resources in this namespace will be automatically cleaned up", resourceName))
-		}
+
 	} else {
 		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, pattern: %s)",
 			eventType, gvrString, resourceName, resourceUID, matchedConfig.NamePattern))
@@ -1297,80 +1410,27 @@ func (c *Controller) startUnifiedNormalizedInformer(gvr schema.GroupVersionResou
 	defer c.wg.Done()
 	defer c.activeInformers.Delete(gvrString) // Remove from active tracking when stopped
 
-	c.logger.Info("controller", fmt.Sprintf("Starting unified config-driven informer for %s", gvrString))
-
-	// For namespace-scoped resources, we need to watch all namespaces and filter
-	// For cluster-scoped resources, watch globally
-	var namespace string
-	if scope == apiextensionsv1.NamespaceScoped {
-		namespace = "" // Watch all namespaces, filter in event handler
+	// Create generic informer config
+	config := InformerConfig{
+		GVR:       gvr,
+		Scope:     scope,
+		GVRString: gvrString,
+		Context:   c.ctx,
+		Name:      gvrString,
+		HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
+			c.handleUnifiedNormalizedEvent(eventType, obj, gvrString, normalizedConfigs)
+		},
 	}
-
-	// Determine the label selector to use for this GVR
-	// For simplicity, we'll use the first non-empty label selector found
-	// In a more sophisticated implementation, you might want to merge selectors
-	var labelSelector string
-	for _, config := range normalizedConfigs {
-		if config.LabelSelector != "" {
-			labelSelector = config.LabelSelector
-			break
-		}
-	}
-
-	// Create a tweakListOptions function to apply the label selector
-	tweakListOptions := func(options *metav1.ListOptions) {
-		if labelSelector != "" {
-			options.LabelSelector = labelSelector
-			c.logger.Debug("controller", fmt.Sprintf("Applying label selector '%s' to informer for %s", labelSelector, gvrString))
-		}
-	}
-
-	// Create dynamic informer factory with label selector filtering
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
-		c.client.Dynamic, 10*time.Minute, namespace, tweakListOptions)
-
-	// Get informer with error handling
-	informer := factory.ForResource(gvr).Informer()
-
-	// Validate that the informer was created successfully
-	if informer == nil {
-		c.logger.Error("controller", fmt.Sprintf("Failed to create informer for GVR %s", gvrString))
+	
+	// Create informer using label selector factory (handles lister storage)
+	informer, err := c.createLabelSelectorInformer(config, normalizedConfigs)
+	if err != nil {
+		c.logger.Error("controller", fmt.Sprintf("Failed to create unified normalized informer: %v", err))
 		return
 	}
-
-	// Store the lister for later retrieval by workers
-	lister := factory.ForResource(gvr).Lister()
-	c.listers.Store(gvrString, lister)
-
-	// Add event handlers with unified normalized config-based filtering and error handling
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-				c.handleUnifiedNormalizedEvent("ADDED", unstructuredObj, gvrString, normalizedConfigs)
-			} else {
-				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in AddFunc for %s", gvrString))
-			}
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			if unstructuredObj, ok := newObj.(*unstructured.Unstructured); ok {
-				c.handleUnifiedNormalizedEvent("UPDATED", unstructuredObj, gvrString, normalizedConfigs)
-			} else {
-				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in UpdateFunc for %s", gvrString))
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-				c.handleUnifiedNormalizedEvent("DELETED", unstructuredObj, gvrString, normalizedConfigs)
-			} else {
-				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in DeleteFunc for %s", gvrString))
-			}
-		},
-	})
-
-	// Start the informer
-	c.logger.Info("controller", fmt.Sprintf("Running unified config-driven informer for %s", gvrString))
-	informer.Run(c.ctx.Done())
-	c.logger.Info("controller", fmt.Sprintf("Unified config-driven informer for %s stopped", gvrString))
+	
+	// Run with consistent logging
+	c.runInformerWithLogging(informer, c.ctx, fmt.Sprintf("unified config-driven informer for %s", gvrString))
 }
 
 // handleUnifiedNormalizedEvent processes events with multiple normalized config-based filtering

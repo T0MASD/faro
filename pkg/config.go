@@ -21,7 +21,8 @@ const (
 // ResourceDetails defines what resources to watch within a namespace (legacy format)
 type ResourceDetails struct {
 	NamePattern   string `yaml:"name_pattern"`   // Regex pattern for resource names
-	LabelSelector string `yaml:"label_selector,omitempty"` // Kubernetes label selector for filtering
+	LabelSelector string `yaml:"label_selector,omitempty"` // Kubernetes label selector for filtering (e.g. "app=faro-test")
+	LabelPattern  string `yaml:"label_pattern,omitempty"`  // Regex pattern for label matching: "key": "pattern"
 }
 
 // NamespaceConfig defines namespace and its resources to watch (namespace-centric format)
@@ -36,7 +37,8 @@ type ResourceConfig struct {
 	Scope             Scope    `yaml:"scope,omitempty"`            // Explicitly define scope (Cluster or Namespaced)
 	NamespacePatterns []string `yaml:"namespace_patterns,omitempty"` // Regex patterns for namespace names (only for namespaced resources)
 	NamePattern       string   `yaml:"name_pattern,omitempty"`      // Regex pattern for resource names
-	LabelSelector     string   `yaml:"label_selector,omitempty"`   // Kubernetes label selector for filtering
+	LabelSelector     string   `yaml:"label_selector,omitempty"`   // Kubernetes label selector for filtering (e.g. "app=faro-test")
+	LabelPattern      string   `yaml:"label_pattern,omitempty"`    // Regex pattern for label matching: "key": "pattern"
 }
 
 // NormalizedConfig is the unified data structure used internally by the controller.
@@ -45,7 +47,8 @@ type NormalizedConfig struct {
 	GVR               string          // Group/Version/Resource identifier
 	ResourceDetails   ResourceDetails // Resource matching details
 	NamespacePatterns []string        // Namespace patterns this config applies to
-	LabelSelector     string          // Kubernetes label selector for filtering
+	LabelSelector     string          // Kubernetes label selector for filtering (e.g. "app=faro-test")
+	LabelPattern      string          // Regex pattern for label matching: "key": "pattern"
 }
 
 // Config represents the minimalist Faro configuration supporting both formats
@@ -220,6 +223,7 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 					ResourceDetails:   details,
 					NamespacePatterns: []string{nsConfig.NamePattern},
 					LabelSelector:     details.LabelSelector, // Pass the label selector
+					LabelPattern:      details.LabelPattern,  // Pass the label pattern
 				})
 			}
 		}
@@ -245,9 +249,11 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 				ResourceDetails: ResourceDetails{
 					NamePattern:   resConfig.NamePattern,
 					LabelSelector: resConfig.LabelSelector,
+					LabelPattern:  resConfig.LabelPattern,
 				},
 				NamespacePatterns: namespacePatterns,
 				LabelSelector:     resConfig.LabelSelector, // Pass the label selector
+				LabelPattern:      resConfig.LabelPattern,  // Pass the label pattern
 			})
 		}
 	}
