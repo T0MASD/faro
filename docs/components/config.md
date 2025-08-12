@@ -18,6 +18,7 @@ type NormalizedConfig struct {
     ResourceDetails   ResourceDetails // Filtering criteria
     NamespacePatterns []string        // Namespace regex patterns
     LabelSelector     string          // Kubernetes label selector
+    LabelPattern      string          // Regex pattern for label values
 }
 ```
 
@@ -31,6 +32,9 @@ namespaces:
       "v1/pods":
         name_pattern: "web-.*"
         label_selector: "app=nginx"
+      "v1/configmaps":
+        name_pattern: ".*"
+        label_pattern: "app=^nginx-.*$"
 ```
 
 ### Resource-Centric Format
@@ -41,6 +45,11 @@ resources:
     namespace_patterns: ["prod-.*"]
     name_pattern: "web-.*"
     label_selector: "app=nginx"
+  - gvr: "v1/services"
+    scope: "Namespaced"
+    namespace_patterns: [".*"]
+    name_pattern: ".*"
+    label_pattern: "environment=^(prod|staging)$"
 ```
 
 ## Normalization Process
@@ -128,6 +137,7 @@ classDiagram
     class ResourceDetails {
         +string NamePattern
         +string LabelSelector
+        +string LabelPattern
     }
     
     class NormalizedConfig {
@@ -197,19 +207,135 @@ matched, err := regexp.MatchString(details.NamePattern, resourceName)
 - **Wildcard**: `".*"`
 - **Complex**: `"^(prod|stage)-web-[0-9]+$"`
 
-## Label Selector Support
+## Label Filtering
 
-### Kubernetes Label Selector Syntax
+Faro supports two complementary approaches to label-based resource filtering:
+
+### Label Selector (Kubernetes Standard)
+
+Uses standard Kubernetes label selector syntax for server-side filtering:
+
+```yaml
+# Namespace-centric format
+namespaces:
+  - name_pattern: "production-.*"
+    resources:
+      "v1/pods":
+        name_pattern: ".*"
+        label_selector: "app=nginx,tier=frontend"
+      "v1/services":
+        name_pattern: ".*"
+        label_selector: "app in (nginx,apache)"
+```
+
+**Kubernetes Label Selector Syntax:**
 - **Equality**: `app=nginx`
-- **Inequality**: `app!=apache`
+- **Inequality**: `app!=apache`  
 - **Set-based**: `environment in (production,staging)`
 - **Existence**: `app`
 - **Non-existence**: `!app`
+- **Multiple conditions**: `app=nginx,tier=frontend`
 
-### Server-Side Filtering
+**Server-Side Filtering:**
 - Applied via `ListOptions.LabelSelector`
 - Processed by Kubernetes API server
 - Reduces network traffic and client-side processing
+- Better performance for large clusters
+
+### Label Pattern (Regex Matching)
+
+Uses regex patterns for flexible label value matching:
+
+```yaml
+# Namespace-centric format
+namespaces:
+  - name_pattern: "^ocm-staging-[a-z0-9]{32}$"
+    resources:
+      "hypershift.openshift.io/v1beta1/hostedclusters":
+        name_pattern: ".*"
+        label_pattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-.*$"
+      "v1/configmaps":
+        name_pattern: ".*"
+        label_pattern: "app=^web-.*$"
+```
+
+**Label Pattern Syntax:**
+- **Format**: `key=regex_pattern`
+- **Exact match**: `app=^nginx$`
+- **Prefix match**: `app=^nginx-.*$`
+- **Complex patterns**: `version=v\\d+\\.\\d+`
+- **Case sensitive**: Regex patterns are case-sensitive
+
+**Client-Side Filtering:**
+- All resources are fetched, then filtered client-side
+- Full regex power for complex pattern matching
+- Higher network overhead but maximum flexibility
+- Bypasses Kubernetes label value validation
+
+### Filtering Comparison
+
+| Feature | Label Selector | Label Pattern |
+|---------|---------------|---------------|
+| **Performance** | ✅ Server-side (faster) | ❌ Client-side (slower) |
+| **Network Traffic** | ✅ Reduced | ❌ Full resource fetch |
+| **Flexibility** | ❌ Limited syntax | ✅ Full regex power |
+| **Kubernetes Native** | ✅ Standard API | ❌ Custom implementation |
+| **Complex Patterns** | ❌ Basic matching | ✅ Advanced regex |
+
+### Combined Usage
+
+Both label filtering types can be used together:
+
+```yaml
+resources:
+  - gvr: "v1/pods"
+    scope: "Namespaced"
+    namespace_patterns: ["production-.*"]
+    name_pattern: "web-.*"
+    label_selector: "app=nginx"              # Server-side pre-filter
+    label_pattern: "version=^v[0-9]+\\.[0-9]+$"  # Client-side regex filter
+```
+
+**Processing Order:**
+1. **Namespace patterns**: Filter namespaces to monitor
+2. **Label selector**: Server-side Kubernetes API filtering  
+3. **Name pattern**: Client-side resource name regex filtering
+4. **Label pattern**: Client-side label value regex filtering
+
+### Use Case Examples
+
+#### Standard Kubernetes Filtering
+```yaml
+# Monitor nginx pods in production environments
+namespaces:
+  - name_pattern: "prod-.*"
+    resources:
+      "v1/pods":
+        name_pattern: ".*"
+        label_selector: "app=nginx,environment=production"
+```
+
+#### Complex Pattern Matching
+```yaml
+# Monitor CI/CD clusters with specific naming patterns
+namespaces:
+  - name_pattern: "^ocm-staging-[a-z0-9]{32}$"
+    resources:
+      "hypershift.openshift.io/v1beta1/hostedclusters":
+        name_pattern: ".*"
+        label_pattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-[a-z0-9-]+$"
+```
+
+#### Version-Based Filtering
+```yaml
+# Monitor resources with semantic version labels
+namespaces:
+  - name_pattern: ".*"
+    resources:
+      "v1/configmaps":
+        name_pattern: ".*"
+        label_pattern: "version=^v\\d+\\.\\d+\\.\\d+$"
+```
 
 ## Command Line Interface
 

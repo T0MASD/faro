@@ -18,7 +18,7 @@ Kubernetes resource observation tool and Go library with dynamic discovery and c
 ### Configuration Layer
 - **Dual format support**: Namespace-centric and resource-centric YAML configurations
 - **Normalization**: Both formats converted to unified `NormalizedConfig` internal structure
-- **Label filtering**: Server-side Kubernetes label selector support
+- **Dual label filtering**: Server-side Kubernetes label selectors + client-side regex patterns
 - **Pattern matching**: Regex-based resource and namespace name filtering
 
 ### Discovery Engine
@@ -74,6 +74,7 @@ type NormalizedConfig struct {
     ResourceDetails   ResourceDetails // name patterns, label selectors
     NamespacePatterns []string        // namespace filtering rules
     LabelSelector     string          // Kubernetes label selector
+    LabelPattern      string          // Regex pattern for label values
 }
 
 type ResourceInfo struct {
@@ -95,6 +96,9 @@ namespaces:
       "v1/pods":
         name_pattern: "web-.*"
         label_selector: "app=nginx"
+      "v1/configmaps":
+        name_pattern: ".*"
+        label_pattern: "app=^nginx-.*$"
 ```
 
 **Resource-Centric**:
@@ -105,6 +109,11 @@ resources:
     namespace_patterns: ["prod-.*"]
     name_pattern: "web-.*"
     label_selector: "app=nginx"
+  - gvr: "v1/services"
+    scope: "Namespaced"
+    namespace_patterns: [".*"]
+    name_pattern: ".*"
+    label_pattern: "environment=^(prod|staging)$"
 ```
 
 ## Runtime Behavior
@@ -127,7 +136,96 @@ resources:
 2. **Key Extraction**: Generate namespace/name key from object metadata
 3. **Work Queuing**: Create `WorkItem` and enqueue for processing
 4. **Worker Processing**: Pull from queue, validate against configuration
-5. **Business Logic**: Execute filtering, logging, and state tracking
+5. **Label Filtering**: Apply both Kubernetes and regex label filters
+6. **Business Logic**: Execute filtering, logging, and state tracking
+
+### Label Filtering Architecture
+
+Faro implements a dual-layer label filtering system combining Kubernetes-native server-side filtering with client-side regex pattern matching:
+
+#### Server-Side Filtering (`label_selector`)
+```go
+// Applied during informer creation
+listOptions := metav1.ListOptions{
+    LabelSelector: config.LabelSelector, // "app=nginx,tier=frontend"
+}
+informer := factory.Core().V1().Pods().Informer(listOptions)
+```
+
+**Characteristics**:
+- **Processing**: Kubernetes API server filters resources before transmission
+- **Performance**: Reduced network traffic and client memory usage
+- **Syntax**: Standard Kubernetes label selector syntax
+- **Limitations**: Cannot use regex patterns or complex matching
+
+#### Client-Side Filtering (`label_pattern`)
+```go
+// Applied in matchesLabelFilter() function
+func matchesLabelFilter(obj *unstructured.Unstructured, labelFilter string, isPattern bool) bool {
+    if isPattern {
+        // Parse "key=regex_pattern" and apply regex matching
+        parts := strings.SplitN(labelFilter, "=", 2)
+        key, pattern := parts[0], parts[1]
+        
+        if value, exists := labels[key]; exists {
+            matched, _ := regexp.MatchString(pattern, value)
+            return matched
+        }
+        return false
+    }
+    // Standard Kubernetes label selector parsing for label_selector
+}
+```
+
+**Characteristics**:
+- **Processing**: All resources fetched, filtered client-side during event processing
+- **Performance**: Higher network overhead, flexible matching
+- **Syntax**: `key=regex_pattern` format with full regex support
+- **Benefits**: Complex pattern matching, bypasses Kubernetes label value validation
+
+#### Unified Processing Flow
+
+```
+Resource Event → Informer → Work Queue → Worker → Label Filter Chain → Event Handler
+                     ↑                              ↓
+              [Server-side]                  [Client-side]
+              label_selector                 label_pattern
+              (if specified)                 (if specified)
+```
+
+**Processing Order**:
+1. **Namespace patterns**: Filter namespaces to monitor
+2. **Label selector**: Kubernetes API server pre-filtering (reduces network load)
+3. **Name pattern**: Client-side resource name regex matching
+4. **Label pattern**: Client-side label value regex matching
+5. **Event handler**: Call registered handlers for matched events
+
+#### Use Case Optimization
+
+**High-volume, simple filtering**:
+```yaml
+# Use label_selector for performance
+resources:
+  - gvr: "v1/pods"
+    label_selector: "app=nginx,environment=production"
+```
+
+**Complex pattern matching**:
+```yaml
+# Use label_pattern for flexibility
+resources:
+  - gvr: "hypershift.openshift.io/v1beta1/hostedclusters"
+    label_pattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-.*$"
+```
+
+**Combined approach**:
+```yaml
+# Pre-filter with label_selector, refine with label_pattern
+resources:
+  - gvr: "v1/pods"
+    label_selector: "app=nginx"              # Server-side: only nginx apps
+    label_pattern: "version=^v[0-9]+\\.[0-9]+$"  # Client-side: semantic versions only
+```
 
 ## Library Interface
 
@@ -167,7 +265,7 @@ func (h *MyHandler) OnMatched(event MatchedEvent) error {
 ### Configuration Architecture
 - **Dual Support**: Both namespace-centric and resource-centric configuration formats
 - **Normalization**: Single internal processing path regardless of input format
-- **Validation**: Server-side label selector application for efficiency
+- **Label Filtering**: Hybrid server-side + client-side approach for optimal performance and flexibility
 
 ### Memory Management
 - **Context Cancellation**: Individual cancel contexts for each informer

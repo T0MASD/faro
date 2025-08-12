@@ -149,6 +149,13 @@ config := &faro.Config{
             LabelSelector:     "app=nginx",
         },
         {
+            GVR:               "v1/configmaps",
+            Scope:             faro.NamespaceScope,
+            NamespacePatterns: []string{".*"},
+            NamePattern:       ".*",
+            LabelPattern:      "app=^nginx-.*$",
+        },
+        {
             GVR:         "v1/services",
             Scope:       faro.NamespaceScope,
             NamePattern: ".*-service",
@@ -156,6 +163,158 @@ config := &faro.Config{
     },
 }
 ```
+
+## Label Filtering
+
+Faro supports two types of label filtering to provide flexible resource selection:
+
+### Label Selector (Kubernetes Standard)
+
+Uses Kubernetes-native label selector syntax for exact matching:
+
+```go
+config := &faro.Config{
+    Resources: []faro.ResourceConfig{
+        {
+            GVR:           "v1/pods",
+            Scope:         faro.NamespaceScope,
+            LabelSelector: "app=nginx,environment=production",
+        },
+        {
+            GVR:           "v1/services", 
+            Scope:         faro.NamespaceScope,
+            LabelSelector: "app in (nginx,apache)",
+        },
+        {
+            GVR:           "v1/configmaps",
+            Scope:         faro.NamespaceScope,
+            LabelSelector: "app,!temp", // has 'app' label, doesn't have 'temp'
+        },
+    },
+}
+```
+
+### Label Pattern (Regex Matching)
+
+Uses regex patterns for flexible label value matching:
+
+```go
+config := &faro.Config{
+    Resources: []faro.ResourceConfig{
+        {
+            GVR:          "v1/pods",
+            Scope:        faro.NamespaceScope,
+            LabelPattern: "app=^nginx-.*$", // matches nginx-web, nginx-api, etc.
+        },
+        {
+            GVR:          "hypershift.openshift.io/v1beta1/hostedclusters",
+            Scope:        faro.NamespaceScope,
+            LabelPattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-.*$",
+        },
+        {
+            GVR:          "v1/configmaps",
+            Scope:        faro.NamespaceScope,
+            LabelPattern: "version=v\\d+\\.\\d+", // matches version=v1.2, v2.10, etc.
+        },
+    },
+}
+```
+
+### YAML Configuration Examples
+
+```yaml
+# Namespace-centric format with label filtering
+namespaces:
+  - name_pattern: "^production-.*"
+    resources:
+      "v1/pods":
+        name_pattern: ".*"
+        label_selector: "app=nginx,tier=frontend"
+      
+      "v1/configmaps":
+        name_pattern: ".*"
+        label_pattern: "app=^web-.*$"
+
+# Resource-centric format with label filtering  
+resources:
+  - gvr: "v1/pods"
+    scope: "Namespaced"
+    namespace_patterns: [".*"]
+    name_pattern: ".*"
+    label_selector: "app=nginx"
+    
+  - gvr: "v1/services"
+    scope: "Namespaced" 
+    namespace_patterns: ["production-.*"]
+    name_pattern: ".*"
+    label_pattern: "environment=^(prod|staging)$"
+```
+
+### Label Filtering vs Server-Side Filtering
+
+**Label Selector (`label_selector`)**:
+- ✅ Processed by Kubernetes API server (server-side filtering)
+- ✅ Reduces network traffic 
+- ✅ Better performance for large clusters
+- ❌ Limited to Kubernetes label selector syntax
+
+**Label Pattern (`label_pattern`)**:
+- ✅ Full regex power for complex matching
+- ✅ Can match any label value pattern
+- ❌ Client-side filtering (all resources fetched first)
+- ❌ Higher network overhead
+
+### Combining Filters
+
+You can combine multiple filtering criteria:
+
+```go
+config := &faro.Config{
+    Resources: []faro.ResourceConfig{
+        {
+            GVR:               "v1/pods",
+            Scope:             faro.NamespaceScope,
+            NamespacePatterns: []string{"prod-.*", "stage-.*"},
+            NamePattern:       "web-.*",
+            LabelSelector:     "app=nginx", // Server-side pre-filter
+            LabelPattern:      "version=^v[0-9]+\\.[0-9]+$", // Client-side regex
+        },
+    },
+}
+```
+
+**Filter Processing Order:**
+1. **Namespace patterns**: Filter namespaces to watch
+2. **Label selector**: Server-side filtering (if specified)
+3. **Name pattern**: Client-side resource name filtering  
+4. **Label pattern**: Client-side label value regex filtering
+
+### OCM Staging Use Case Example
+
+For monitoring OpenShift CI/CD clusters in OCM staging:
+
+```go
+config := &faro.Config{
+    Namespaces: []faro.NamespaceConfig{
+        {
+            // Monitor parent namespaces but filter resources by CI pattern
+            NamePattern: "^ocm-staging-[a-z0-9]{32}$",
+            Resources: map[string]faro.ResourceDetails{
+                "hypershift.openshift.io/v1beta1/hostedclusters": {
+                    NamePattern:  ".*",
+                    LabelPattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-[a-z0-9-]+$",
+                },
+                "hypershift.openshift.io/v1beta1/nodepools": {
+                    NamePattern:  ".*", 
+                    LabelPattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-[a-z0-9-]+$",
+                },
+            },
+        },
+    },
+}
+```
+
+This solves the timing problem by monitoring ALL parent namespaces but only logging resources that match the CI cluster pattern.
 
 ## Advanced Usage: Worker Dispatcher Pattern
 
