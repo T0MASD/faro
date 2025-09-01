@@ -4,4 +4,5 @@ examples/logs
 # Build artifacts
 build/
 scratch/
+work/
 faro
