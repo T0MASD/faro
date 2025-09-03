@@ -1,6 +1,7 @@
 package faro
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -24,6 +25,11 @@ type Logger struct {
 
 // NewLogger creates a new callback-based logger with console and file handlers
 func NewLogger(logDir string) (*Logger, error) {
+	return NewLoggerWithJSON(logDir, false)
+}
+
+// NewLoggerWithJSON creates a logger with optional JSON file separation
+func NewLoggerWithJSON(logDir string, separateJSON bool) (*Logger, error) {
 	logger := &Logger{
 		handlers: make([]LogHandler, 0),
 	}
@@ -48,6 +54,17 @@ func NewLogger(logDir string) (*Logger, error) {
 		}
 		
 		logger.AddHandler(&FileLogHandler{file: logFile})
+		
+		// Add JSON file handler if requested
+		if separateJSON {
+			jsonPath := fmt.Sprintf("%s/events-%s.json", logDir, timestamp)
+			jsonFile, err := os.OpenFile(jsonPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create JSON log file: %v", err)
+			}
+			
+			logger.AddHandler(&JSONFileHandler{file: jsonFile})
+		}
 	}
 	
 	return logger, nil
@@ -60,14 +77,33 @@ func (l *Logger) AddHandler(handler LogHandler) {
 	l.handlers = append(l.handlers, handler)
 }
 
+// SetConsoleEnabled enables or disables console output
+func (l *Logger) SetConsoleEnabled(enabled bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	
+	for _, handler := range l.handlers {
+		if consoleHandler, ok := handler.(*ConsoleLogHandler); ok {
+			consoleHandler.Disabled = !enabled
+		}
+	}
+}
+
 // ConsoleLogHandler handles logging to console via klog
-type ConsoleLogHandler struct{}
+type ConsoleLogHandler struct{
+	Disabled bool
+}
 
 func (ch *ConsoleLogHandler) Name() string {
 	return "console"
 }
 
 func (ch *ConsoleLogHandler) WriteLog(level int, component, message string, timestamp time.Time) error {
+	// Skip console output if disabled (e.g., when dashboard is active)
+	if ch.Disabled {
+		return nil
+	}
+	
 	logLine := fmt.Sprintf("[%s] %s", component, message)
 	
 	switch level {
@@ -150,6 +186,56 @@ func (fh *FileLogHandler) Close() error {
 	if fh.file != nil {
 		err := fh.file.Close()
 		fh.file = nil
+		return err
+	}
+	return nil
+}
+
+// JSONFileHandler handles logging structured JSON events to a separate file
+type JSONFileHandler struct {
+	file *os.File
+	mu   sync.Mutex
+}
+
+func (jh *JSONFileHandler) Name() string {
+	return "json-file"
+}
+
+func (jh *JSONFileHandler) WriteLog(level int, component, message string, timestamp time.Time) error {
+	// Only handle cluster-handler messages that contain JSON
+	if component != "cluster-handler" {
+		return nil
+	}
+	
+	// Check if the message is valid JSON
+	var jsonData interface{}
+	if err := json.Unmarshal([]byte(message), &jsonData); err != nil {
+		// Not JSON, skip
+		return nil
+	}
+	
+	jh.mu.Lock()
+	defer jh.mu.Unlock()
+	
+	if jh.file == nil {
+		return fmt.Errorf("JSON file handler is closed")
+	}
+	
+	// Write pure JSON (one line per event)
+	if _, err := jh.file.WriteString(message + "\n"); err != nil {
+		return err
+	}
+	
+	return jh.file.Sync() // Ensure immediate write
+}
+
+func (jh *JSONFileHandler) Close() error {
+	jh.mu.Lock()
+	defer jh.mu.Unlock()
+	
+	if jh.file != nil {
+		err := jh.file.Close()
+		jh.file = nil
 		return err
 	}
 	return nil

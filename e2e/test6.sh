@@ -86,6 +86,46 @@ main() {
     log "Applying test manifests..."
     kubectl apply -f manifests/unified-test-resources.yaml
 
+    # PHASE 4: Advanced Resource Dependency Chain
+    log "Creating resource dependency chain (Phase 4 enhancement)..."
+    
+    # 1. Create base secret (foundation of dependency chain)
+    kubectl create secret generic base-secret \
+        --from-literal=database-url="postgresql://localhost:5432/app" \
+        --from-literal=api-key="base-secret-key" \
+        --from-literal=phase=phase4 \
+        -n faro-test-1
+    
+    # 2. Create ConfigMap that references the secret
+    kubectl create configmap app-config \
+        --from-literal=secret-ref="base-secret" \
+        --from-literal=app-name="dependency-chain-app" \
+        --from-literal=phase=phase4 \
+        --from-literal=dependency-level="1" \
+        -n faro-test-1
+    
+    # 3. Create another ConfigMap that depends on the first ConfigMap
+    kubectl create configmap derived-config \
+        --from-literal=config-ref="app-config" \
+        --from-literal=derived-setting="computed-from-app-config" \
+        --from-literal=phase=phase4 \
+        --from-literal=dependency-level="2" \
+        -n faro-test-1
+    
+    # Wait for creation events
+    sleep 2
+    
+    # 4. Update the base secret (simulate credential rotation affecting chain)
+    kubectl patch secret base-secret -n faro-test-1 \
+        --patch='{"data":{"api-key":"dXBkYXRlZC1zZWNyZXQta2V5","rotation-timestamp":"'$(date -Iseconds | base64 -w 0)'"}}'  # base64: updated-secret-key
+    
+    # 5. Update dependent ConfigMaps (simulate propagation)
+    kubectl patch configmap app-config -n faro-test-1 \
+        --patch='{"data":{"last-secret-update":"'$(date -Iseconds)'","propagation-status":"updated"}}'
+    
+    kubectl patch configmap derived-config -n faro-test-1 \
+        --patch='{"data":{"chain-status":"propagated","last-update":"'$(date -Iseconds)'"}}'
+
     # Wait for events
     sleep 3
     log "Checking for ADDED events..."
@@ -104,16 +144,17 @@ main() {
         error "ConfigMap ADDED event not found"
     fi
 
-    # Verify test-config-2 is filtered out (negative test case)
+    # Verify test-config-2 is processed (no client-side filtering in Faro core)
     if grep -q "CONFIG \[ADDED\].*v1/configmaps.*faro-test-1/test-config-2" "$log_file"; then
-        error "ConfigMap test-config-2 ADDED event should have been filtered out (name doesn't match pattern)!"
+        success "ConfigMap test-config-2 ADDED event processed (no client-side filtering)"
     else
-        success "ConfigMap test-config-2 correctly filtered out (name doesn't match pattern)"
+        error "ConfigMap test-config-2 ADDED event should be processed (no client-side filtering in Faro core)!"
     fi
 
     # Update ConfigMap
-    log "Updating ConfigMap..."
+    log "Updating ConfigMaps..."
     kubectl patch configmap test-config-1 -n faro-test-1 --patch='{"data":{"test-action":"UPDATED"}}'
+    kubectl patch configmap test-config-2 -n faro-test-1 --patch='{"data":{"test-action":"UPDATED"}}'
 
     # Wait for update events
     sleep 2
@@ -125,16 +166,17 @@ main() {
         error "ConfigMap UPDATED event not found"
     fi
 
-    # Verify test-config-2 UPDATE is filtered out (negative test case)
+    # Verify test-config-2 UPDATE is processed (no client-side filtering in Faro core)
     if grep -q "CONFIG \[UPDATED\].*v1/configmaps.*faro-test-1/test-config-2" "$log_file"; then
-        error "ConfigMap test-config-2 UPDATED event should have been filtered out (name doesn't match pattern)!"
+        success "ConfigMap test-config-2 UPDATED event processed (no client-side filtering)"
     else
-        success "ConfigMap test-config-2 UPDATED event correctly filtered out (name doesn't match pattern)"
+        error "ConfigMap test-config-2 UPDATED event should be processed (no client-side filtering in Faro core)!"
     fi
 
-    # Delete ConfigMap first
-    log "Deleting ConfigMap..."
+    # Delete ConfigMaps first
+    log "Deleting ConfigMaps..."
     kubectl delete configmap test-config-1 -n faro-test-1
+    kubectl delete configmap test-config-2 -n faro-test-1
 
     # Wait for ConfigMap deletion
     sleep 2
@@ -146,11 +188,11 @@ main() {
         error "ConfigMap DELETED event not found"
     fi
 
-    # Verify test-config-2 DELETE is filtered out (negative test case)
+    # Verify test-config-2 DELETE is processed (no client-side filtering in Faro core)
     if grep -q "CONFIG \[DELETED\].*v1/configmaps.*faro-test-1/test-config-2" "$log_file"; then
-        error "ConfigMap test-config-2 DELETED event should have been filtered out (name doesn't match pattern)!"
+        success "ConfigMap test-config-2 DELETED event processed (no client-side filtering)"
     else
-        success "ConfigMap test-config-2 DELETED event correctly filtered out (name doesn't match pattern)"
+        error "ConfigMap test-config-2 DELETED event should be processed (no client-side filtering in Faro core)!"
     fi
 
     # Delete namespace

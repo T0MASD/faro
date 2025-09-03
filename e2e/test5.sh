@@ -86,6 +86,34 @@ main() {
     log "Applying test manifests..."
     kubectl apply -f manifests/unified-test-resources.yaml
 
+    # PHASE 4: Advanced Service Discovery Operations
+    log "Performing advanced service discovery (Phase 4 enhancement)..."
+    
+    # 1. Create a service with multiple endpoints
+    kubectl create service clusterip discovery-service \
+        --tcp=80:8080 \
+        --tcp=443:8443 \
+        -n faro-test-1
+    
+    # 2. Create a headless service for service discovery
+    kubectl create service clusterip headless-service \
+        --tcp=80:8080 \
+        --clusterip=None \
+        -n faro-test-1
+    
+    # 3. Add service annotations (simulate service mesh integration)
+    kubectl annotate service discovery-service \
+        phase4.test/service-type="discovery" \
+        phase4.test/mesh-enabled="true" \
+        -n faro-test-1
+    
+    # Wait for service creation events
+    sleep 2
+    
+    # 4. Update service (simulate configuration change)
+    kubectl patch service discovery-service -n faro-test-1 \
+        --patch='{"metadata":{"annotations":{"phase4.test/updated":"true","phase4.test/timestamp":"'$(date -Iseconds)'"}}}'
+
     # Wait for events
     sleep 3
     log "Checking for ADDED events..."

@@ -61,7 +61,7 @@ check_kubectl_access
 # Ensure logs directory exists
 mkdir -p logs
 
-log_file="logs/test8.log"
+log_file="logs/simple-test-8.log"
 log "Faro log file: $SCRIPT_DIR/$log_file"
 
 log "Starting Faro via library (go run test8.go)..."
@@ -106,16 +106,17 @@ else
     exit 1
 fi
 
-# Verify test-config-2 is filtered out (negative test case)
+# Verify test-config-2 is processed (no client-side filtering in Faro core)
 if grep -q "CONFIG \[ADDED\].*test-config-2" $log_file; then
-    echo "❌ ConfigMap test-config-2 ADDED event should have been filtered out (name doesn't match pattern)!"
-    exit 1
+    echo "✅ ConfigMap test-config-2 ADDED event processed (no client-side filtering)"
 else
-    echo "✅ ConfigMap test-config-2 correctly filtered out (name doesn't match pattern)"
+    echo "❌ ConfigMap test-config-2 ADDED event should be processed (no client-side filtering in Faro core)!"
+    exit 1
 fi
 
-log "Updating ConfigMap..."
+log "Updating ConfigMaps..."
 kubectl patch configmap test-config-1 -n faro-test-1 --patch '{"data":{"updated":"true"}}'
+kubectl patch configmap test-config-2 -n faro-test-1 --patch '{"data":{"updated":"true"}}'
 
 # Wait for update event
 sleep 3
@@ -128,16 +129,17 @@ else
     exit 1
 fi
 
-# Verify test-config-2 UPDATE is filtered out (negative test case)
+# Verify test-config-2 UPDATE is processed (no client-side filtering in Faro core)
 if grep -q "CONFIG \[UPDATED\].*test-config-2" $log_file; then
-    echo "❌ ConfigMap test-config-2 UPDATED event should have been filtered out (name doesn't match pattern)!"
-    exit 1
+    echo "✅ ConfigMap test-config-2 UPDATED event processed (no client-side filtering)"
 else
-    echo "✅ ConfigMap test-config-2 UPDATED event correctly filtered out (name doesn't match pattern)"
+    echo "❌ ConfigMap test-config-2 UPDATED event should be processed (no client-side filtering in Faro core)!"
+    exit 1
 fi
 
-log "Deleting ConfigMap test-config-1..."
+log "Deleting ConfigMaps..."
 kubectl delete configmap test-config-1 -n faro-test-1
+kubectl delete configmap test-config-2 -n faro-test-1
 
 # Wait for delete event
 sleep 4
@@ -150,12 +152,12 @@ else
     exit 1
 fi
 
-# Verify test-config-2 DELETE is filtered out (negative test case)
+# Verify test-config-2 DELETE is processed (no client-side filtering in Faro core)
 if grep -q "CONFIG \[DELETED\].*test-config-2" $log_file; then
-    echo "❌ ConfigMap test-config-2 DELETED event should have been filtered out (name doesn't match pattern)!"
-    exit 1
+    echo "✅ ConfigMap test-config-2 DELETED event processed (no client-side filtering)"
 else
-    echo "✅ ConfigMap test-config-2 DELETED event correctly filtered out (name doesn't match pattern)"
+    echo "❌ ConfigMap test-config-2 DELETED event should be processed (no client-side filtering in Faro core)!"
+    exit 1
 fi
 
 # Show log

@@ -46,9 +46,9 @@ func (d *DynamicDiscoveryHandler) createTargetController(targetNS string) {
 		LogLevel:  "info",
 		Resources: []faro.ResourceConfig{
 			{
-				GVR:         "v1/namespaces",
-				Scope:       faro.ClusterScope,
-				NamePattern: fmt.Sprintf("^%s$", targetNS), // Exact match for target namespace
+				GVR:   "v1/namespaces",
+				Scope: faro.ClusterScope,
+				// Note: No client-side filtering - all namespaces will be processed
 			},
 		},
 	}
@@ -92,9 +92,9 @@ func main() {
 		LogLevel:  "info",
 		Resources: []faro.ResourceConfig{
 			{
-				GVR:         "v1/namespaces",
-				Scope:       faro.ClusterScope,
-				NamePattern: "^faro-testa$", // Watch specific namespace by name
+				GVR:   "v1/namespaces",
+				Scope: faro.ClusterScope,
+				// Note: No client-side filtering - all namespaces will be processed
 			},
 		},
 	}

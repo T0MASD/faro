@@ -30,6 +30,15 @@ error() {
 
 cleanup() {
     log "Cleaning up test resources..."
+    # Phase 4: Clean up advanced resources first
+    kubectl delete configmap cross-ref-config -n faro-ns-1 --ignore-not-found=true || true
+    kubectl delete secret rotation-secret -n faro-ns-2 --ignore-not-found=true || true
+    kubectl delete configmap dependent-config -n faro-ns-2 --ignore-not-found=true || true
+    
+    # Phase 2: Clean up ConfigMaps first (namespaces will cascade delete them anyway)
+    kubectl delete configmap test-config-ns1 -n faro-ns-1 --ignore-not-found=true || true
+    kubectl delete configmap test-config-ns2 -n faro-ns-2 --ignore-not-found=true || true
+    
     kubectl delete namespace faro-ns-1 --ignore-not-found=true || true
     kubectl delete namespace faro-ns-2 --ignore-not-found=true || true
     kubectl delete namespace faro-ns-3 --ignore-not-found=true || true
@@ -111,6 +120,65 @@ main() {
     kubectl create namespace faro-ns-3 --dry-run=client -o yaml | \
         kubectl label --local -f - test-label=different-value -o yaml | \
         kubectl apply -f -
+
+    # PHASE 2: Add ConfigMaps to faro-ns-1 and faro-ns-2 for multi-namespace resource testing
+    log "Creating ConfigMaps in detected namespaces (Phase 2 enhancement)..."
+    
+    # Add ConfigMap to faro-ns-1
+    kubectl create configmap test-config-ns1 \
+        --from-literal=namespace=faro-ns-1 \
+        --from-literal=phase=phase2 \
+        --from-literal=test-data="multi-namespace-validation" \
+        -n faro-ns-1
+    
+    # Add ConfigMap to faro-ns-2  
+    kubectl create configmap test-config-ns2 \
+        --from-literal=namespace=faro-ns-2 \
+        --from-literal=phase=phase2 \
+        --from-literal=test-data="multi-namespace-validation" \
+        -n faro-ns-2
+
+    # PHASE 4: Advanced Resource Operations
+    log "Performing advanced resource operations (Phase 4 enhancement)..."
+    
+    # 1. Cross-namespace ConfigMap reference simulation
+    log "Creating cross-namespace ConfigMap references..."
+    kubectl create configmap cross-ref-config \
+        --from-literal=source-namespace=faro-ns-1 \
+        --from-literal=target-namespace=faro-ns-2 \
+        --from-literal=phase=phase4 \
+        --from-literal=operation="cross-namespace-reference" \
+        -n faro-ns-1
+    
+    # 2. Secret rotation simulation
+    log "Simulating secret rotation..."
+    kubectl create secret generic rotation-secret \
+        --from-literal=version=v1 \
+        --from-literal=key="initial-secret-value" \
+        --from-literal=phase=phase4 \
+        -n faro-ns-2
+    
+    # Wait for creation events
+    sleep 2
+    
+    # 3. Update cross-namespace ConfigMap (simulate config propagation)
+    log "Updating cross-namespace ConfigMap..."
+    kubectl patch configmap cross-ref-config -n faro-ns-1 \
+        --patch='{"data":{"propagation-status":"updated","timestamp":"'$(date -Iseconds)'"}}'
+    
+    # 4. Rotate the secret (simulate credential rotation)
+    log "Rotating secret..."
+    kubectl patch secret rotation-secret -n faro-ns-2 \
+        --patch='{"data":{"version":"djI=","key":"cm90YXRlZC1zZWNyZXQtdmFsdWU="}}'  # base64: v2, rotated-secret-value
+    
+    # 5. Create dependent ConfigMap in faro-ns-2 (simulate dependency chain)
+    log "Creating dependent ConfigMap..."
+    kubectl create configmap dependent-config \
+        --from-literal=depends-on=cross-ref-config \
+        --from-literal=secret-ref=rotation-secret \
+        --from-literal=phase=phase4 \
+        --from-literal=dependency-type="advanced-chain" \
+        -n faro-ns-2
 
     # Wait for events
     sleep 3

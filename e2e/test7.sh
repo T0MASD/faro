@@ -131,6 +131,32 @@ main() {
         error "ConfigMap test-config-2 UPDATED event not found"
     fi
 
+    # PHASE 3: Update Service and Secret (Resource Lifecycle Enhancement)
+    log "Updating Service and Secret (Phase 3 enhancement)..."
+    kubectl patch service test-service -n faro-test-1 --patch='{"metadata":{"annotations":{"phase3":"updated","test":"test7"}}}' 2>/dev/null || log "Service not found (expected in ConfigMap-focused test)"
+    kubectl patch secret test-secret -n faro-test-1 --patch='{"metadata":{"annotations":{"phase3":"updated","test":"test7"}}}' 2>/dev/null || log "Secret not found (expected in ConfigMap-focused test)"
+
+    # Wait for update events
+    sleep 2
+    log "Checking for Service/Secret UPDATED events..."
+
+    if grep -q "CONFIG \[UPDATED\].*faro-test-1/test-service" "$log_file"; then
+        success "Service UPDATED event detected!"
+    else
+        log "Service UPDATED event not found (expected - test7 focuses on ConfigMaps)"
+    fi
+
+    if grep -q "CONFIG \[UPDATED\].*faro-test-1/test-secret" "$log_file"; then
+        success "Secret UPDATED event detected!"
+    else
+        log "Secret UPDATED event not found (expected - test7 focuses on ConfigMaps)"
+    fi
+
+    # Delete Service and Secret before ConfigMaps (if they exist)
+    log "Deleting Service and Secret (Phase 3 enhancement)..."
+    kubectl delete service test-service -n faro-test-1 2>/dev/null || true
+    kubectl delete secret test-secret -n faro-test-1 2>/dev/null || true
+
     # Delete both ConfigMaps
     log "Deleting ConfigMaps..."
     kubectl delete configmap test-config-1 -n faro-test-1

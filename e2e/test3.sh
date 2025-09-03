@@ -96,18 +96,19 @@ main() {
         error "ConfigMap ADDED event not found"
     fi
 
-    # Verify test-config-2 is filtered out (negative test case)
+    # Verify test-config-2 is filtered out by server-side label selector (app=faro-test)
     if grep -q "CONFIG \[ADDED\].*faro-test-1/test-config-2" "$log_file"; then
-        error "ConfigMap test-config-2 ADDED event should have been filtered out (name doesn't match pattern)!"
+        error "ConfigMap test-config-2 ADDED event should be filtered out by server-side label selector!"
     else
-        success "ConfigMap test-config-2 correctly filtered out (name doesn't match pattern)"
+        success "ConfigMap test-config-2 correctly filtered out by server-side label selector (app=faro-test)"
     fi
 
-    # Update ConfigMap
-    log "Updating ConfigMap..."
+    # Update ConfigMaps
+    log "Updating ConfigMaps..."
     kubectl patch configmap test-config-1 -n faro-test-1 --patch='{"data":{"test-action":"UPDATED"}}'
+    kubectl patch configmap test-config-2 -n faro-test-1 --patch='{"data":{"test-action":"UPDATED"}}'
 
-    # Wait for update event
+    # Wait for update events
     sleep 2
     log "Checking for UPDATED events..."
 
@@ -117,16 +118,17 @@ main() {
         error "ConfigMap UPDATED event not found"
     fi
 
-    # Verify test-config-2 UPDATE is filtered out (negative test case)
+    # Verify test-config-2 UPDATE is filtered out by server-side label selector (app=faro-test)
     if grep -q "CONFIG \[UPDATED\].*faro-test-1/test-config-2" "$log_file"; then
-        error "ConfigMap test-config-2 UPDATED event should have been filtered out (name doesn't match pattern)!"
+        error "ConfigMap test-config-2 UPDATED event should be filtered out by server-side label selector!"
     else
-        success "ConfigMap test-config-2 UPDATED event correctly filtered out (name doesn't match pattern)"
+        success "ConfigMap test-config-2 UPDATED event correctly filtered out by server-side label selector (app=faro-test)"
     fi
 
-    # Delete ConfigMap
-    log "Deleting ConfigMap test-config..."
+    # Delete ConfigMaps
+    log "Deleting ConfigMaps..."
     kubectl delete configmap test-config-1 -n faro-test-1
+    kubectl delete configmap test-config-2 -n faro-test-1
 
     # Wait for deletion event
     sleep 3
@@ -138,11 +140,11 @@ main() {
         error "ConfigMap DELETED event not found"
     fi
 
-    # Verify test-config-2 DELETE is filtered out (negative test case)
+    # Verify test-config-2 DELETE is filtered out by server-side label selector (app=faro-test)
     if grep -q "CONFIG \[DELETED\].*faro-test-1/test-config-2" "$log_file"; then
-        error "ConfigMap test-config-2 DELETED event should have been filtered out (name doesn't match pattern)!"
+        error "ConfigMap test-config-2 DELETED event should be filtered out by server-side label selector!"
     else
-        success "ConfigMap test-config-2 DELETED event correctly filtered out (name doesn't match pattern)"
+        success "ConfigMap test-config-2 DELETED event correctly filtered out by server-side label selector (app=faro-test)"
     fi
 
     # Show log

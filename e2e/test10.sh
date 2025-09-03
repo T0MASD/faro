@@ -36,6 +36,12 @@ trap cleanup EXIT
 
 log "Starting Test10 - Dynamic Namespace Discovery"
 
+# Create logs directory if it doesn't exist
+mkdir -p logs
+
+log_file="logs/simple-test-10.log"
+log "Faro log file: $SCRIPT_DIR/$log_file"
+
 # Check kubectl access
 log "Checking kubectl access..."
 if ! kubectl cluster-info >/dev/null 2>&1; then
@@ -52,7 +58,7 @@ sleep 5
 
 # Run the library test
 log "Running dynamic discovery test..."
-if ! go run test10.go; then
+if ! go run test10.go > "$log_file" 2>&1; then
     error "Test10 failed to run"
 fi
 

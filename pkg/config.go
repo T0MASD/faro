@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"gopkg.in/yaml.v2"
 )
@@ -20,9 +19,7 @@ const (
 
 // ResourceDetails defines what resources to watch within a namespace (legacy format)
 type ResourceDetails struct {
-	NamePattern   string `yaml:"name_pattern"`   // Regex pattern for resource names
-	LabelSelector string `yaml:"label_selector,omitempty"` // Kubernetes label selector for filtering (e.g. "app=faro-test")
-	LabelPattern  string `yaml:"label_pattern,omitempty"`  // Regex pattern for label matching: "key": "pattern"
+	LabelSelector string `yaml:"label_selector,omitempty"` // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
 }
 
 // NamespaceConfig defines namespace and its resources to watch (namespace-centric format)
@@ -35,20 +32,17 @@ type NamespaceConfig struct {
 type ResourceConfig struct {
 	GVR               string   `yaml:"gvr"`                         // Group/Version/Resource identifier
 	Scope             Scope    `yaml:"scope,omitempty"`            // Explicitly define scope (Cluster or Namespaced)
-	NamespacePatterns []string `yaml:"namespace_patterns,omitempty"` // Regex patterns for namespace names (only for namespaced resources)
-	NamePattern       string   `yaml:"name_pattern,omitempty"`      // Regex pattern for resource names
-	LabelSelector     string   `yaml:"label_selector,omitempty"`   // Kubernetes label selector for filtering (e.g. "app=faro-test")
-	LabelPattern      string   `yaml:"label_pattern,omitempty"`    // Regex pattern for label matching: "key": "pattern"
+	NamespacePatterns []string `yaml:"namespace_patterns,omitempty"` // Literal namespace names only (for server-side filtering)
+	LabelSelector     string   `yaml:"label_selector,omitempty"`   // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
 }
 
 // NormalizedConfig is the unified data structure used internally by the controller.
 // This represents the normalized form that both configuration formats are converted to.
 type NormalizedConfig struct {
 	GVR               string          // Group/Version/Resource identifier
-	ResourceDetails   ResourceDetails // Resource matching details
-	NamespacePatterns []string        // Namespace patterns this config applies to
-	LabelSelector     string          // Kubernetes label selector for filtering (e.g. "app=faro-test")
-	LabelPattern      string          // Regex pattern for label matching: "key": "pattern"
+	ResourceDetails   ResourceDetails // Resource matching details (SERVER-SIDE only)
+	NamespacePatterns []string        // Literal namespace names only (for server-side filtering)
+	LabelSelector     string          // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
 }
 
 // Config represents the minimalist Faro configuration supporting both formats
@@ -174,29 +168,7 @@ func (c *Config) GetLogDir() string {
 	return filepath.Join(c.OutputDir, "logs")
 }
 
-// MatchesNamespace checks if a namespace name matches any configured namespace patterns
-func (c *Config) MatchesNamespace(namespaceName string) (*NamespaceConfig, bool) {
-	for _, nsConfig := range c.Namespaces {
-		if matched, _ := regexp.MatchString(nsConfig.NamePattern, namespaceName); matched {
-			return &nsConfig, true
-		}
-	}
-	return nil, false
-}
-
-// MatchesResource checks if a resource name matches the pattern for a specific GVR within a namespace config
-func (nsConfig *NamespaceConfig) MatchesResource(gvr string, resourceName string) bool {
-	if resourceDetails, exists := nsConfig.Resources[gvr]; exists {
-		matched, err := regexp.MatchString(resourceDetails.NamePattern, resourceName)
-		if err != nil {
-			// Log error but don't crash - return false for invalid patterns
-			fmt.Fprintf(os.Stderr, "Invalid regex pattern '%s' for resource %s: %v\n", resourceDetails.NamePattern, gvr, err)
-			return false
-		}
-		return matched
-	}
-	return false
-}
+// REMOVED: All client-side filtering functions have been eliminated from Faro core
 
 // GetMatchingResources returns all GVRs configured for a namespace
 func (nsConfig *NamespaceConfig) GetMatchingResources() []string {
@@ -217,13 +189,12 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 		// Process namespace-centric config
 		for _, nsConfig := range c.Namespaces {
 			for gvr, details := range nsConfig.Resources {
-				// Normalize into a single structure
+				// Normalize into a single structure (SERVER-SIDE filtering only)
 				normalizedMap[gvr] = append(normalizedMap[gvr], NormalizedConfig{
 					GVR:               gvr,
 					ResourceDetails:   details,
-					NamespacePatterns: []string{nsConfig.NamePattern},
-					LabelSelector:     details.LabelSelector, // Pass the label selector
-					LabelPattern:      details.LabelPattern,  // Pass the label pattern
+					NamespacePatterns: []string{nsConfig.NamePattern}, // Literal namespace names only
+					LabelSelector:     details.LabelSelector, // SERVER-SIDE filtering only
 				})
 			}
 		}
@@ -240,20 +211,17 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 					namespacePatterns = []string{""}
 				} else {
 					// Default to "all namespaces" for namespace-scoped resources without explicit patterns
-					namespacePatterns = []string{".*"}
+					namespacePatterns = []string{""}
 				}
 			}
 			
 			normalizedMap[resConfig.GVR] = append(normalizedMap[resConfig.GVR], NormalizedConfig{
 				GVR: resConfig.GVR,
 				ResourceDetails: ResourceDetails{
-					NamePattern:   resConfig.NamePattern,
-					LabelSelector: resConfig.LabelSelector,
-					LabelPattern:  resConfig.LabelPattern,
+					LabelSelector: resConfig.LabelSelector, // SERVER-SIDE filtering only
 				},
-				NamespacePatterns: namespacePatterns,
-				LabelSelector:     resConfig.LabelSelector, // Pass the label selector
-				LabelPattern:      resConfig.LabelPattern,  // Pass the label pattern
+				NamespacePatterns: namespacePatterns, // Literal namespace names only
+				LabelSelector:     resConfig.LabelSelector, // SERVER-SIDE filtering only
 			})
 		}
 	}
