@@ -1,0 +1,18 @@
+# Simple E2E Test 6 - Combined: Namespace + ConfigMap monitoring
+output_dir: "./logs/test6"
+log_level: "info"
+auto_shutdown_sec: 120
+json_export: true
+
+# Monitor cluster-scoped namespace resource
+resources:
+  - gvr: "v1/namespaces"
+    scope: "Cluster"
+    name_pattern: "faro-test-6"
+
+# Monitor namespace-scoped configmaps
+namespaces:
+  - name_pattern: "faro-test-6"
+    resources:
+      "v1/configmaps":
+        name_pattern: "test-config-1"

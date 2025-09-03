@@ -1,0 +1,72 @@
+# Unified E2E Test Manifests - All resources for all tests
+---
+# Namespace 1: Now has test-label for workload monitor detection (PHASE 1 OPTIMIZATION)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-1
+  labels:
+    test-label: faro-namespace  # Enables workload monitor detection
+    workload-type: e2e-test     # Additional metadata for analysis
+---
+# Namespace 2: Has label but different name - should only match label selector (for test9)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-testa
+  labels:
+    test-label: faro-namespace
+    next-namespace: faro-test-1
+---
+# ConfigMap for tests 2,3,4,7: test-config-1 (with label)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config-1
+  namespace: faro-test-1
+  labels:
+    app: faro-test
+data:
+  key1: "value1"
+  test-action: "ADDED"
+---
+# ConfigMap for test 7: test-config-2 (no label)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config-2
+  namespace: faro-test-1
+data:
+  key1: "value2"
+  test-action: "ADDED"
+---
+# Service for faro-test-1 (PHASE 1 OPTIMIZATION - Resource Diversity)
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-service
+  namespace: faro-test-1
+  labels:
+    app: faro-test
+    workload-type: e2e-test
+spec:
+  selector:
+    app: faro-test
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+---
+# Secret for faro-test-1 (PHASE 1 OPTIMIZATION - Resource Diversity)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret
+  namespace: faro-test-1
+  labels:
+    app: faro-test
+    workload-type: e2e-test
+type: Opaque
+data:
+  test-key: dGVzdC12YWx1ZQ==  # base64: test-value
+  config-data: ZTJlLXRlc3QtZGF0YQ==  # base64: e2e-test-data

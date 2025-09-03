@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-8a
+  labels:
+    test-label: "faro-namespace"
+    workload-type: "e2e-test"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-8b
+  labels:
+    test-label: "faro-namespace"
+    workload-type: "e2e-test"

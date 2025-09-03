@@ -2,8 +2,8 @@ package faro
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -11,7 +11,6 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -46,9 +45,42 @@ type MatchedEvent struct {
 	Timestamp time.Time                   // When the event was processed
 }
 
+// JSONEvent represents a structured JSON event for export
+type JSONEvent struct {
+	Timestamp string            `json:"timestamp"`
+	EventType string            `json:"eventType"`
+	GVR       string            `json:"gvr"`
+	Namespace string            `json:"namespace,omitempty"`
+	Name      string            `json:"name"`
+	UID       string            `json:"uid,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+}
+
 // EventHandler interface for handling matched events via callbacks
 type EventHandler interface {
 	OnMatched(event MatchedEvent) error
+}
+
+// logJSONEvent creates and logs a structured JSON event
+func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string) {
+	jsonEvent := JSONEvent{
+		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+		EventType: eventType,
+		GVR:       gvr,
+		Namespace: namespace,
+		Name:      name,
+		UID:       uid,
+		Labels:    labels,
+	}
+
+	jsonData, err := json.Marshal(jsonEvent)
+	if err != nil {
+		c.logger.Warning("controller", fmt.Sprintf("Failed to marshal JSON event: %v", err))
+		return
+	}
+
+	// Log as JSON for the JSONFileHandler to pick up
+	c.logger.Info("controller", string(jsonData))
 }
 
 // InformerConfig holds configuration for creating a generic informer
@@ -90,6 +122,11 @@ type Controller struct {
 	// Event handlers for library usage
 	eventHandlers []EventHandler
 	handlersMu    sync.RWMutex
+
+	// Readiness callback
+	onReady   func()
+	readyMu   sync.Mutex
+	isReady   bool
 }
 
 // NewController creates a new informer-based controller
@@ -116,12 +153,43 @@ func (c *Controller) AddEventHandler(handler EventHandler) {
 	c.eventHandlers = append(c.eventHandlers, handler)
 }
 
+// SetReadyCallback sets a callback function to be called when Faro is fully initialized and ready
+func (c *Controller) SetReadyCallback(callback func()) {
+	c.readyMu.Lock()
+	defer c.readyMu.Unlock()
+	c.onReady = callback
+	
+	// If already ready, call immediately
+	if c.isReady && callback != nil {
+		go callback()
+	}
+}
+
+// IsReady returns true if Faro is fully initialized and ready to process events
+func (c *Controller) IsReady() bool {
+	c.readyMu.Lock()
+	defer c.readyMu.Unlock()
+	return c.isReady
+}
+
+// AddResources dynamically adds new resource configurations to the controller
+func (c *Controller) AddResources(newResources []ResourceConfig) {
+	c.config.Resources = append(c.config.Resources, newResources...)
+	c.logger.Info("controller", fmt.Sprintf("Added %d new resource configurations", len(newResources)))
+}
+
+// RestartInformers restarts config-driven informers with the current configuration
+func (c *Controller) RestartInformers() error {
+	c.logger.Info("controller", "Restarting informers with updated configuration")
+	return c.startConfigDrivenInformers()
+}
+
 // createGenericInformer creates a generic informer with consistent setup
 func (c *Controller) createGenericInformer(config InformerConfig) (cache.SharedIndexInformer, error) {
 	// Handle namespace scope logic
 	var namespace string
 	if config.Scope == apiextensionsv1.NamespaceScoped {
-		namespace = "" // Watch all namespaces, filter in event handler
+		namespace = "" // Watch all namespaces, filter in event handler (generic informer doesn't have config patterns)
 	}
 
 	// Create factory
@@ -158,11 +226,25 @@ func (c *Controller) createEventHandlers(handlerFunc func(string, *unstructured.
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-				handlerFunc("DELETED", unstructuredObj)
+			var unstructuredObj *unstructured.Unstructured
+			var ok bool
+			
+			// Handle Kubernetes cache tombstone objects properly
+			if tombstone, isTombstone := obj.(cache.DeletedFinalStateUnknown); isTombstone {
+				unstructuredObj, ok = tombstone.Obj.(*unstructured.Unstructured)
+				if !ok {
+					c.logger.Error("controller", fmt.Sprintf("Tombstone contained unexpected object type for %s", gvrString))
+					return
+				}
 			} else {
-				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in DeleteFunc for %s", gvrString))
+				unstructuredObj, ok = obj.(*unstructured.Unstructured)
+				if !ok {
+					c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in DeleteFunc for %s", gvrString))
+					return
+				}
 			}
+			
+			handlerFunc("DELETED", unstructuredObj)
 		},
 	}
 }
@@ -177,10 +259,39 @@ func (c *Controller) runInformerWithLogging(informer cache.SharedIndexInformer, 
 
 // createLabelSelectorInformer creates an informer with label selector support for the normalized config path
 func (c *Controller) createLabelSelectorInformer(config InformerConfig, normalizedConfigs []NormalizedConfig) (cache.SharedIndexInformer, error) {
-	// Handle namespace scope logic
+	// Handle namespace scope logic with server-side filtering
 	var namespace string
 	if config.Scope == apiextensionsv1.NamespaceScoped {
+		// Check if we have specific namespace patterns for server-side filtering
+		if len(normalizedConfigs) > 0 && len(normalizedConfigs[0].NamespacePatterns) > 0 {
+			// For now, use the first namespace pattern if it's a literal (no regex)
+			firstPattern := normalizedConfigs[0].NamespacePatterns[0]
+			
+			// Extract literal namespace name from common regex patterns
+			var literalNamespace string
+			
+			// Check if it's an exact match pattern like "^exact-namespace-name$"
+			if strings.HasPrefix(firstPattern, "^") && strings.HasSuffix(firstPattern, "$") && len(firstPattern) > 2 {
+				// Extract the middle part and check if it's literal
+				middle := firstPattern[1 : len(firstPattern)-1]
+				if !strings.ContainsAny(middle, ".*+?{}[]|()\\") {
+					literalNamespace = middle
+				}
+			} else if !strings.ContainsAny(firstPattern, ".*+?^${}[]|()\\") {
+				// It's already a literal namespace name
+				literalNamespace = firstPattern
+			}
+			
+			if literalNamespace != "" {
+				namespace = literalNamespace
+				c.logger.Info("controller", fmt.Sprintf("Using server-side namespace filtering for %s: %s", config.GVRString, namespace))
+			} else {
+				namespace = "" // Fall back to client-side filtering for complex regex patterns
+				c.logger.Debug("controller", fmt.Sprintf("Using client-side namespace filtering for %s (regex pattern: %s)", config.GVRString, firstPattern))
+			}
+		} else {
 		namespace = "" // Watch all namespaces, filter in event handler
+		}
 	}
 
 	// Determine the label selector to use for this GVR (for server-side filtering)
@@ -192,11 +303,31 @@ func (c *Controller) createLabelSelectorInformer(config InformerConfig, normaliz
 		}
 	}
 
-	// Create a tweakListOptions function to apply the label selector
+	// Determine the field selector for name pattern (for server-side filtering)
+	var fieldSelector string
+	for _, nConfig := range normalizedConfigs {
+		c.logger.Info("controller", fmt.Sprintf("DEBUG: Checking normalized config - NamePattern: '%s'", nConfig.NamePattern))
+		if nConfig.NamePattern != "" {
+			// For exact name matches, use field selector
+			if !strings.ContainsAny(nConfig.NamePattern, ".*+?^${}[]|()\\") {
+				fieldSelector = fmt.Sprintf("metadata.name=%s", nConfig.NamePattern)
+				c.logger.Info("controller", fmt.Sprintf("Using server-side name filtering for %s: %s", config.GVRString, fieldSelector))
+				break
+			} else {
+				c.logger.Warning("controller", fmt.Sprintf("Regex name patterns not supported for server-side filtering: %s", nConfig.NamePattern))
+			}
+		}
+	}
+
+	// Create a tweakListOptions function to apply selectors
 	tweakListOptions := func(options *metav1.ListOptions) {
 		if labelSelector != "" {
 			options.LabelSelector = labelSelector
 			c.logger.Debug("controller", fmt.Sprintf("Applying label selector '%s' to informer for %s", labelSelector, config.GVRString))
+		}
+		if fieldSelector != "" {
+			options.FieldSelector = fieldSelector
+			c.logger.Debug("controller", fmt.Sprintf("Applying field selector '%s' to informer for %s", fieldSelector, config.GVRString))
 		}
 	}
 
@@ -246,6 +377,17 @@ func (c *Controller) Start() error {
 	}
 
 	c.logger.Info("controller", "Multi-layered informer architecture started successfully")
+	
+	// Trigger readiness callback
+	c.readyMu.Lock()
+	c.isReady = true
+	callback := c.onReady
+	c.readyMu.Unlock()
+	
+	if callback != nil {
+		go callback()
+	}
+	
 	return nil
 }
 
@@ -303,6 +445,13 @@ func (c *Controller) processAPIGroup(group, version string) error {
 			continue // Skip subresources
 		}
 
+		// Skip resources that don't support watch operations
+		if !c.isResourceWatchable(resource) {
+			c.logger.Debug("controller", fmt.Sprintf("Skipping non-watchable resource: %s/%s/%s (verbs: %v)", 
+				group, version, resource.Name, resource.Verbs))
+			continue
+		}
+
 		// Create GVR key
 		var gvrKey string
 		if group == "" {
@@ -328,6 +477,47 @@ func (c *Controller) processAPIGroup(group, version string) error {
 	}
 
 	return nil
+}
+
+// isResourceWatchable checks if a resource supports watch operations
+func (c *Controller) isResourceWatchable(resource metav1.APIResource) bool {
+	// Check if the resource supports the "watch" verb
+	for _, verb := range resource.Verbs {
+		if verb == "watch" {
+			return true
+		}
+	}
+	
+	// Known non-watchable resource types (even if they claim to support watch)
+	nonWatchableResources := map[string]bool{
+		"componentstatuses":                    true, // /v1
+		"bindings":                            true, // /v1
+		"projectrequests":                     true, // project.openshift.io/v1
+		"appliedclusterresourcequotas":        true, // quota.openshift.io/v1
+		"selfsubjectaccessreviews":            true, // authorization.k8s.io/v1
+		"selfsubjectrulesreviews":             true, // authorization.k8s.io/v1
+		"selfsubjectreviews":                  true, // authentication.k8s.io/v1
+		"localsubjectaccessreviews":           true, // authorization.k8s.io/v1
+		"localresourceaccessreviews":          true, // authorization.openshift.io/v1
+		"tokenreviews":                        true, // oauth.openshift.io/v1
+		"podsecuritypolicyreviews":            true, // security.openshift.io/v1
+		"podsecuritypolicyselfsubjectreviews": true, // security.openshift.io/v1
+		"podsecuritypolicysubjectreviews":     true, // security.openshift.io/v1
+		"processedtemplates":                  true, // template.openshift.io/v1
+		"imagestreammappings":                 true, // image.openshift.io/v1
+	}
+	
+	// Check against known non-watchable resources
+	if nonWatchableResources[resource.Name] {
+		return false
+	}
+	
+	// Additional check for metrics resources (they often don't support watch properly)
+	if strings.Contains(resource.Group, "metrics") {
+		return false
+	}
+	
+	return true
 }
 
 // startCRDWatcher starts a CRD informer to watch for new CustomResourceDefinitions
@@ -367,11 +557,25 @@ func (c *Controller) startCRDWatcher() error {
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			if unstructuredObj, ok := obj.(*unstructured.Unstructured); ok {
-				c.handleCRDDeleted(unstructuredObj)
+			var unstructuredObj *unstructured.Unstructured
+			var ok bool
+			
+			// Handle Kubernetes cache tombstone objects properly for CRDs
+			if tombstone, isTombstone := obj.(cache.DeletedFinalStateUnknown); isTombstone {
+				unstructuredObj, ok = tombstone.Obj.(*unstructured.Unstructured)
+				if !ok {
+					c.logger.Error("controller", "Tombstone contained unexpected object type in CRD DeleteFunc")
+					return
+				}
 			} else {
-				c.logger.Error("controller", "Received unexpected object type in CRD DeleteFunc")
+				unstructuredObj, ok = obj.(*unstructured.Unstructured)
+				if !ok {
+					c.logger.Error("controller", "Received unexpected object type in CRD DeleteFunc")
+					return
+				}
 			}
+			
+			c.handleCRDDeleted(unstructuredObj)
 		},
 	})
 
@@ -1078,28 +1282,8 @@ func (c *Controller) processNextWorkItem() bool {
 
 // reconcile contains the core business logic for processing a work item
 func (c *Controller) reconcile(workItem *WorkItem) error {
-	// Step 1: Parse the key to get namespace and name.
-	namespace, name, err := cache.SplitMetaNamespaceKey(workItem.Key)
-	if err != nil {
-		c.logger.Warning("controller", fmt.Sprintf("Invalid resource key: %s", workItem.Key))
-		return nil
-	}
-
-	// Step 2: Check if the key matches any of the relevant configurations for this GVR.
-	isMatch := false
-	for _, config := range workItem.Configs {
-		if c.matchesConfigByKey(namespace, name, config) {
-			isMatch = true
-			break
-		}
-	}
-
-	if !isMatch {
-		// This object does not match our filters, so we don't care about it,
-		// whether it was added, updated, or deleted.
-		c.logger.Debug("controller", fmt.Sprintf("Skipping event for %s %s as it does not match any config", workItem.GVRString, workItem.Key))
-		return nil
-	}
+	// NO CLIENT-SIDE FILTERING - rely entirely on server-side filtering and application logic
+	// All events that reach here have already passed server-side filtering
 
 	// At this point, we know the object is one we are configured to watch.
 
@@ -1116,8 +1300,64 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 	obj, err := lister.Get(workItem.Key)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			// The object was deleted. Now we log it with the correct "CONFIG" prefix.
+			// The object was deleted. Log CONFIG message and call OnMatched handlers.
 			c.logger.Info("controller", fmt.Sprintf("CONFIG [DELETED] %s %s", workItem.GVRString, workItem.Key))
+			
+			// Parse the key to get namespace and name for JSON event
+			namespace, name, keyErr := cache.SplitMetaNamespaceKey(workItem.Key)
+			if keyErr != nil {
+				// For cluster-scoped resources, key is just the name
+				name = workItem.Key
+				namespace = ""
+			}
+			
+			// Log JSON event for DELETE
+			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, "", nil)
+			
+			// Create a minimal unstructured object for DELETE events
+			// We can't get the full object since it's deleted, but we can extract key info
+			deletedObj := &unstructured.Unstructured{}
+			
+			// Parse the key to get namespace and name
+			namespace, name, err := cache.SplitMetaNamespaceKey(workItem.Key)
+			if err != nil {
+				// For cluster-scoped resources, key is just the name
+				name = workItem.Key
+				namespace = ""
+			}
+			
+			deletedObj.SetName(name)
+			if namespace != "" {
+				deletedObj.SetNamespace(namespace)
+			}
+			
+			// Call OnMatched handlers for DELETE events
+			for _, config := range workItem.Configs {
+				matchedEvent := MatchedEvent{
+					EventType: "DELETED",
+					Object:    deletedObj,
+					GVR:       workItem.GVRString,
+					Key:       workItem.Key,
+					Config:    config,
+					Timestamp: time.Now(),
+				}
+				
+				// Call event handlers (non-blocking)
+				c.handlersMu.RLock()
+				handlers := c.eventHandlers
+				c.handlersMu.RUnlock()
+				
+				for _, handler := range handlers {
+					// Call handler in goroutine to avoid blocking Faro
+					go func(h EventHandler, event MatchedEvent) {
+						if err := h.OnMatched(event); err != nil {
+							c.logger.Warning("controller", fmt.Sprintf("Event handler failed for DELETE: %v", err))
+						}
+					}(handler, matchedEvent)
+				}
+				break // Only process once per object
+			}
+			
 			return nil
 		}
 		return fmt.Errorf("failed to get object %s: %w", workItem.Key, err)
@@ -1138,10 +1378,9 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 	resourceNamespace := obj.GetNamespace()
 	resourceUID := obj.GetUID()
 
-	// Apply filtering logic from configs
+	// SERVER-SIDE filtering only - process all events that reach here
 	for _, config := range configs {
-		// Check if this object matches the config's patterns
-		if c.matchesConfig(obj, config) {
+		// All filtering is done server-side via Kubernetes API
 			// Create matched event for handlers
 			matchedEvent := MatchedEvent{
 				EventType: eventType,
@@ -1179,112 +1418,17 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 				c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, pattern: %s)",
 					eventType, gvrString, resourceName, resourceUID, config.GVR))
 			}
+			
+			// Log JSON event for export
+			c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels())
+			
 			break // Only process once per object
-		}
 	}
 
 	return nil
 }
 
-// matchesConfig checks if an object matches a normalized config's patterns
-func (c *Controller) matchesConfig(obj *unstructured.Unstructured, config NormalizedConfig) bool {
-	resourceName := obj.GetName()
-	resourceNamespace := obj.GetNamespace()
-
-	// First check namespace and name patterns
-	if !c.matchesConfigByKey(resourceNamespace, resourceName, config) {
-		return false
-	}
-
-	// Check label selector if specified (Kubernetes-style: app=faro-test)
-	if config.ResourceDetails.LabelSelector != "" {
-		if !c.matchesLabelFilter(obj, config.ResourceDetails.LabelSelector, false) {
-			return false
-		}
-	}
-
-	// Check label pattern if specified (regex-style: app=^faro-.*$)
-	if config.ResourceDetails.LabelPattern != "" {
-		if !c.matchesLabelFilter(obj, config.ResourceDetails.LabelPattern, true) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// matchesLabelFilter checks if an object matches a label filter using Kubernetes label selector parsing
-func (c *Controller) matchesLabelFilter(obj *unstructured.Unstructured, labelFilter string, isPattern bool) bool {
-	objLabels := obj.GetLabels()
-	if objLabels == nil {
-		objLabels = make(map[string]string)
-	}
-	
-	if !isPattern {
-		// For label_selector: use standard Kubernetes label selector matching
-		selector, err := labels.Parse(labelFilter)
-		if err != nil {
-			c.logger.Warning("controller", fmt.Sprintf("Invalid label selector '%s': %v", labelFilter, err))
-			return false
-		}
-		return selector.Matches(labels.Set(objLabels))
-	} else {
-		// For label_pattern: parse manually to allow regex patterns in values
-		// Format: "key=regex_pattern"
-		if strings.Contains(labelFilter, "=") {
-			parts := strings.SplitN(labelFilter, "=", 2)
-			if len(parts) != 2 {
-				c.logger.Warning("controller", fmt.Sprintf("Invalid label pattern format '%s': expected 'key=pattern'", labelFilter))
-				return false
-			}
-			
-			key := strings.TrimSpace(parts[0])
-			pattern := strings.TrimSpace(parts[1])
-			
-			actualValue, exists := objLabels[key]
-			if !exists {
-				return false
-			}
-			
-			matched, err := regexp.MatchString(pattern, actualValue)
-			if err != nil {
-				c.logger.Warning("controller", fmt.Sprintf("Invalid regex pattern '%s' for label %s: %v", pattern, key, err))
-				return false
-			}
-			return matched
-		}
-		
-		c.logger.Warning("controller", fmt.Sprintf("Invalid label pattern format '%s': expected 'key=pattern'", labelFilter))
-		return false
-	}
-}
-
-// matchesConfigByKey checks if a resource key (namespace/name) matches a normalized config.
-func (c *Controller) matchesConfigByKey(namespace, name string, config NormalizedConfig) bool {
-	// Check name pattern
-	if config.ResourceDetails.NamePattern != "" {
-		matched, err := regexp.MatchString(config.ResourceDetails.NamePattern, name)
-		if err != nil || !matched {
-			return false
-		}
-	}
-
-	// Check namespace patterns (only for namespaced resources)
-	if namespace != "" && len(config.NamespacePatterns) > 0 {
-		namespaceMatched := false
-		for _, nsPattern := range config.NamespacePatterns {
-			if matched, err := regexp.MatchString(nsPattern, namespace); err == nil && matched {
-				namespaceMatched = true
-				break
-			}
-		}
-		if !namespaceMatched {
-			return false
-		}
-	}
-
-	return true
-}
+// REMOVED: All client-side filtering functions have been eliminated from Faro core
 
 // startUnifiedConfigDrivenInformer starts an informer that handles multiple namespace configurations for the same GVR
 func (c *Controller) startUnifiedConfigDrivenInformer(gvr schema.GroupVersionResource, scope apiextensionsv1.ResourceScope, gvrString string, nsConfigs []NamespaceConfig) {
@@ -1314,43 +1458,23 @@ func (c *Controller) startUnifiedConfigDrivenInformer(gvr schema.GroupVersionRes
 	c.runInformerWithLogging(informer, c.ctx, fmt.Sprintf("unified config-driven informer for %s", gvrString))
 }
 
-// handleConfigDrivenEvent processes events with config-based filtering
+// handleConfigDrivenEvent processes events with NO client-side filtering
 func (c *Controller) handleConfigDrivenEvent(eventType string, obj *unstructured.Unstructured, gvrString string, nsConfig NamespaceConfig) {
 	resourceName := obj.GetName()
 	resourceNamespace := obj.GetNamespace()
 	resourceUID := obj.GetUID()
 
-	// For namespace-scoped resources, check if namespace matches pattern
-	if resourceNamespace != "" {
-		if matched, _ := regexp.MatchString(nsConfig.NamePattern, resourceNamespace); !matched {
-			// Namespace doesn't match pattern, skip this event
-			c.logger.Debug("controller", fmt.Sprintf("Skipping %s %s/%s - namespace '%s' doesn't match pattern '%s'",
-				gvrString, resourceNamespace, resourceName, resourceNamespace, nsConfig.NamePattern))
-			return
-		}
-	}
-
-	// Check if resource name matches the configured pattern for this GVR
-	if !nsConfig.MatchesResource(gvrString, resourceName) {
-		// Resource name doesn't match pattern, skip this event
-		resourceConfig := nsConfig.Resources[gvrString]
-		c.logger.Debug("controller", fmt.Sprintf("Skipping %s %s/%s - name '%s' doesn't match pattern '%s'",
-			gvrString, resourceNamespace, resourceName, resourceName, resourceConfig.NamePattern))
-		return
-	}
-
-	// Event passed all filters, log it with additional context
+	// NO CLIENT-SIDE FILTERING - Process all events that reach here
+	// Server-side filtering and application logic handle all filtering
+	
+	// Log all events without filtering
 	if resourceNamespace != "" {
 		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s)",
 			eventType, gvrString, resourceNamespace, resourceName, resourceUID))
-
-
 	} else {
 		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s)",
 			eventType, gvrString, resourceName, resourceUID))
 	}
-
-	// Future: Add sophisticated event processing, correlation, file output, etc.
 }
 
 // handleUnifiedConfigDrivenEvent processes events with multiple config-based filtering
@@ -1359,50 +1483,17 @@ func (c *Controller) handleUnifiedConfigDrivenEvent(eventType string, obj *unstr
 	resourceNamespace := obj.GetNamespace()
 	resourceUID := obj.GetUID()
 
-	// Check against all namespace configurations to see if this event matches any pattern
-	matched := false
-	var matchedConfig NamespaceConfig
+	// NO CLIENT-SIDE FILTERING - Process all events that reach here
+	// Server-side filtering and application logic handle all filtering
 
-	for _, nsConfig := range nsConfigs {
-		// For namespace-scoped resources, check if namespace matches pattern
+	// Log all events without filtering
 		if resourceNamespace != "" {
-			nameMatched, err := regexp.MatchString(nsConfig.NamePattern, resourceNamespace)
-			if err != nil {
-				c.logger.Error("controller", fmt.Sprintf("Invalid regex pattern '%s' for namespace: %v", nsConfig.NamePattern, err))
-				continue
-			}
-			if !nameMatched {
-				continue // Namespace doesn't match this pattern
-			}
-		}
-
-		// Check if resource name matches the configured pattern for this GVR
-		if nsConfig.MatchesResource(gvrString, resourceName) {
-			matched = true
-			matchedConfig = nsConfig
-			break // Found a matching configuration
-		}
-	}
-
-	if !matched {
-		// Event doesn't match any configuration, skip with debug log
-		c.logger.Debug("controller", fmt.Sprintf("Skipping %s %s/%s - doesn't match any configured patterns",
-			gvrString, resourceNamespace, resourceName))
-		return
-	}
-
-	// Event passed filters for at least one configuration, log it
-	if resourceNamespace != "" {
-		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s, pattern: %s)",
-			eventType, gvrString, resourceNamespace, resourceName, resourceUID, matchedConfig.NamePattern))
-
-
+		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s)",
+			eventType, gvrString, resourceNamespace, resourceName, resourceUID))
 	} else {
-		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, pattern: %s)",
-			eventType, gvrString, resourceName, resourceUID, matchedConfig.NamePattern))
+		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s)",
+			eventType, gvrString, resourceName, resourceUID))
 	}
-
-	// Future: Add sophisticated event processing, correlation, file output, etc.
 }
 
 // startUnifiedNormalizedInformer starts an informer that handles multiple normalized configurations for the same GVR

@@ -1,119 +1,75 @@
 # Faro Makefile
 
-# Variables
-BINARY_NAME=faro
-PACKAGE=.
-GO_FILES=$(shell find . -name "*.go" -type f)
+.PHONY: help build build-dev test test-ci test-unit test-e2e test-integration clean tag-patch tag-minor tag-major
 
 # Default target
-.PHONY: all
-all: build
+help:
+	@echo "Faro - Kubernetes Resource Monitor"
+	@echo ""
+	@echo "Available targets:"
+	@echo "  build            - Build the faro binary"
+	@echo "  build-dev        - Build with development version info"
+	@echo "  test             - Run all tests (unit + e2e + integration) - requires K8s"
+	@echo "  test-ci          - Run CI-safe tests only (unit tests, no K8s required)"
+	@echo "  test-unit        - Run unit tests only (no K8s required)"
+	@echo "  test-e2e         - Run E2E tests only (requires K8s cluster)"
+	@echo "  test-integration - Run integration tests only (requires K8s cluster)"
+	@echo "  clean            - Clean build artifacts and test logs"
+	@echo "  tag-patch        - Create patch version tag and trigger release"
+	@echo "  tag-minor        - Create minor version tag and trigger release"
+	@echo "  tag-major        - Create major version tag and trigger release"
+	@echo "  help             - Show this help message"
 
-# Build the binary
-.PHONY: build
+# Build the faro binary
 build:
-	go build -o $(BINARY_NAME) $(PACKAGE)
+	@echo "Building faro binary..."
+	go build -o faro main.go
 
-# Build with optimizations for production
-.PHONY: build-prod
-build-prod:
-	CGO_ENABLED=0 go build -ldflags="-s -w" -o $(BINARY_NAME) $(PACKAGE)
+# Build with version information (for local testing)
+build-dev:
+	@echo "Building faro with dev version info..."
+	go build -ldflags "-X main.version=dev-$(shell git rev-parse --short HEAD) -X main.commit=$(shell git rev-parse HEAD) -X main.date=$(shell date -u +%Y-%m-%dT%H:%M:%SZ) -X main.builtBy=make" -o faro main.go
 
-# Run the application
-.PHONY: run
-run: build
-	./$(BINARY_NAME)
+# Run all tests (requires Kubernetes cluster)
+test: clean test-unit test-e2e test-integration
 
-# Run with config file
-.PHONY: run-config
-run-config: build
-	./$(BINARY_NAME) --config=examples/minimal-config.yaml
+# Run only tests that don't require Kubernetes (for CI/releases)
+test-ci: test-unit
+	@echo "CI tests completed (unit tests only)"
 
-# Clean build artifacts
-.PHONY: clean
-clean:
-	rm -f $(BINARY_NAME)
-	rm -rf output/
-	rm -rf logs/
-	rm -rf examples/logs/
-	rm -rf e2e/logs/
-
-# Run tests
-.PHONY: test
-test:
-	go test ./...
+# Run unit tests
+test-unit:
+	@echo "Running unit tests..."
+	cd tests/unit && go test -v
 
 # Run E2E tests
-.PHONY: test-e2e
-test-e2e: build
-	cd e2e && ./test1.sh && ./test2.sh && ./test3.sh && ./test4.sh && ./test5.sh && ./test6.sh && ./test7.sh && ./test8.sh && ./test9.sh && ./test10.sh
+test-e2e:
+	@echo "Running E2E tests..."
+	@echo "Note: Requires access to a Kubernetes cluster"
+	cd tests/e2e && go test -v
 
-# Run library usage example
-.PHONY: example-library
-example-library:
-	cd examples && go run library-usage.go
+# Run integration tests
+test-integration:
+	@echo "Running integration tests..."
+	@echo "Note: Requires access to a Kubernetes cluster"
+	cd tests/integration && go test -v
 
-# Run worker dispatcher example
-.PHONY: example-worker
-example-worker:
-	cd examples && go run worker-dispatcher.go
+# Clean build artifacts and test logs
+clean:
+	@echo "Cleaning up..."
+	rm -f faro workload-monitor
+	find tests -type d -name "logs" -exec rm -rf {} + 2>/dev/null || true
+	@echo "Clean complete"
 
-# Run all examples
-.PHONY: examples
-examples:
-	@echo "🚀 Running Faro Library Examples"
-	@echo ""
-	@echo "📚 Basic Library Usage Example:"
-	@echo "   Press Ctrl+C to stop and continue to next example"
-	@echo ""
-	@cd examples && go run library-usage.go || true
-	@echo ""
-	@echo "🔧 Worker Dispatcher Example:"
-	@echo "   Press Ctrl+C to stop"
-	@echo ""
-	@cd examples && go run worker-dispatcher.go
+# Git tag helpers (triggers GitHub Actions release)
+tag-patch:
+	@echo "Creating patch version tag (triggers GitHub Actions release)..."
+	@./scripts/tag-version.sh patch
 
-# Format code
-.PHONY: fmt
-fmt:
-	go fmt ./...
+tag-minor:
+	@echo "Creating minor version tag (triggers GitHub Actions release)..."
+	@./scripts/tag-version.sh minor
 
-# Lint code
-.PHONY: lint
-lint:
-	golangci-lint run
-
-# Tidy dependencies
-.PHONY: tidy
-tidy:
-	go mod tidy
-
-# Install dependencies
-.PHONY: deps
-deps:
-	go mod download
-
-# Development setup
-.PHONY: dev-setup
-dev-setup: deps fmt tidy
-
-# Help target
-.PHONY: help
-help:
-	@echo "Available targets:"
-	@echo "  build      - Build the faro binary"
-	@echo "  build-prod - Build optimized binary for production"
-	@echo "  run        - Build and run faro"
-	@echo "  run-config - Build and run faro with example config"
-	@echo "  clean      - Remove build artifacts and output files"
-	@echo "  test       - Run unit tests"
-	@echo "  test-e2e   - Run end-to-end tests"
-	@echo "  examples   - Run all library examples (interactive)"
-	@echo "  example-library - Run basic library usage example"
-	@echo "  example-worker  - Run worker dispatcher example"
-	@echo "  fmt        - Format Go code"
-	@echo "  lint       - Run linter"
-	@echo "  tidy       - Tidy Go modules"
-	@echo "  deps       - Download dependencies"
-	@echo "  dev-setup  - Setup development environment"
-	@echo "  help       - Show this help message"
+tag-major:
+	@echo "Creating major version tag (triggers GitHub Actions release)..."
+	@./scripts/tag-version.sh major

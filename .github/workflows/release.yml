@@ -1,0 +1,44 @@
+name: Library Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Run unit tests
+        run: |
+          go mod tidy
+          cd tests/unit && go test -v
+
+      - name: Validate library can be imported
+        run: |
+          echo 'package main; import _ "github.com/T0MASD/faro/pkg"; func main() {}' > test_import.go
+          go mod tidy
+          go build test_import.go
+          rm test_import.go
+
+      - name: Create library release
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
