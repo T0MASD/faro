@@ -1,0 +1,11 @@
+# Simple E2E Test 1 - Namespace-centric ConfigMap by name
+output_dir: "./logs/test1"
+log_level: "info"
+auto_shutdown_sec: 120
+json_export: true
+
+namespaces:
+  - name_pattern: "faro-test-1"
+    resources:
+      "v1/configmaps":
+        name_pattern: "test-config-1"

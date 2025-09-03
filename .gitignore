@@ -1,8 +1,9 @@
 # Output directories
-e2e/logs
+tests/*/logs
 examples/logs
 # Build artifacts
 build/
 scratch/
 work/
 faro
+dist/

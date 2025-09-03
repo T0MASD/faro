@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-3
+  labels:
+    test-label: "faro-namespace"
+    workload-type: "e2e-test"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config-1
+  namespace: faro-test-3
+  labels:
+    app: "faro-test"
+data:
+  key1: "value1"
+  config: "test-data"

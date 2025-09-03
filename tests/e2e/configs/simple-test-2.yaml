@@ -1,0 +1,12 @@
+# Simple E2E Test 2 - Resource-Centric ConfigMap Informer
+output_dir: "./logs/test2"
+log_level: "info"
+auto_shutdown_sec: 120
+json_export: true
+
+resources:
+  - gvr: "v1/configmaps"
+    scope: "Namespaced"
+    namespace_patterns:
+      - "faro-test-2"
+    name_pattern: "test-config-1"

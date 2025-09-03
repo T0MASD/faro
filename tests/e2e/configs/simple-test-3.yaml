@@ -1,0 +1,12 @@
+# Simple E2E Test 3 - Namespace ConfigMap by Label
+output_dir: "./logs/test3"
+log_level: "info"
+auto_shutdown_sec: 120
+json_export: true
+
+namespaces:
+  - name_pattern: "faro-test-3"
+    resources:
+      "v1/configmaps":
+        name_pattern: "test-config-1"
+        label_selector: "app=faro-test"

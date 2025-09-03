@@ -13,6 +13,14 @@ import (
 	faro "github.com/T0MASD/faro/pkg"
 )
 
+// Build information set by GoReleaser
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+	builtBy = "unknown"
+)
+
 func main() {
 	// Initialize klog first with default settings
 	klog.InitFlags(nil)
@@ -25,10 +33,10 @@ func main() {
 		os.Exit(1)
 	}
 	
-	tempLogger.Info("main", "Faro v2 initializing...")
+	tempLogger.Info("main", fmt.Sprintf("Faro %s initializing...", version))
 
-	// Load minimalistic config from command line args
-	config, err := faro.LoadConfig()
+	// Load minimalistic config from command line args (handles version flag)
+	config, err := faro.LoadConfigWithVersion(version, commit, date, builtBy)
 	if err != nil {
 		tempLogger.Error("main", fmt.Sprintf("Error loading config: %v", err))
 		tempLogger.Shutdown()
@@ -43,8 +51,8 @@ func main() {
 	tempLogger.Info("main", fmt.Sprintf("Config loaded, switching to configured log directory: %s", config.GetLogDir()))
 	tempLogger.Shutdown()
 
-	// Create final logger with config-specified log directory
-	logger, err := faro.NewLogger(config.GetLogDir())
+	// Create final logger with config-specified log directory and JSON export option
+	logger, err := faro.NewLoggerWithJSON(config.GetLogDir(), config.JsonExport)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
 		os.Exit(1)
@@ -52,7 +60,7 @@ func main() {
 	defer logger.Shutdown()
 	
 	// Log configuration
-	logger.Info("main", fmt.Sprintf("Faro v2 starting up..."))
+	logger.Info("main", fmt.Sprintf("Faro %s starting up...", version))
 	logger.Info("main", fmt.Sprintf("Output directory: %s", config.OutputDir))
 	logger.Info("main", fmt.Sprintf("Log level: %s", config.LogLevel))
 	logger.Info("main", fmt.Sprintf("Log directory: %s", config.GetLogDir()))
@@ -137,5 +145,5 @@ func main() {
 		performGracefulShutdown(fmt.Sprintf("signal received (%s)", sig))
 	}
 	
-	logger.Info("main", "Faro v2 shutdown complete")
+	logger.Info("main", fmt.Sprintf("Faro %s shutdown complete", version))
 }

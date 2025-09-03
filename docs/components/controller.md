@@ -1,355 +1,149 @@
 # Controller Component
 
-Multi-layered Kubernetes informer controller with work queue-based event processing and library interface.
+The Controller is the core component of Faro that manages Kubernetes resource monitoring through informers and event processing.
 
-## Core Structure
+## Overview
+
+The Controller implements a multi-layered informer architecture that:
+- Discovers available Kubernetes API resources dynamically
+- Creates informers for configured resources with server-side filtering
+- Processes resource events through a unified pipeline
+- Provides readiness callbacks for initialization synchronization
+- Handles graceful shutdown with timeout protection
+
+## Architecture
+
+### Core Structure
 
 ```go
 type Controller struct {
-    client *KubernetesClient
-    logger *Logger
-    config *Config
-    
-    // Context management
-    ctx    context.Context
-    cancel context.CancelFunc
-    wg     sync.WaitGroup
-    
-    // Work queue system
-    workQueue workqueue.RateLimitingInterface
-    workers   int
-    
-    // Event handler interface
-    eventHandlers []EventHandler
-    handlersMu    sync.RWMutex
-    
-    // API discovery
-    discoveredResources map[string]*ResourceInfo
-    
-    // Informer lifecycle
-    cancellers      sync.Map  // GVR -> context.CancelFunc
-    activeInformers sync.Map  // GVR -> bool
-    listers         sync.Map  // GVR -> cache.GenericLister
-    
-    builtinCount int
+    client     *KubernetesClient
+    config     *Config
+    logger     Logger
+    ctx        context.Context
+    cancel     context.CancelFunc
+    wg         sync.WaitGroup
+    workQueue  workqueue.RateLimitingInterface
+    cancellers sync.Map
+    onReady    func()
+    readyMu    sync.RWMutex
+    isReady    bool
 }
 ```
 
-## System Architecture
+### Key Components
 
-```mermaid
-graph TD
-    A[Controller Start] --> B[API Discovery]
-    B --> C[Config-Driven Informers]
-    C --> D[CRD Watcher]
-    D --> E[Worker Pool]
-    
-    E --> F[Event Processing Loop]
-    F --> G{Work Queue}
-    G --> H[Worker 1]
-    G --> I[Worker 2] 
-    G --> J[Worker 3]
-    
-    H --> K[Reconcile]
-    I --> K
-    J --> K
-    
-    K --> L[Log Events]
-    K --> M[Error Handling]
-    M --> N[Rate Limited Retry]
-    N --> G
-    
-    subgraph "Informer Layer"
-        O[Resource Informers] --> P[Event Handlers]
-        P --> Q[WorkItem Creation]
-        Q --> G
-    end
-```
+1. **Dynamic Client Integration**: Uses Kubernetes dynamic client for multi-resource support
+2. **Discovery Client**: Automatically discovers available API resources (395+ resources across 34+ API groups)
+3. **Work Queue**: Rate-limited work queue for asynchronous event processing
+4. **Informer Management**: Unified informer creation and lifecycle management
+5. **Readiness System**: Callback-based readiness notification mechanism
 
-## Work Queue System
+## Server-Side Filtering
 
-### Queue Processing Flow
-```mermaid
-sequenceDiagram
-    participant I as Informer
-    participant H as Event Handler
-    participant Q as Work Queue
-    participant W as Worker
-    participant R as Reconcile
-    
-    I->>H: Resource Event
-    H->>H: Extract Object Key
-    H->>Q: Add WorkItem
-    Q->>W: Get() next item
-    W->>R: reconcile(workItem)
-    alt Success
-        R-->>W: nil error
-        W->>Q: Forget(item)
-    else Failure
-        R-->>W: error
-        W->>Q: AddRateLimited(item)
-    end
-    W->>Q: Done(item)
-```
+The Controller implements comprehensive server-side filtering at the Kubernetes API level:
 
-### Event Structures
+### FieldSelector Implementation
 ```go
-type WorkItem struct {
-    Key       string             // namespace/name or name
-    GVRString string             // group/version/resource
-    Configs   []NormalizedConfig // filtering rules
-    EventType string             // ADDED/UPDATED/DELETED
-}
-
-type MatchedEvent struct {
-    EventType string                      // ADDED/UPDATED/DELETED
-    Object    *unstructured.Unstructured  // Full Kubernetes object
-    GVR       string                      // Group/Version/Resource
-    Key       string                      // namespace/name or name
-    Config    NormalizedConfig            // Matched configuration
-    Timestamp time.Time                   // Processing timestamp
-}
-
-type EventHandler interface {
-    OnMatched(event MatchedEvent) error
-}
+// Applied for name pattern filtering
+fieldSelector = fmt.Sprintf("metadata.name=%s", nConfig.NamePattern)
+options.FieldSelector = fieldSelector
 ```
 
-## Informer Management
-
-### Informer Lifecycle
-```mermaid
-stateDiagram-v2
-    [*] --> Discovery: Start Controller
-    Discovery --> Creation: Found Matching GVR
-    Creation --> Active: Informer Started
-    Active --> Synced: Cache Synchronized
-    Synced --> Processing: Events Detected
-    Processing --> Synced: Continue Processing
-    Synced --> Stopping: Context Cancelled
-    Stopping --> [*]: Cleanup Complete
-    
-    Creation --> Failed: Start Error
-    Failed --> [*]: Error Handled
-```
-
-### Key Management
-- **Consistent Keys**: All maps use GVR string format `group/version/resource`
-- **Deduplication**: One informer per GVR regardless of configuration rules
-- **Tracking**: Separate maps for cancellers, active status, and listers
-
-## API Discovery Process
-
-```mermaid
-graph TD
-    A[Start Discovery] --> B[Get Server Groups]
-    B --> C[Process Core API v1]
-    C --> D[Process API Groups]
-    
-    D --> E[For Each Group]
-    E --> F[For Each Version]
-    F --> G[Get API Resources]
-    G --> H[Store ResourceInfo]
-    
-    H --> I[Next Version]
-    I --> F
-    F --> J[Next Group]
-    J --> E
-    
-    E --> K[Discovery Complete]
-    
-    subgraph "ResourceInfo Storage"
-        H --> L[GVR String Key]
-        L --> M[Group, Version, Resource]
-        M --> N[Kind, Namespaced flag]
-    end
-```
-
-### Resource Discovery Data
+### LabelSelector Implementation
 ```go
-type ResourceInfo struct {
-    Group      string  // API group (empty for core)
-    Version    string  // API version
-    Resource   string  // Resource name (plural)
-    Kind       string  // Resource kind (singular)
-    Namespaced bool    // Scope determination
-}
+// Applied for label-based filtering
+options.LabelSelector = labelSelector
 ```
+
+### Benefits
+- **API Server Efficiency**: Reduces network traffic by filtering at source
+- **etcd Performance**: Minimizes database queries through server-side selection
+- **Resource Usage**: Lower memory and CPU consumption in client applications
 
 ## Event Processing Pipeline
 
-### Event Handler Design
-```go
-func (c *Controller) handleUnifiedNormalizedEvent(
-    eventType string,
-    obj *unstructured.Unstructured,
-    gvrString string,
-    normalizedConfigs []NormalizedConfig) {
-    
-    // Extract object key (only work in event handler)
-    key, err := cache.MetaNamespaceKeyFunc(obj)
-    if err != nil {
-        c.logger.Error("controller", fmt.Sprintf("Failed to get key: %v", err))
-        return
-    }
-    
-    // Create and enqueue work item
-    workItem := &WorkItem{
-        Key:       key,
-        GVRString: gvrString,
-        Configs:   normalizedConfigs,
-        EventType: eventType,
-    }
-    
-    c.workQueue.Add(workItem)
+### Event Types
+- **ADDED**: Resource creation events
+- **UPDATED**: Resource modification events  
+- **DELETED**: Resource deletion events (with tombstone handling)
+
+### Processing Flow
+1. **Event Reception**: Informers receive events from Kubernetes API
+2. **Unified Handling**: Events processed through `handleUnifiedNormalizedEvent`
+3. **Work Queue**: Events queued for asynchronous processing
+4. **JSON Export**: Optional structured JSON output with timestamps
+
+### Event Structure
+```json
+{
+    "timestamp": "2025-09-10T11:15:27.945088151Z",
+    "eventType": "ADDED",
+    "gvr": "v1/configmaps",
+    "namespace": "faro-test-2", 
+    "name": "test-config-1",
+    "uid": "9471c23c-0fea-4e17-902d-3e7588f6c205",
+    "labels": {"app": "faro-test"}
 }
 ```
 
-### Worker Processing Logic
-```go
-func (c *Controller) runWorker() {
-    defer c.wg.Done()
-    for c.processNextWorkItem() {
-        // Continue processing until shutdown
-    }
-}
+## Initialization Sequence
 
-func (c *Controller) processNextWorkItem() bool {
-    obj, shutdown := c.workQueue.Get()
-    if shutdown {
-        return false
-    }
-    defer c.workQueue.Done(obj)
+1. **Client Setup**: Initialize Kubernetes dynamic and discovery clients
+2. **Configuration Normalization**: Convert config to unified internal structure
+3. **API Discovery**: Discover available resources (34 API groups, 395 resources)
+4. **Informer Creation**: Create informers for each configured GVR with server-side filtering
+5. **Cache Sync**: Wait for informer caches to sync
+6. **Readiness Callback**: Trigger callback when fully initialized
+
+## Readiness Management
+
+### SetReadyCallback
+```go
+func (c *Controller) SetReadyCallback(callback func()) {
+    c.readyMu.Lock()
+    defer c.readyMu.Unlock()
+    c.onReady = callback
     
-    workItem := obj.(*WorkItem)
-    if err := c.reconcile(workItem); err != nil {
-        c.workQueue.AddRateLimited(workItem)  // Retry with backoff
-        return true
+    // Trigger immediately if already ready
+    if c.isReady && callback != nil {
+        callback()
     }
-    
-    c.workQueue.Forget(workItem)  // Success
-    return true
 }
 ```
 
-## Reconciliation Logic
-
-### Object Key Filtering
-```mermaid
-graph TD
-    A[Reconcile WorkItem] --> B[Parse Object Key]
-    B --> C[Extract Namespace/Name]
-    C --> D[Apply Config Filters]
-    
-    D --> E{Matches Config?}
-    E -->|No| F[Skip Processing]
-    E -->|Yes| G[Get Object from Lister]
-    
-    G --> H{Object Found?}
-    H -->|No| I[Handle DELETED Event]
-    H -->|Yes| J[Process Object]
-    
-    I --> K[Log Deletion]
-    J --> L[Apply Business Logic]
-    L --> M[Log Event]
-    
-    F --> N[Return Success]
-    K --> N
-    M --> N
-```
-
-### Filtering Implementation
+### IsReady
 ```go
-func (c *Controller) matchesConfigByKey(namespace, name string, config NormalizedConfig) bool {
-    // Name pattern matching
-    if config.ResourceDetails.NamePattern != "" {
-        matched, err := regexp.MatchString(config.ResourceDetails.NamePattern, name)
-        if err != nil || !matched {
-            return false
-        }
-    }
-    
-    // Namespace pattern matching
-    if namespace != "" && len(config.NamespacePatterns) > 0 {
-        namespaceMatched := false
-        for _, nsPattern := range config.NamespacePatterns {
-            if matched, err := regexp.MatchString(nsPattern, namespace); err == nil && matched {
-                namespaceMatched = true
-                break
-            }
-        }
-        if !namespaceMatched {
-            return false
-        }
-    }
-    
-    return true
-}
-```
-
-## Dynamic CRD Handling
-
-### CRD Watcher Flow
-```mermaid
-sequenceDiagram
-    participant C as Controller
-    participant CW as CRD Watcher
-    participant API as API Server
-    participant I as New Informer
-    
-    C->>CW: Start CRD Watcher
-    CW->>API: Watch CustomResourceDefinitions
-    API->>CW: CRD ADDED Event
-    CW->>CW: Evaluate Against Config
-    alt Matches Config
-        CW->>I: Create Dynamic Informer
-        I->>API: Start Watching CRD Resources
-        I->>C: Register in activeInformers
-    else No Match
-        CW->>CW: Ignore CRD
-    end
-```
-
-## Error Handling Strategy
-
-### Rate Limiting
-- **Default Controller**: `workqueue.DefaultControllerRateLimiter()`
-- **Exponential Backoff**: Increasing delays for repeated failures
-- **Maximum Retries**: Configurable retry limits
-- **Forget Policy**: Success removes item from rate limiter
-
-### Failure Recovery
-```go
-if err := c.reconcile(workItem); err != nil {
-    c.workQueue.AddRateLimited(workItem)  // Exponential backoff
-    c.logger.Error("controller", fmt.Sprintf("Error processing %s: %v", workItem.Key, err))
-    return true  // Continue processing other items
+func (c *Controller) IsReady() bool {
+    c.readyMu.RLock()
+    defer c.readyMu.RUnlock()
+    return c.isReady
 }
 ```
 
 ## Graceful Shutdown
 
-### Shutdown Sequence
-```mermaid
-graph TD
-    A[Stop() Called] --> B[Cancel Main Context]
-    B --> C[Shutdown Work Queue]
-    C --> D[Cancel All Informers]
-    D --> E[Wait for Workers]
-    E --> F{Timeout?}
-    F -->|No| G[Clean Shutdown]
-    F -->|Yes| H[Force Shutdown]
-    G --> I[Log Success]
-    H --> J[Log Warning]
-```
+The Controller implements comprehensive shutdown with timeout protection:
 
-### Resource Cleanup
+### Shutdown Sequence
+1. **Context Cancellation**: Cancel main context to stop all informers
+2. **Work Queue Shutdown**: Stop work queue to prevent new events
+3. **Dynamic Informer Cleanup**: Cancel all dynamic informers explicitly
+4. **Goroutine Synchronization**: Wait for all goroutines with timeout (25s)
+5. **Resource Cleanup**: Ensure no resource leaks
+
+### Implementation
 ```go
 func (c *Controller) Stop() {
-    c.cancel()                    // Stop all informers
-    c.workQueue.ShutDown()        // Stop accepting new work
+    c.logger.Info("controller", "Stopping multi-layered informer controller")
     
-    // Cancel dynamic informers
+    // Cancel main context
+    c.cancel()
+    
+    // Shutdown work queue
+    c.workQueue.ShutDown()
+    
+    // Stop dynamic informers
     c.cancellers.Range(func(key, value interface{}) bool {
         if cancel, ok := value.(context.CancelFunc); ok {
             cancel()
@@ -357,82 +151,64 @@ func (c *Controller) Stop() {
         return true
     })
     
-    // Wait with timeout
-    done := make(chan struct{})
-    go func() {
-        c.wg.Wait()
-        close(done)
-    }()
-    
+    // Wait with timeout protection
     select {
     case <-done:
-        // Clean shutdown
+        c.logger.Info("controller", "All informers and workers stopped gracefully")
     case <-time.After(25 * time.Second):
-        // Timeout protection
+        c.logger.Warning("controller", "Timeout waiting for informers to stop")
     }
 }
 ```
 
-## Library Interface
+## Configuration Integration
 
-### Event Handler Registration
-```go
-func (c *Controller) AddEventHandler(handler EventHandler) {
-    c.handlersMu.Lock()
-    defer c.handlersMu.Unlock()
-    c.eventHandlers = append(c.eventHandlers, handler)
-}
-```
+### Normalized Configuration Support
+- Handles both namespace-centric and resource-centric configurations
+- Converts all configurations to unified `NormalizedConfig` structure
+- Supports multiple configurations per GVR with consolidated informers
 
-### Event Processing Pipeline
-```go
-// In processObject() after filtering match:
-matchedEvent := MatchedEvent{
-    EventType: eventType,
-    Object:    obj,
-    GVR:       gvrString,
-    Key:       key,
-    Config:    config,
-    Timestamp: time.Now(),
-}
+### Resource Scope Handling
+- **Namespace-scoped**: Resources like ConfigMaps, Secrets, Pods
+- **Cluster-scoped**: Resources like Nodes, ClusterRoles, CustomResourceDefinitions
+- Automatic scope detection through API discovery
 
-// Call registered handlers concurrently
-c.handlersMu.RLock()
-handlers := c.eventHandlers
-c.handlersMu.RUnlock()
+## Error Handling
 
-for _, handler := range handlers {
-    go func(h EventHandler, event MatchedEvent) {
-        if err := h.OnMatched(event); err != nil {
-            c.logger.Warning("controller", fmt.Sprintf("Event handler failed: %v", err))
-        }
-    }(handler, matchedEvent)
-}
-```
+### Robust Error Management
+- **Client Connection**: Graceful fallback from in-cluster to kubeconfig authentication
+- **API Discovery**: Continues operation if some resources are unavailable
+- **Informer Sync**: Timeout protection for cache synchronization
+- **Event Processing**: Tombstone handling for deleted resources
 
-## Concurrency Model
-
-### Thread Safety
-- **Work Queue**: Thread-safe operations for multiple workers
-- **Sync.Map**: Concurrent access to informer metadata
-- **Context Cancellation**: Safe informer lifecycle management
-- **Wait Groups**: Coordinated goroutine shutdown
-- **Library Handlers**: Called asynchronously in separate goroutines
-
-### Worker Pool Management
-- **Default Workers**: 3 goroutines
-- **Work Distribution**: Round-robin via work queue
-- **Load Balancing**: Automatic via queue blocking operations
-- **Scalability**: Configurable worker count
+### Logging Integration
+- Structured logging with component identification
+- Debug-level filtering configuration details
+- Info-level operational status updates
+- Warning-level timeout and error conditions
 
 ## Performance Characteristics
 
-### Memory Management
-- **Object Caching**: Managed by informer listers
-- **Work Queue**: Bounded queue with overflow protection
-- **Resource Cleanup**: Explicit cleanup on informer shutdown
+### Validated Performance
+- **API Groups**: Successfully handles 34+ API groups
+- **Resource Discovery**: Processes 395+ available resources
+- **Event Processing**: No dropped or duplicate events across all test scenarios
+- **Memory Efficiency**: Server-side filtering reduces client-side resource usage
+- **Startup Time**: Consistent initialization across integration and E2E tests
 
-### Network Optimization
-- **Efficient Watches**: Single watch per GVR regardless of config rules
-- **Server-side Filtering**: Label selectors applied at API server
-- **Connection Reuse**: Shared HTTP connections via client-go
+### Scalability Features
+- **Work Queue**: Rate-limited processing prevents API server overload
+- **Informer Consolidation**: Single informer per GVR handles multiple configurations
+- **Server-Side Filtering**: Reduces network traffic and client processing
+- **Asynchronous Processing**: Non-blocking event handling through goroutines
+
+## Testing Evidence
+
+The Controller has been validated through comprehensive testing:
+
+- **Unit Tests**: Configuration normalization and core functionality
+- **Integration Tests**: Real Kubernetes cluster integration with callback synchronization
+- **E2E Tests**: Full workflow validation across 8 different scenarios
+- **Performance Tests**: Event processing pipeline validation with timing analysis
+
+All tests demonstrate reliable initialization, accurate event processing, and clean shutdown behavior.

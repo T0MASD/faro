@@ -15,10 +15,10 @@ type Config struct {
 
 type NormalizedConfig struct {
     GVR               string          // Group/Version/Resource
-    ResourceDetails   ResourceDetails // Filtering criteria
-    NamespacePatterns []string        // Namespace regex patterns
-    LabelSelector     string          // Kubernetes label selector
-    LabelPattern      string          // Regex pattern for label values
+    ResourceDetails   ResourceDetails // Filtering criteria (SERVER-SIDE only)
+    NamespacePatterns []string        // Literal namespace names only (for server-side filtering)
+    NamePattern       string          // Exact name for resource name filtering (server-side)
+    LabelSelector     string          // Kubernetes label selector for SERVER-SIDE filtering only
 }
 ```
 
@@ -27,29 +27,21 @@ type NormalizedConfig struct {
 ### Namespace-Centric Format
 ```yaml
 namespaces:
-  - name_pattern: "prod-.*"
+  - name_pattern: "faro-test-1"  # Literal namespace name for server-side filtering
     resources:
-      "v1/pods":
-        name_pattern: "web-.*"
-        label_selector: "app=nginx"
       "v1/configmaps":
-        name_pattern: ".*"
-        label_pattern: "app=^nginx-.*$"
+        name_pattern: "test-config-1"  # Exact name for server-side field selector
+        label_selector: "app=faro-test"  # Server-side label filtering
 ```
 
 ### Resource-Centric Format
 ```yaml
 resources:
-  - gvr: "v1/pods"
+  - gvr: "v1/configmaps"
     scope: "Namespaced"
-    namespace_patterns: ["prod-.*"]
-    name_pattern: "web-.*"
-    label_selector: "app=nginx"
-  - gvr: "v1/services"
-    scope: "Namespaced"
-    namespace_patterns: [".*"]
-    name_pattern: ".*"
-    label_pattern: "environment=^(prod|staging)$"
+    namespace_patterns: ["faro-test-2"]  # Literal namespace names only
+    name_pattern: "test-config-1"        # Exact name for server-side filtering
+    label_selector: "app=faro-test"      # Server-side label filtering
 ```
 
 ## Normalization Process
@@ -121,8 +113,6 @@ classDiagram
     class NamespaceConfig {
         +string NamePattern
         +map[string]ResourceDetails Resources
-        +MatchesNamespace(name) bool
-        +MatchesResource(gvr, name) bool
         +GetMatchingResources() []string
     }
     
@@ -135,15 +125,14 @@ classDiagram
     }
     
     class ResourceDetails {
-        +string NamePattern
         +string LabelSelector
-        +string LabelPattern
     }
     
     class NormalizedConfig {
         +string GVR
         +ResourceDetails ResourceDetails
         +[]string NamespacePatterns
+        +string NamePattern
         +string LabelSelector
     }
     
@@ -170,7 +159,7 @@ const (
 - **Access Pattern**: No namespace specification in API calls
 
 ### Namespace-Scoped Resources
-- **Namespace Patterns**: Regex patterns or `[".*"]` for all namespaces
+- **Namespace Patterns**: Literal namespace names only for server-side filtering
 - **Examples**: `v1/pods`, `v1/services`, `apps/v1/deployments`
 - **Access Pattern**: Requires namespace specification in API calls
 
@@ -184,32 +173,15 @@ const (
 ### Configuration Format Validation
 - **Mutual Exclusivity**: Not enforced - both formats can coexist
 - **Empty Configuration**: Error if no namespaces or resources specified
-- **Regex Patterns**: Compiled and validated at load time
+- **Server-Side Filtering**: All filtering done via Kubernetes API server
 
 ### GVR Format Validation
 - **Pattern**: `group/version/resource` or `version/resource` for core API
 - **Examples**: `apps/v1/deployments`, `v1/pods`, `apiextensions.k8s.io/v1/customresourcedefinitions`
 
-## Regex Pattern Matching
+## Server-Side Filtering
 
-```go
-// Namespace pattern matching
-matched, err := regexp.MatchString(nsConfig.NamePattern, namespaceName)
-
-// Resource name pattern matching  
-matched, err := regexp.MatchString(details.NamePattern, resourceName)
-```
-
-### Pattern Examples
-- **Exact Match**: `"production"`
-- **Prefix Match**: `"prod-.*"`
-- **Suffix Match**: `".*-prod"`
-- **Wildcard**: `".*"`
-- **Complex**: `"^(prod|stage)-web-[0-9]+$"`
-
-## Label Filtering
-
-Faro supports two complementary approaches to label-based resource filtering:
+Faro implements **server-side filtering only** using Kubernetes API capabilities:
 
 ### Label Selector (Kubernetes Standard)
 
@@ -218,14 +190,11 @@ Uses standard Kubernetes label selector syntax for server-side filtering:
 ```yaml
 # Namespace-centric format
 namespaces:
-  - name_pattern: "production-.*"
+  - name_pattern: "faro-test-1"  # Literal namespace name
     resources:
-      "v1/pods":
-        name_pattern: ".*"
-        label_selector: "app=nginx,tier=frontend"
-      "v1/services":
-        name_pattern: ".*"
-        label_selector: "app in (nginx,apache)"
+      "v1/configmaps":
+        name_pattern: "test-config-1"        # Exact name for field selector
+        label_selector: "app=faro-test"      # Server-side label filtering
 ```
 
 **Kubernetes Label Selector Syntax:**
@@ -236,106 +205,34 @@ namespaces:
 - **Non-existence**: `!app`
 - **Multiple conditions**: `app=nginx,tier=frontend`
 
-**Server-Side Filtering:**
-- Applied via `ListOptions.LabelSelector`
-- Processed by Kubernetes API server
-- Reduces network traffic and client-side processing
-- Better performance for large clusters
+**Server-Side Filtering Benefits:**
+- **API Server Processing**: The Kubernetes API server receives requests and performs filtering based on selectors, only retrieving resources that match criteria
+- **etcd Efficiency**: The etcd database backing the API server is designed for efficient key lookups and watches, handling filtered requests without transmitting entire datasets
+- **Network Optimization**: Only matching resources are transferred from API server to client, reducing bandwidth usage
+- **Memory Efficiency**: Client applications receive only relevant data, minimizing memory footprint
+- **Faro Core Efficiency**: No client-side pattern matching or filtering logic required in Faro core (applications may implement additional filtering)
+- **Scalability**: Performance scales with filtered results, not total cluster resources
+- **Implementation**: Applied via `ListOptions.LabelSelector` and `ListOptions.FieldSelector`
+- **Faro Core Behavior**: All events matching server-side filters are forwarded to application handlers (confirmed by integration tests)
 
-### Label Pattern (Regex Matching)
+### Field Selector (Exact Name Matching)
 
-Uses regex patterns for flexible label value matching:
-
-```yaml
-# Namespace-centric format
-namespaces:
-  - name_pattern: "^ocm-staging-[a-z0-9]{32}$"
-    resources:
-      "hypershift.openshift.io/v1beta1/hostedclusters":
-        name_pattern: ".*"
-        label_pattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-.*$"
-      "v1/configmaps":
-        name_pattern: ".*"
-        label_pattern: "app=^web-.*$"
-```
-
-**Label Pattern Syntax:**
-- **Format**: `key=regex_pattern`
-- **Exact match**: `app=^nginx$`
-- **Prefix match**: `app=^nginx-.*$`
-- **Complex patterns**: `version=v\\d+\\.\\d+`
-- **Case sensitive**: Regex patterns are case-sensitive
-
-**Client-Side Filtering:**
-- All resources are fetched, then filtered client-side
-- Full regex power for complex pattern matching
-- Higher network overhead but maximum flexibility
-- Bypasses Kubernetes label value validation
-
-### Filtering Comparison
-
-| Feature | Label Selector | Label Pattern |
-|---------|---------------|---------------|
-| **Performance** | ✅ Server-side (faster) | ❌ Client-side (slower) |
-| **Network Traffic** | ✅ Reduced | ❌ Full resource fetch |
-| **Flexibility** | ❌ Limited syntax | ✅ Full regex power |
-| **Kubernetes Native** | ✅ Standard API | ❌ Custom implementation |
-| **Complex Patterns** | ❌ Basic matching | ✅ Advanced regex |
-
-### Combined Usage
-
-Both label filtering types can be used together:
+For exact resource name matches, Faro uses Kubernetes field selectors:
 
 ```yaml
 resources:
-  - gvr: "v1/pods"
+  - gvr: "v1/configmaps"
     scope: "Namespaced"
-    namespace_patterns: ["production-.*"]
-    name_pattern: "web-.*"
-    label_selector: "app=nginx"              # Server-side pre-filter
-    label_pattern: "version=^v[0-9]+\\.[0-9]+$"  # Client-side regex filter
+    namespace_patterns: ["faro-test-2"]  # Literal namespace names
+    name_pattern: "test-config-1"        # Creates metadata.name=test-config-1 field selector
+    label_selector: "app=faro-test"      # Server-side label filtering
 ```
 
-**Processing Order:**
-1. **Namespace patterns**: Filter namespaces to monitor
-2. **Label selector**: Server-side Kubernetes API filtering  
-3. **Name pattern**: Client-side resource name regex filtering
-4. **Label pattern**: Client-side label value regex filtering
-
-### Use Case Examples
-
-#### Standard Kubernetes Filtering
-```yaml
-# Monitor nginx pods in production environments
-namespaces:
-  - name_pattern: "prod-.*"
-    resources:
-      "v1/pods":
-        name_pattern: ".*"
-        label_selector: "app=nginx,environment=production"
-```
-
-#### Complex Pattern Matching
-```yaml
-# Monitor CI/CD clusters with specific naming patterns
-namespaces:
-  - name_pattern: "^ocm-staging-[a-z0-9]{32}$"
-    resources:
-      "hypershift.openshift.io/v1beta1/hostedclusters":
-        name_pattern: ".*"
-        label_pattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-[a-z0-9-]+$"
-```
-
-#### Version-Based Filtering
-```yaml
-# Monitor resources with semantic version labels
-namespaces:
-  - name_pattern: ".*"
-    resources:
-      "v1/configmaps":
-        name_pattern: ".*"
-        label_pattern: "version=^v\\d+\\.\\d+\\.\\d+$"
-```
+**Field Selector Implementation:**
+- **Format**: `metadata.name=exact-value`
+- **Server-Side**: Applied at Kubernetes API level
+- **Performance**: Optimal network and processing efficiency
+- **Limitation**: Only exact matches supported (no wildcards or regex)
 
 ## Command Line Interface
 
@@ -360,19 +257,32 @@ namespaces:
 - **YAML Parse Error**: Line and column information
 - **Validation Error**: Specific field and constraint information
 
-### Regex Compilation Errors
-- **Invalid Pattern**: Error during pattern matching operations
-- **Graceful Degradation**: Skip invalid patterns, continue with valid ones
-- **Logging**: Warning messages for invalid regex patterns
+### Server-Side Filtering Errors
+- **Invalid Label Selector**: Kubernetes API validation errors
+- **Invalid Field Selector**: Field selector syntax validation
+- **Graceful Degradation**: Skip invalid selectors, continue with valid ones
+- **Logging**: Warning messages for invalid selector patterns
 
-## Pattern Matching Performance
+## Performance Characteristics
 
-### Regex Compilation
-- **Compilation**: Performed during pattern matching operations
-- **Caching**: No built-in caching - compiled per match
-- **Performance Impact**: Negligible for typical configuration sizes
+### Server-Side Filtering Architecture
 
-### Optimization Opportunities
-- **Pre-compilation**: Store compiled regex objects
-- **Pattern Simplification**: Use string operations for simple patterns
-- **Caching**: Cache match results for repeated evaluations
+**Kubernetes API Server Processing:**
+1. **Request Reception**: API server receives LIST/WATCH requests with selector parameters
+2. **etcd Query Construction**: Server builds efficient queries based on label and field selectors
+3. **Filtered Retrieval**: Only resources matching criteria are retrieved from etcd storage
+4. **Selective Transmission**: API server transmits only matching resources to Faro client
+5. **Watch Optimization**: Subsequent watch events are pre-filtered before network transmission
+
+**etcd Database Efficiency:**
+- **Key-Value Design**: etcd's architecture enables efficient key lookups and range queries for resource filtering
+- **Index Utilization**: Label and field selectors leverage etcd's built-in indexing capabilities
+- **Watch Streams**: Native support for filtered watch streams reduces unnecessary data transfer
+- **Memory Conservation**: Server-side filtering prevents loading entire resource sets into API server memory
+
+**Performance Benefits:**
+- **Network Efficiency**: Only matching resources transferred from API server to client
+- **Faro Core CPU Efficiency**: No client-side pattern matching, regex processing, or filtering logic required in Faro core
+- **Memory Efficiency**: Reduced object storage and processing overhead in client applications
+- **Scalability**: Performance scales with filtered results, not total cluster resource count
+- **Bandwidth Conservation**: Eliminates transmission of irrelevant resources across network

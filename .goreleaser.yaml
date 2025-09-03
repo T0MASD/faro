@@ -1,0 +1,110 @@
+# GoReleaser configuration for Faro Library
+# Since Faro is a Go library, we only need to create GitHub releases
+# with source code and documentation - no binary builds required
+
+project_name: faro
+
+before:
+  hooks:
+    # Validate library before release
+    - go mod tidy
+    - go mod download
+    - cd tests/unit && go test -v
+
+# Skip binary builds entirely for library releases
+builds:
+  - skip: true
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - '^style:'
+      - Merge pull request
+      - Merge branch
+      - go mod tidy
+
+release:
+  github:
+    owner: T0MASD
+    name: faro
+  
+  # Release name template
+  name_template: "Faro Library v{{.Version}}"
+  
+  # Release notes for library users
+  header: |
+    ## Faro Kubernetes Resource Monitoring Library v{{.Version}}
+    
+    A lightweight Go library for monitoring Kubernetes resource changes with server-side filtering.
+    
+    ### Installation
+    ```bash
+    go get github.com/T0MASD/faro@{{.Tag}}
+    ```
+    
+    ### Quick Start
+    ```go
+    package main
+    
+    import (
+        "context"
+        "github.com/T0MASD/faro/pkg"
+    )
+    
+    func main() {
+        // Create Kubernetes client
+        client, err := faro.NewKubernetesClient()
+        if err != nil {
+            panic(err)
+        }
+        
+        // Create logger
+        logger, err := faro.NewLogger("./logs")
+        if err != nil {
+            panic(err)
+        }
+        defer logger.Shutdown()
+        
+        // Load configuration
+        config, err := faro.LoadConfig()
+        if err != nil {
+            panic(err)
+        }
+        
+        // Create and start controller
+        controller := faro.NewController(client, logger, config)
+        ctx := context.Background()
+        
+        // Set readiness callback (optional)
+        controller.SetReadyCallback(func() {
+            logger.Info("main", "Faro is ready")
+        })
+        
+        // Start monitoring
+        if err := controller.Start(ctx); err != nil {
+            logger.Error("main", "Controller error: " + err.Error())
+        }
+    }
+    ```
+    
+  footer: |
+    ## Documentation
+    
+    - [Architecture Overview](https://github.com/T0MASD/faro/blob/{{.Tag}}/docs/architecture.md)
+    - [Component Reference](https://github.com/T0MASD/faro/tree/{{.Tag}}/docs/components/)
+    - [Testing Strategy](https://github.com/T0MASD/faro/blob/{{.Tag}}/docs/TESTING_STRATEGY.md)
+    - [Comprehensive Analysis](https://github.com/T0MASD/faro/blob/{{.Tag}}/COMPREHENSIVE_FARO_ANALYSIS.md)
+    
+    ## Examples
+    
+    - [Basic Usage](https://github.com/T0MASD/faro/blob/{{.Tag}}/examples/workload-monitor.go)
+    - [Configuration Examples](https://github.com/T0MASD/faro/tree/{{.Tag}}/examples/configs/)
+    - [Test Configurations](https://github.com/T0MASD/faro/tree/{{.Tag}}/tests/e2e/configs/)
+    
+    **Full Changelog**: https://github.com/T0MASD/faro/compare/{{.PreviousTag}}...{{.Tag}}

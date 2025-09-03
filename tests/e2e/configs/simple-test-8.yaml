@@ -1,0 +1,14 @@
+# Simple E2E Test 8 - Multiple namespaces with same label selector
+# This test validates Faro's ability to watch multiple namespace resources
+# that share the same label, demonstrating proper server-side filtering
+
+output_dir: "./logs/test8"
+log_level: "info"
+auto_shutdown_sec: 120
+json_export: true
+
+resources:
+  # Watch namespace resources with shared label - this should work perfectly
+  - gvr: "v1/namespaces"
+    scope: "Cluster"
+    label_selector: "test-label=faro-namespace"

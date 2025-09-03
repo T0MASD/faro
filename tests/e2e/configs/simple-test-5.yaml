@@ -1,0 +1,11 @@
+# Simple E2E Test 5 - Namespace monitoring only
+output_dir: "./logs/test5"
+log_level: "info"
+auto_shutdown_sec: 120
+json_export: true
+
+# Monitor cluster-scoped namespace resource
+resources:
+  - gvr: "v1/namespaces"
+    scope: "Cluster"
+    name_pattern: "faro-*"

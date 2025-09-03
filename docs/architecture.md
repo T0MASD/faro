@@ -1,43 +1,55 @@
 # Faro Architecture
 
-Kubernetes resource observation tool and Go library with dynamic discovery and configuration-driven informer management.
+Kubernetes resource monitoring Go library with informer-based event processing.
 
 ## System Overview
 
-**Purpose**: Monitor Kubernetes resource lifecycle events (ADDED/UPDATED/DELETED) across namespaced and cluster-scoped resources using dynamic informer creation. Available as CLI tool and Go library.
+**Purpose**: Go library for monitoring Kubernetes resources using informers with configurable filtering and event callbacks.
 
 **Key Characteristics**:
-- Configuration-driven informer creation
-- Real-time API discovery
-- Work queue-based event processing
-- Dual configuration format support
-- Event handler interface for library consumption
+- **Library-First Design**: Core monitoring library with callback-based event handling
+- **Server-Side Filtering**: Kubernetes API server-side filtering for namespaces, labels, and resource names
+- **Multi-Layered Informers**: Dynamic informer creation with CRD discovery
+- **Work Queue Pattern**: Asynchronous event processing with rate limiting
+- **JSON Export**: Optional structured event export to files
 
 ## Core Components
 
-### Configuration Layer
-- **Dual format support**: Namespace-centric and resource-centric YAML configurations
-- **Normalization**: Both formats converted to unified `NormalizedConfig` internal structure
-- **Dual label filtering**: Server-side Kubernetes label selectors + client-side regex patterns
-- **Pattern matching**: Regex-based resource and namespace name filtering
+### Configuration System (`pkg/config.go`)
+- **YAML Configuration**: Supports both namespace-centric and resource-centric formats
+- **Server-Side Filtering**: Label selectors, namespace patterns, and exact resource names
+- **Normalization**: Converts both config formats to unified internal representation
+- **Validation**: Config validation with sensible defaults
 
-### Discovery Engine
-- **API Resource Discovery**: Runtime enumeration of all cluster API groups and resources
-- **Scope Detection**: Automatic determination of cluster vs namespace-scoped resources
-- **CRD Monitoring**: Real-time CustomResourceDefinition detection for dynamic informer creation
-- **Version Handling**: Multi-version API resource support
+### Controller (`pkg/controller.go`)
+- **Multi-Layered Informers**: Dynamic informer creation for configured resources
+- **Work Queue**: Asynchronous event processing with rate limiting
+- **CRD Discovery**: Real-time CustomResourceDefinition monitoring
+- **Event Callbacks**: Handler interface for library consumers
+- **Graceful Shutdown**: Proper informer lifecycle management
+
+### Kubernetes Client (`pkg/client.go`)
+- **Client Wrapper**: Kubernetes clientset and dynamic client management
+- **Configuration**: Supports both in-cluster and kubeconfig-based auth
+
+### Logger (`pkg/logger.go`)
+- **Multi-Handler Logging**: Console, file, and JSON export handlers
+- **Callback Interface**: Pluggable log handlers
+- **Structured Events**: JSON event export with timestamps and metadata
 
 ### Controller Architecture
+
+**Event Processing Flow:**
 ```
-Event Flow: Resource Change → Informer → Work Queue → Worker → Reconcile → Log + Event Handlers
+Resource Event → Informer → Work Queue → Worker → Event Handler Callbacks
 ```
 
 **Components**:
-- **Controller**: Main orchestrator with work queue pattern
-- **Informer Management**: Dynamic creation/destruction of resource informers
+- **Controller**: Main orchestrator with work queue pattern and informer management
+- **Informer Management**: Dynamic creation/destruction with server-side filtering
 - **Worker Pool**: Asynchronous event processing with rate limiting and retries
 - **Event Handlers**: Callback interface for library consumers
-- **Lister Management**: Cached object retrieval for DELETED event validation
+- **CRD Watcher**: Dynamic informer creation for new CustomResourceDefinitions
 
 ### Work Queue System
 - **Pattern**: Standard Kubernetes controller pattern with `workqueue.RateLimitingInterface`
@@ -69,162 +81,156 @@ type EventHandler interface {
     OnMatched(event MatchedEvent) error
 }
 
-type NormalizedConfig struct {
-    GVR               string          // target resource
-    ResourceDetails   ResourceDetails // name patterns, label selectors
-    NamespacePatterns []string        // namespace filtering rules
-    LabelSelector     string          // Kubernetes label selector
-    LabelPattern      string          // Regex pattern for label values
-}
-
-type ResourceInfo struct {
-    Group      string
-    Version    string
-    Resource   string
-    Kind       string
-    Namespaced bool
+type JSONEvent struct {
+    Timestamp string            `json:"timestamp"`
+    EventType string            `json:"eventType"`
+    GVR       string            `json:"gvr"`
+    Namespace string            `json:"namespace,omitempty"`
+    Name      string            `json:"name"`
+    UID       string            `json:"uid,omitempty"`
+    Labels    map[string]string `json:"labels,omitempty"`
 }
 ```
 
 ### Configuration Formats
 
-**Namespace-Centric**:
+**Namespace-Centric Configuration:**
 ```yaml
+output_dir: "./logs"
+log_level: "info"
+auto_shutdown_sec: 120
+json_export: true
+
 namespaces:
   - name_pattern: "prod-.*"
     resources:
       "v1/pods":
-        name_pattern: "web-.*"
         label_selector: "app=nginx"
       "v1/configmaps":
-        name_pattern: ".*"
-        label_pattern: "app=^nginx-.*$"
+        name_pattern: "config-.*"
 ```
 
-**Resource-Centric**:
+**Resource-Centric Configuration:**
 ```yaml
+output_dir: "./logs"
+log_level: "info"
+json_export: true
+
 resources:
   - gvr: "v1/pods"
     scope: "Namespaced"
-    namespace_patterns: ["prod-.*"]
-    name_pattern: "web-.*"
+    namespace_patterns: ["default", "kube-system"]
     label_selector: "app=nginx"
-  - gvr: "v1/services"
-    scope: "Namespaced"
-    namespace_patterns: [".*"]
-    name_pattern: ".*"
-    label_pattern: "environment=^(prod|staging)$"
+  - gvr: "v1/namespaces"
+    scope: "Cluster"
+    name_pattern: "prod-.*"
 ```
 
 ## Runtime Behavior
 
 ### Startup Sequence
-1. **API Discovery**: Enumerate all cluster API resources
-2. **Configuration Normalization**: Convert YAML to internal format
-3. **Informer Creation**: Start informers for matching discovered resources
-4. **CRD Watcher**: Monitor for new CustomResourceDefinition additions
-5. **Worker Pool**: Start event processing workers
+1. **Configuration Loading**: Parse YAML config and normalize to internal format
+2. **API Discovery**: Enumerate cluster API resources (395 resources from 34 API groups)
+3. **Watchability Validation**: Filter resources by 'watch' verb support, exclude problematic resources
+4. **Informer Creation**: Create informers for configured resources with server-side filtering
+5. **CRD Watcher**: Start monitoring for new CustomResourceDefinition additions
+6. **Worker Pool**: Start event processing workers (default: 3 goroutines)
+7. **Readiness Callback**: Signal "Multi-layered informer architecture started successfully"
 
-### Dynamic Adaptation
-- **New CRDs**: Automatically evaluated against configuration patterns
-- **Matching CRDs**: Dynamic informer creation without restart
-- **CRD Deletion**: Graceful informer shutdown and cleanup
-- **Resource Filtering**: Combined regex patterns and label selectors
+### Server-Side Filtering
+- **Namespace Filtering**: Applied at informer creation for namespace-scoped resources
+- **Label Selectors**: Kubernetes-native label filtering on API server  
+- **Field Selectors**: Exact resource name matching (metadata.name=exact-value)
+- **Faro Core Processing**: All events matching server-side filters are processed and forwarded to application handlers (verified by tests)
+
+**Why Server-Side Filtering:**
+- **API Server Efficiency**: The Kubernetes API server receives requests and performs filtering based on selectors, only retrieving resources that match criteria
+- **etcd Optimization**: The etcd database backing the API server is designed for efficient key lookups and watches, handling filtered requests without transmitting entire datasets
+- **Network Efficiency**: Only matching resources are transferred from API server to client, reducing bandwidth usage
+- **Memory Efficiency**: Client applications receive only relevant data, minimizing memory footprint
+- **CPU Efficiency**: Faro core requires no client-side pattern matching or filtering logic (applications using Faro may implement additional filtering)
 
 ### Event Processing
-1. **Event Detection**: Informer detects resource change
+
+**Processing Flow:**
+1. **Event Detection**: Informer detects resource change (ADDED/UPDATED/DELETED)
 2. **Key Extraction**: Generate namespace/name key from object metadata
-3. **Work Queuing**: Create `WorkItem` and enqueue for processing
-4. **Worker Processing**: Pull from queue, validate against configuration
-5. **Label Filtering**: Apply both Kubernetes and regex label filters
-6. **Business Logic**: Execute filtering, logging, and state tracking
+3. **Work Queuing**: Create `WorkItem` and enqueue for asynchronous processing
+4. **Worker Processing**: Pull from queue and validate against configuration
+5. **Event Handler Callbacks**: Execute registered handlers with `MatchedEvent`
+6. **JSON Export**: Optional structured event export to timestamped files
 
-### Label Filtering Architecture
+**CRD Discovery:**
+1. **CRD Monitoring**: Watch for new CustomResourceDefinition additions
+2. **Dynamic Informer Creation**: Automatically create informers for matching CRDs
+3. **Lifecycle Management**: Handle CRD deletion and informer cleanup
 
-Faro implements a dual-layer label filtering system combining Kubernetes-native server-side filtering with client-side regex pattern matching:
+### Filtering Architecture
 
-#### Server-Side Filtering (`label_selector`)
-```go
-// Applied during informer creation
-listOptions := metav1.ListOptions{
-    LabelSelector: config.LabelSelector, // "app=nginx,tier=frontend"
-}
-informer := factory.Core().V1().Pods().Informer(listOptions)
-```
+#### Server-Side Filtering
 
-**Characteristics**:
-- **Processing**: Kubernetes API server filters resources before transmission
-- **Performance**: Reduced network traffic and client memory usage
-- **Syntax**: Standard Kubernetes label selector syntax
-- **Limitations**: Cannot use regex patterns or complex matching
+Faro leverages Kubernetes API server-side filtering for optimal efficiency and performance:
 
-#### Client-Side Filtering (`label_pattern`)
-```go
-// Applied in matchesLabelFilter() function
-func matchesLabelFilter(obj *unstructured.Unstructured, labelFilter string, isPattern bool) bool {
-    if isPattern {
-        // Parse "key=regex_pattern" and apply regex matching
-        parts := strings.SplitN(labelFilter, "=", 2)
-        key, pattern := parts[0], parts[1]
-        
-        if value, exists := labels[key]; exists {
-            matched, _ := regexp.MatchString(pattern, value)
-            return matched
-        }
-        return false
-    }
-    // Standard Kubernetes label selector parsing for label_selector
-}
-```
+**Implementation Details:**
+- **Namespace Filtering**: Informers created with namespace restrictions for namespace-scoped resources
+- **Label Selectors**: Standard Kubernetes label selectors applied at the API server via `ListOptions.LabelSelector`
+- **Field Selectors**: Exact resource name matching using `metadata.name=exact-value` via `ListOptions.FieldSelector`
+- **Faro Core Processing**: All events matching server-side filters are processed and forwarded to application event handlers (verified by integration tests)
 
-**Characteristics**:
-- **Processing**: All resources fetched, filtered client-side during event processing
-- **Performance**: Higher network overhead, flexible matching
-- **Syntax**: `key=regex_pattern` format with full regex support
-- **Benefits**: Complex pattern matching, bypasses Kubernetes label value validation
+**Kubernetes API Server Processing:**
+1. **Request Reception**: API server receives LIST/WATCH requests with selector parameters
+2. **etcd Query Optimization**: Server constructs efficient etcd queries based on selectors
+3. **Filtered Retrieval**: Only resources matching criteria are retrieved from etcd storage
+4. **Selective Transmission**: API server transmits only matching resources to client
+5. **Watch Efficiency**: Subsequent watch events are pre-filtered before transmission
 
-#### Unified Processing Flow
+**etcd Database Benefits:**
+- **Key-Value Optimization**: etcd's design enables efficient key lookups and range queries
+- **Watch Streams**: Native support for filtered watch streams reduces unnecessary data transfer
+- **Index Utilization**: Label and field selectors leverage etcd's indexing capabilities
+- **Memory Conservation**: Server-side filtering prevents loading entire resource sets into memory
+
+#### Processing Flow
 
 ```
-Resource Event → Informer → Work Queue → Worker → Label Filter Chain → Event Handler
-                     ↑                              ↓
-              [Server-side]                  [Client-side]
-              label_selector                 label_pattern
-              (if specified)                 (if specified)
+Resource Event → Informer → Work Queue → Worker → Event Handler Callbacks → Application Filtering
+                     ↑                                                              ↑
+              [Server-side filtering]                                    [Application-specific filtering]
+              (namespaces, labels, names)                                (custom logic, complex patterns)
 ```
 
-**Processing Order**:
-1. **Namespace patterns**: Filter namespaces to monitor
-2. **Label selector**: Kubernetes API server pre-filtering (reduces network load)
-3. **Name pattern**: Client-side resource name regex matching
-4. **Label pattern**: Client-side label value regex matching
-5. **Event handler**: Call registered handlers for matched events
+**Processing Responsibilities:**
+- **Faro Core**: Handles server-side filtering via Kubernetes API selectors and forwards all matching events
+- **Applications**: Implement additional client-side filtering logic in event handlers as needed for complex patterns, business logic, or advanced matching criteria
+- **Worker Dispatchers**: Can be set up to process matched events and take further actions on resource activity:
+  - Create, update, or delete related resources
+  - Send notifications or alerts  
+  - Update external systems or databases
+  - Trigger workflows or automation
+  - Apply business logic based on resource state
 
-#### Use Case Optimization
+#### Configuration Examples
 
-**High-volume, simple filtering**:
+**Simple Resource Monitoring:**
 ```yaml
-# Use label_selector for performance
-resources:
-  - gvr: "v1/pods"
-    label_selector: "app=nginx,environment=production"
+output_dir: "./logs"
+log_level: "info"
+json_export: true
+
+namespaces:
+  - name_pattern: "default"
+    resources:
+      "v1/pods":
+        label_selector: "app=nginx"
 ```
 
-**Complex pattern matching**:
+**Multi-Namespace Monitoring:**
 ```yaml
-# Use label_pattern for flexibility
 resources:
-  - gvr: "hypershift.openshift.io/v1beta1/hostedclusters"
-    label_pattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-.*$"
-```
-
-**Combined approach**:
-```yaml
-# Pre-filter with label_selector, refine with label_pattern
-resources:
-  - gvr: "v1/pods"
-    label_selector: "app=nginx"              # Server-side: only nginx apps
-    label_pattern: "version=^v[0-9]+\\.[0-9]+$"  # Client-side: semantic versions only
+  - gvr: "v1/configmaps"
+    scope: "Namespaced"
+    namespace_patterns: ["kube-system", "default"]
+    name_pattern: "config-.*"
 ```
 
 ## Library Interface
@@ -238,39 +244,79 @@ controller.AddEventHandler(&MyHandler{})
 type MyHandler struct{}
 func (h *MyHandler) OnMatched(event MatchedEvent) error {
     // Process matched Kubernetes resource event
+    fmt.Printf("Event: %s %s/%s\n", event.EventType, event.GVR, event.Key)
     return nil
 }
 ```
 
-### Library vs CLI
-- **CLI**: Uses built-in logging handler for file output
-- **Library**: Event handlers receive `MatchedEvent` structs
-- **Configuration**: Same YAML configs for both CLI and library
-- **Filtering**: Identical logic applies events to registered handlers
+### Basic Usage
+```go
+// Load configuration
+config, err := faro.LoadConfig()
+if err != nil {
+    log.Fatal(err)
+}
 
-**See**: [Library Usage Guide](library-usage.md) for comprehensive examples and patterns.
+// Create Kubernetes client
+client, err := faro.NewKubernetesClient()
+if err != nil {
+    log.Fatal(err)
+}
+
+// Create logger
+logger, err := faro.NewLoggerWithJSON(config.OutputDir, config.JsonExport)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Create controller
+controller := faro.NewController(client, logger, config)
+
+// Register event handler
+controller.AddEventHandler(&MyHandler{})
+
+// Set readiness callback
+controller.SetReadyCallback(func() {
+    fmt.Println("Faro is ready!")
+})
+
+// Start monitoring
+if err := controller.Start(); err != nil {
+    log.Fatal(err)
+}
+
+// Wait for shutdown signal
+// ... 
+
+// Stop gracefully
+controller.Stop()
+```
 
 ## Key Design Decisions
 
-### Informer Deduplication
-- **Strategy**: One informer per GVR regardless of multiple configuration rules
-- **Key Management**: Consistent GVR string format across all tracking maps
-- **Lifecycle**: Shared informer with multiple configuration pattern evaluation
+### Library-First Architecture
+- **Core Library**: Foundational Kubernetes monitoring capabilities
+- **Event Handler Interface**: Enables custom monitoring applications
+- **Extensibility**: Same core library can power different use cases
+- **Reusability**: Clean separation between core functionality and specific implementations
 
-### Event Handler Simplicity
-- **Principle**: Event handlers only extract keys and enqueue work items
-- **Processing**: All business logic in dedicated `reconcile()` function
-- **Benefits**: Non-blocking event detection, unified error handling
+### Server-Side Filtering Strategy
+- **Efficiency**: Leverage Kubernetes API server filtering capabilities
+- **Performance**: Reduce network traffic and client-side processing
+- **Simplicity**: No complex client-side filtering logic
+- **Reliability**: Use proven Kubernetes filtering mechanisms
 
-### Configuration Architecture
-- **Dual Support**: Both namespace-centric and resource-centric configuration formats
-- **Normalization**: Single internal processing path regardless of input format
-- **Label Filtering**: Hybrid server-side + client-side approach for optimal performance and flexibility
+### Dynamic Informer Management
+- **CRD Support**: Automatic informer creation for new CustomResourceDefinitions
+- **Lifecycle Management**: Proper creation/destruction of informers
+- **Resource Efficiency**: Only create informers for configured resources
+- **Graceful Shutdown**: Clean termination of all informers and workers
 
-### Memory Management
-- **Context Cancellation**: Individual cancel contexts for each informer
-- **Graceful Shutdown**: Wait groups ensure complete cleanup
-- **Resource Tracking**: Sync.Map usage for concurrent informer lifecycle management
+### Work Queue Pattern
+- **Asynchronous Processing**: Decouple event detection from processing
+- **Rate Limiting**: Built-in exponential backoff for failed events
+- **Reliability**: Standard Kubernetes controller pattern
+- **Scalability**: Configurable worker pool for concurrent processing
 
 ## Dependencies
 
@@ -282,7 +328,8 @@ func (h *MyHandler) OnMatched(event MatchedEvent) error {
 ### Core Go Libraries
 - `context`: Cancellation and timeout management
 - `sync`: Concurrent data structure management
-- `regexp`: Pattern matching for resource filtering
+- `encoding/json`: JSON event export
+- `gopkg.in/yaml.v2`: YAML configuration parsing
 
 ## File Organization
 
@@ -291,14 +338,7 @@ pkg/
 ├── client.go     # Kubernetes client initialization
 ├── config.go     # Configuration parsing and normalization  
 ├── controller.go # Controller, informer management, event handlers
-├── logger.go     # Callback-based logging system
-main.go           # CLI entry point
-examples/
-├── library-usage.go         # Basic library usage example
-└── worker-dispatcher.go     # Worker dispatcher pattern example
-e2e/
-├── test8.go      # Library-based test implementation
-└── test*.sh      # CLI and library test suite
+└── logger.go     # Callback-based logging system
 ```
 
 ## Concurrency Model
@@ -310,7 +350,9 @@ e2e/
 
 ## Error Handling
 
+### Core Library
 - **Work Queue Retries**: Automatic retry with exponential backoff
 - **Discovery Failures**: Graceful degradation with partial functionality
 - **Invalid Patterns**: Configuration validation with clear error reporting
 - **Resource Conflicts**: Deduplication logic prevents informer conflicts
+- **Graceful Shutdown**: Proper cleanup of all resources and goroutines
