@@ -8,54 +8,68 @@
 
 # Faro
 
-**Smart Kubernetes resource monitoring** with dual label filtering, dynamic discovery, and flexible configuration formats.
+**Kubernetes Resource Monitoring Library** with advanced filtering, dynamic workload detection, and production-ready monitoring capabilities.
 
-> 🎯 **Perfect for**: CI/CD pipeline monitoring, production workload tracking, security compliance, and custom resource management
+> 🎯 **Perfect for**: Workload lifecycle monitoring, CI/CD pipeline tracking, multi-cluster observability, and custom resource management
+> 📚 **Library-First**: Core Kubernetes monitoring with examples for specialized use cases like workload-monitor
 
 ## Why Faro?
 
-| **Feature** | **Faro** | **kubectl get --watch** | **Custom Controllers** |
-|-------------|----------|-------------------------|------------------------|
-| **Configuration-Driven** | ✅ YAML configs | ❌ CLI only | ❌ Code-based |
-| **Dual Label Filtering** | ✅ Server + Regex | ❌ Basic only | ⚠️ Manual implementation |
-| **Multi-Resource** | ✅ Single config | ❌ One command per resource | ⚠️ Complex setup |
-| **CRD Auto-Discovery** | ✅ Real-time | ❌ Manual | ⚠️ Manual implementation |
-| **Go Library** | ✅ Event handlers | ❌ Not available | ✅ Full control |
-| **Production Ready** | ✅ Rate limiting, graceful shutdown | ❌ Basic watching | ⚠️ DIY reliability |
+| **Feature** | **Faro Library** | **kubectl get --watch** | **Custom Controllers** |
+|-------------|------------------|-------------------------|------------------------|
+| **Library-First Design** | ✅ Go library + examples | ❌ CLI only | ⚠️ Framework-based |
+| **Advanced Filtering** | ✅ Allowlist/Denylist/Workload GVRs | ❌ Basic selectors | ⚠️ Manual implementation |
+| **Dynamic Workload Detection** | ✅ Label-based + namespace patterns | ❌ Static resources | ⚠️ Custom logic required |
+| **Namespace-Scoped Informers** | ✅ Per-workload efficiency | ❌ Cluster-wide only | ⚠️ Complex setup |
+| **Production Monitoring** | ✅ Workload-monitor example | ❌ Not suitable | ✅ Full control |
+| **Resource Efficiency** | ✅ Server-side + client-side filtering | ❌ All events processed | ⚠️ DIY optimization |
 
 ## System Overview
 
-**Purpose**: Monitor Kubernetes resource lifecycle events (ADDED/UPDATED/DELETED) across namespaced and cluster-scoped resources using dynamic informer creation. Available as both CLI tool and Go library.
+**Purpose**: Go library for Kubernetes resource monitoring with specialized examples for production workload tracking. Core library provides foundational monitoring capabilities while examples like `workload-monitor` demonstrate advanced use cases.
 
 **Key Characteristics**:
-- **Smart Filtering**: Dual label filtering (Kubernetes selectors + regex patterns)
-- **Configuration-Driven**: Namespace-centric and resource-centric YAML formats
-- **Real-Time Discovery**: API discovery and CRD monitoring with dynamic informer creation
-- **Production-Ready**: Work queue processing with rate limiting and graceful shutdown
-- **High Performance**: Server-side filtering for efficiency, client-side regex for flexibility
-- **Developer-Friendly**: Go library interface with event handler callbacks
+- **Library-First**: Core Kubernetes monitoring library with production examples
+- **Advanced Filtering**: Three-tier filtering (allowedgvrs/deniedgvrs/workloadgvrs)
+- **Dynamic Workload Detection**: Label-based workload discovery with namespace pattern matching
+- **Namespace-Scoped Efficiency**: Per-workload informers for optimal resource usage
+- **Production Examples**: workload-monitor for real-world deployment scenarios
+- **Comprehensive Coverage**: 400+ Kubernetes GVRs with watchability validation
 
 ## Architecture
 
-### Core Components
+### Core Library Components
 
-- **Configuration Layer**: Dual YAML format support with normalization to unified internal structure
-- **Discovery Engine**: Runtime API enumeration with automatic scope detection and CRD monitoring  
-- **Controller Architecture**: Multi-layered informer management with work queue pattern
-- **Event Processing**: Asynchronous processing with exponential backoff and graceful shutdown
-- **Logging System**: Callback-based logging with pluggable handlers
-- **Library Interface**: Event handler registration for external consumption
+- **Configuration Layer**: YAML-driven configuration with flexible GVR filtering
+- **Discovery Engine**: Runtime API enumeration with watchability validation (400+ GVRs)
+- **Controller Architecture**: Multi-layered informer management with dynamic creation
+- **Event Processing**: Work queue pattern with exponential backoff and graceful shutdown
+- **Filtering System**: Three-tier filtering (allowed/denied/workload GVRs)
+- **Library Interface**: Event handler callbacks for custom monitoring applications
+
+### Workload Monitor Example
+
+- **Dynamic Detection**: Label-based workload discovery across cluster namespaces
+- **Namespace-Scoped Informers**: Per-workload resource monitoring for efficiency
+- **Advanced Filtering**: Allowlist (cluster-wide) + Workload GVRs (per-namespace)
+- **Production Ready**: Structured logging with workload context and metadata
 
 ### Processing Flow
 
+**Core Library:**
 ```
-Config Load → API Discovery → Informer Creation → Event Detection → Work Queue → Processing → Logging
+Config Load → API Discovery → Informer Creation → Event Detection → Work Queue → Event Handlers
 ```
 
-## Configuration Formats
+**Workload Monitor Example:**
+```
+Workload Detection → Namespace Discovery → Dynamic Informer Creation → Resource Filtering → Structured Logging
+```
 
-### Namespace-Centric
-Monitor specific namespaces and their contained resources:
+## Configuration Approaches
+
+### Core Library Configuration
+YAML-based configuration for foundational monitoring:
 ```yaml
 namespaces:
   - name_pattern: "prod-.*"
@@ -68,47 +82,65 @@ namespaces:
         label_pattern: "app=^web-.*$"             # Regex pattern matching
 ```
 
-### Resource-Centric  
-Monitor specific resource types across namespace patterns:
-```yaml
-resources:
-  - gvr: "v1/pods"
-    scope: "Namespaced"
-    namespace_patterns: ["prod-.*", "staging-.*"]
-    name_pattern: "web-.*"
-    label_selector: "app=nginx"                   # Pre-filter for performance
-    label_pattern: "version=^v[0-9]+\\.[0-9]+$"   # Regex for semantic versions
+### Workload Monitor Configuration
+Command-line driven for production workload monitoring:
+```bash
+./workload-monitor \
+  -label "api.openshift.com/name" \
+  -pattern "toda-.*" \
+  -namespace-pattern "ocm-staging-(.+)" \
+  -allowedgvrs "v1/namespaces" \
+  -workloadgvrs "v1/pods,v1/configmaps,v1/services,v1/secrets"
 ```
 
-## Smart Label Filtering 🎯
+**Three-Tier Filtering:**
+- **allowedgvrs**: Cluster-wide monitoring (e.g., namespaces for workload detection)
+- **deniedgvrs**: Explicitly excluded GVRs (reduces noise)
+- **workloadgvrs**: Per-namespace monitoring for detected workloads (efficiency)
 
-Faro provides two complementary label filtering approaches for optimal performance and flexibility:
+## Advanced Filtering System 🎯
 
-### **Label Selector** (Kubernetes Standard)
-- ✅ **Server-side filtering** - reduces network traffic
-- ✅ **High performance** for large clusters  
-- ✅ **Standard syntax**: `app=nginx,tier=frontend`
+### **Three-Tier GVR Filtering** (Workload Monitor)
+Optimal resource efficiency through strategic filtering:
 
-### **Label Pattern** (Regex Matching)
-- ✅ **Full regex power** for complex patterns
-- ✅ **Flexible matching** - `app=^web-.*$`, `version=v\\d+\\.\\d+`
-- ✅ **Perfect for CI/CD** naming patterns and version matching
+#### **Allowed GVRs** (Cluster-Wide)
+- ✅ **Minimal cluster monitoring** - only essential resources
+- ✅ **Workload detection** - typically just `v1/namespaces`
+- ✅ **Low resource usage** - single informers for detection
 
-### **Combined Usage**
-```yaml
-# Best of both worlds: pre-filter + refine
-resources:
-  - gvr: "v1/pods"
-    label_selector: "app=nginx"              # Server-side pre-filter
-    label_pattern: "version=^v[0-9]+\\.[0-9]+$"  # Client-side regex refinement
+#### **Workload GVRs** (Per-Namespace)
+- ✅ **Namespace-scoped informers** - created dynamically per workload
+- ✅ **Server-side filtering** - only events from detected namespaces
+- ✅ **High efficiency** - scales with workloads, not cluster size
+
+#### **Denied GVRs** (Explicit Exclusion)
+- ✅ **Noise reduction** - exclude high-volume, low-value resources
+- ✅ **Performance optimization** - prevent unnecessary processing
+- ✅ **Customizable** - adapt to cluster characteristics
+
+### **Label-Based Workload Detection**
+```bash
+# Detect workloads by label and namespace pattern
+-label "api.openshift.com/name" -pattern "toda-.*" -namespace-pattern "ocm-staging-(.+)"
 ```
+
+### **Traditional Label Filtering** (Core Library)
+- **Label Selector**: Server-side Kubernetes filtering (`app=nginx,tier=frontend`)
+- **Label Pattern**: Client-side regex matching (`version=^v[0-9]+\\.[0-9]+$`)
 
 ## Event Processing
 
+### Core Library
 - **Work Queue Pattern**: Standard Kubernetes controller pattern with rate limiting
-- **Smart Filtering**: Multi-level filtering (namespace → labels → name patterns)
+- **Multi-Level Filtering**: Namespace → labels → name patterns
 - **Event Correlation**: Consistent key-based resource identification
 - **Error Handling**: Exponential backoff with maximum retry limits
+
+### Workload Monitor Enhancement
+- **Dynamic Informer Creation**: Namespace-scoped informers created per detected workload
+- **Client-Side Filtering**: Workload context applied to all resource events
+- **Structured Logging**: JSON output with workload metadata and context
+- **Efficient Scaling**: Resource usage scales with workloads, not cluster size
 
 ## Technical Features
 
@@ -132,7 +164,27 @@ resources:
 
 ## Real-World Use Cases 🚀
 
-### **CI/CD Pipeline Monitoring**
+### **Production Workload Monitoring** (workload-monitor)
+Monitor dynamic workloads across Management and Service clusters:
+```bash
+# Management Cluster - comprehensive workload tracking
+./workload-monitor \
+  -label "api.openshift.com/name" \
+  -pattern "toda-.*" \
+  -namespace-pattern "ocm-staging-(.+)" \
+  -allowedgvrs "v1/namespaces" \
+  -workloadgvrs "v1/pods,v1/configmaps,v1/services,apps/v1/deployments,hypershift.openshift.io/v1beta1/hostedclusters"
+
+# Service Cluster - focused application monitoring  
+./workload-monitor \
+  -label "api.openshift.com/name" \
+  -pattern "toda-.*" \
+  -namespace-pattern "ocm-staging-(.+)" \
+  -allowedgvrs "v1/namespaces" \
+  -workloadgvrs "v1/pods,v1/configmaps,v1/services,apps/v1/deployments"
+```
+
+### **CI/CD Pipeline Monitoring** (Core Library)
 Monitor OpenShift CI clusters with complex naming patterns:
 ```yaml
 namespaces:
@@ -143,40 +195,31 @@ namespaces:
         label_pattern: "kubernetes.io/metadata.name=^ocm-staging-[a-z0-9]{32}-cs-ci-.*$"
 ```
 
-### **Production Workload Tracking**
-Monitor specific application versions across environments:
-```yaml
-resources:
-  - gvr: "v1/pods"
-    namespace_patterns: ["prod-.*", "staging-.*"]
-    label_selector: "app=nginx"                    # Performance pre-filter
-    label_pattern: "version=^v[2-9]\\.[0-9]+$"     # Only v2.x+ versions
-```
-
-### **Security Compliance**
-Track resources without required security labels:
-```yaml
-resources:
-  - gvr: "v1/secrets"
-    label_selector: "!security-reviewed"          # Missing security label
-  - gvr: "v1/configmaps"
-    label_pattern: "classification=^(public|internal|confidential)$"
-```
+### **Multi-Cluster Observability**
+Track workload lifecycle across different cluster types:
+- **Workload Detection**: Label-based discovery (`api.openshift.com/name`)
+- **Namespace Patterns**: Dynamic namespace matching (`ocm-staging-(.+)`)
+- **Resource Efficiency**: Per-workload informers vs cluster-wide monitoring
+- **Structured Output**: JSON logs with workload context for analysis
 
 ## Usage
 
-### CLI Tool
+### Workload Monitor (Production Ready)
 ```bash
-# Build and run
-make build
-./faro --config config.yaml
+# Build workload monitor
+go build -o workload-monitor examples/workload-monitor.go
 
-# Quick example configs
-./faro --config examples/ocm-staging.yaml     # CI/CD monitoring
-./faro --config examples/production.yaml     # Production workloads
+# Production workload monitoring
+./workload-monitor \
+  -label "api.openshift.com/name" \
+  -pattern "toda-.*" \
+  -namespace-pattern "ocm-staging-(.+)" \
+  -allowedgvrs "v1/namespaces" \
+  -workloadgvrs "v1/pods,v1/configmaps,v1/services,v1/secrets" \
+  > workload.log 2>&1
 ```
 
-### Go Library
+### Core Library (Custom Applications)
 ```go
 import "github.com/T0MASD/faro/pkg"
 
@@ -193,23 +236,38 @@ controller.AddEventHandler(&MyHandler{})
 controller.Start()
 ```
 
-### Examples
+### CLI Tool (Basic Monitoring)
+```bash
+# Build and run core CLI
+make build
+./faro --config config.yaml
+```
+
+### Development and Testing
 ```bash
 # Run library examples
 make examples             # All examples
 make example-library      # Basic usage
 make example-worker       # Worker dispatcher
 
-# Run all E2E tests (includes library tests)
-make test-e2e
+# Run comprehensive E2E tests
+make test-e2e            # Validates library + workload-monitor
 ```
 
 ## Documentation
 
-- [Architecture Overview](docs/architecture.md) - Complete system design
-- [Library Usage Guide](docs/library-usage.md) - Comprehensive Go library examples and patterns
+- [Architecture Overview](docs/architecture.md) - Core library + workload monitor design
+- [Library Usage Guide](docs/library-usage.md) - Go library examples and integration patterns
+- [Audit Requirements](docs/audit-requirements.md) - Production monitoring validation criteria
 - [Component Reference](docs/components/) - Detailed component documentation
   - [Client](docs/components/client.md) - Kubernetes API client management
-  - [Config](docs/components/config.md) - Configuration processing and validation
+  - [Config](docs/components/config.md) - Configuration processing and validation  
   - [Controller](docs/components/controller.md) - Event handler interface and informer lifecycle
   - [Logger](docs/components/logger.md) - Callback-based logging system
+
+## Examples
+
+- **workload-monitor.go** - Production workload monitoring with dynamic detection
+- **library-usage.go** - Basic library integration patterns
+- **worker-dispatcher.go** - Advanced event processing patterns
+- **E2E Tests** - Comprehensive validation suite for library and examples
