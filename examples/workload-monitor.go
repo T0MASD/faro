@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -24,7 +25,8 @@ import (
 type WorkloadMonitor struct {
 	client                   *faro.KubernetesClient
 	logger                   *faro.Logger
-	sharedController         *faro.Controller
+	discoveryController      *faro.Controller         // Cluster controller for namespace discovery
+	workloadControllers      map[string]*faro.Controller // Per-workload controllers for namespace GVRs
 	mu                       sync.RWMutex
 	
 	// Configuration
@@ -40,9 +42,7 @@ type WorkloadMonitor struct {
 	commandLine              string        // Full command line used to start the monitor
 	
 	// State tracking
-	detectedWorkloads        map[string]bool
-	monitoredNamespaces      map[string]bool
-	namespaceToWorkloadID    map[string]string
+	detectedWorkloads        map[string][]string      // workloadID -> namespaces
 	workloadIDToWorkloadName map[string]string
 }
 
@@ -66,91 +66,27 @@ type WorkloadContext struct {
 	Labels       map[string]string `json:"labels,omitempty"`
 }
 
-// OnMatched handles both namespace detection and resource logging
+// WorkloadResourceHandler handles events for a specific workload's resources
+type WorkloadResourceHandler struct {
+	WorkloadID   string
+	WorkloadName string
+	Namespaces   []string
+	Monitor      *WorkloadMonitor
+}
+
+func (w *WorkloadResourceHandler) OnMatched(event faro.MatchedEvent) error {
+	return w.Monitor.logResourceEvent(event, w.WorkloadID, w.WorkloadName)
+}
+
+// OnMatched handles namespace detection for workload discovery
 func (w *WorkloadMonitor) OnMatched(event faro.MatchedEvent) error {
-	// Handle namespace events for workload detection (only for ADDED events)
+	// Only handle namespace events for workload detection
 	if event.GVR == "v1/namespaces" && event.EventType == "ADDED" {
 		return w.handleNamespaceDetection(event)
 	}
-	
-	// Handle all resource events with client-side filtering (monitoring is always active)
-		return w.handleResourceEventWithClientFiltering(event)
-}
-
-// logDeleteEvent creates and logs a structured DELETE event from CONFIG [DELETED] messages
-func (w *WorkloadMonitor) logDeleteEvent(gvr, namespace, name string) error {
-	// Check if this namespace is monitored
-	w.mu.RLock()
-	workloadID, isMonitored := w.namespaceToWorkloadID[namespace]
-	workloadName := w.workloadIDToWorkloadName[workloadID]
-	w.mu.RUnlock()
-	
-	if !isMonitored {
-		return nil // Skip non-monitored namespaces
-	}
-	
-	entry := StructuredLogEntry{
-		Timestamp: time.Now().UTC(),
-		Level:     "info",
-		Message:   "Kubernetes resource deleted",
-		Workload: WorkloadContext{
-			WorkloadID:   workloadID,
-			WorkloadName: workloadName,
-			Namespace:    namespace,
-			ResourceType: gvr,
-			ResourceName: name,
-			Action:       "DELETED",
-			// UID and Labels not available for deleted resources
-		},
-	}
-	
-	// Marshal to JSON and log
-	jsonData, err := json.Marshal(entry)
-	if err != nil {
-		w.logger.Error("workload-handler", "Failed to marshal DELETE log entry: "+err.Error())
-		return err
-	}
-	
-	w.logger.Info("workload-handler", string(jsonData))
 	return nil
 }
 
-// handleResourceEventWithClientFiltering processes resource events with client-side namespace filtering
-func (w *WorkloadMonitor) handleResourceEventWithClientFiltering(event faro.MatchedEvent) error {
-	namespace := event.Object.GetNamespace()
-	
-	// For cluster-scoped resources, check if they're workload-related
-	if namespace == "" {
-		// Special handling for v1/namespaces - check if they belong to monitored workloads
-		if event.GVR == "v1/namespaces" {
-			namespaceName := event.Object.GetName()
-			w.mu.RLock()
-			workloadID, isMonitored := w.namespaceToWorkloadID[namespaceName]
-			workloadName := w.workloadIDToWorkloadName[workloadID]
-			w.mu.RUnlock()
-			
-			if isMonitored {
-				return w.logResourceEvent(event, workloadID, workloadName)
-			}
-		}
-		// For other cluster-scoped resources, always log them
-		return w.logResourceEvent(event, "cluster-scoped", "cluster-scoped")
-	}
-	
-	// For namespaced resources, check if namespace is monitored
-	w.mu.RLock()
-	workloadID, isMonitored := w.namespaceToWorkloadID[namespace]
-	workloadName := w.workloadIDToWorkloadName[workloadID]
-	w.mu.RUnlock()
-	
-	if isMonitored {
-		return w.logResourceEvent(event, workloadID, workloadName)
-	}
-	
-	// Debug: log ignored events for spam pattern identification
-	w.logger.Debug("client-filtering", "Ignoring event for non-monitored namespace: "+namespace+" (GVR: "+event.GVR+")")
-	return nil
-}
 
 // logResourceEvent creates and logs a structured resource event
 func (w *WorkloadMonitor) logResourceEvent(event faro.MatchedEvent, workloadID, workloadName string) error {
@@ -190,11 +126,6 @@ func (w *WorkloadMonitor) handleNamespaceDetection(event faro.MatchedEvent) erro
 	namespaceName := event.Object.GetName()
 	labels := event.Object.GetLabels()
 	
-	// Skip deleted namespaces - Faro automatically stops informers
-	if event.EventType == "DELETED" {
-		return nil
-	}
-	
 	// Check if namespace has the detection label
 	workloadName, exists := labels[w.detectionLabel]
 	if !exists {
@@ -215,22 +146,27 @@ func (w *WorkloadMonitor) handleNamespaceDetection(event faro.MatchedEvent) erro
 	
 	w.logger.Info("workload-detection", "["+w.clusterName+"] 🎯 DETECTED WORKLOAD: "+workloadID+" (name: "+workloadName+")")
 	
-	// Check if we've already detected this workload
+	// Discover all namespaces for this workload ID
+	workloadNamespaces := w.discoverWorkloadNamespaces(workloadID, workloadName)
+	
 	w.mu.Lock()
-	isNewWorkload := !w.detectedWorkloads[workloadID]
+	isNewWorkload := w.detectedWorkloads[workloadID] == nil
+	previousNamespaces := w.detectedWorkloads[workloadID]
+	w.detectedWorkloads[workloadID] = workloadNamespaces
+	hasController := w.workloadControllers[workloadID] != nil
 	if isNewWorkload {
-		// Mark as detected and store mapping
-		w.detectedWorkloads[workloadID] = true
 		w.workloadIDToWorkloadName[workloadID] = workloadName
 	}
 	w.mu.Unlock()
 	
 	if isNewWorkload {
-		// Add new workload to client-side filtering
-		w.addWorkloadToClientFiltering(workloadID, workloadName)
+		w.logger.Info("workload-detection", "["+w.clusterName+"] 🚀 New workload detected: "+workloadID+" with namespaces: "+fmt.Sprintf("%v", workloadNamespaces))
+		w.createWorkloadController(workloadID, workloadName, workloadNamespaces)
+	} else if !hasController && len(workloadNamespaces) > len(previousNamespaces) {
+		w.logger.Info("workload-detection", "["+w.clusterName+"] 🔄 Workload "+workloadID+" updated with more namespaces: "+fmt.Sprintf("%v", workloadNamespaces))
+		w.createWorkloadController(workloadID, workloadName, workloadNamespaces)
 	} else {
-		// Re-evaluate namespaces for existing workload (in case new namespaces were created)
-		w.reevaluateWorkloadNamespaces(workloadID, workloadName)
+		w.logger.Info("workload-detection", "["+w.clusterName+"] 🔄 Workload "+workloadID+" already has controller or no new namespaces")
 	}
 	
 	return nil
@@ -260,40 +196,70 @@ func (w *WorkloadMonitor) extractWorkloadID(namespaceName, workloadName string) 
 	return namespaceName
 }
 
-// addWorkloadToClientFiltering adds a detected workload to client-side filtering
-func (w *WorkloadMonitor) addWorkloadToClientFiltering(workloadID, workloadName string) {
-	w.logger.Info("workload-monitoring", "["+w.clusterName+"] 🚀 Adding workload "+workloadID+" ("+workloadName+") to client-side filtering")
-	
-	// Discover all namespaces related to this workload
-	namespaces := w.discoverWorkloadNamespaces(workloadID, workloadName)
-	
-	w.mu.Lock()
-	var newNamespaces []string
-	
-	// Track new namespaces and store workload ID mapping
-	for _, ns := range namespaces {
-		if !w.monitoredNamespaces[ns] {
-			w.monitoredNamespaces[ns] = true
-			w.namespaceToWorkloadID[ns] = workloadID
-			newNamespaces = append(newNamespaces, ns)
-		}
-	}
-	w.mu.Unlock()
-	
-	if len(newNamespaces) == 0 {
-		w.logger.Info("workload-monitoring", "No new namespaces to monitor")
+// createWorkloadController creates a dedicated controller for a workload's namespaces
+func (w *WorkloadMonitor) createWorkloadController(workloadID, workloadName string, namespaces []string) {
+	if len(namespaces) == 0 {
+		w.logger.Info("workload-controller", "["+w.clusterName+"] ⚠️  No namespaces found for workload "+workloadID+", skipping controller creation")
 		return
 	}
 	
-	w.logger.Info("workload-monitoring", 
-		"["+w.clusterName+"] 📋 Found " + strconv.Itoa(len(newNamespaces)) + " namespaces for workload " + workloadID + ": [" + strings.Join(newNamespaces, ", ") + "]")
-	
-	w.logger.Info("workload-monitoring", "📝 Workload namespaces added to client-side filtering - comprehensive monitoring already active")
-	
-	// Create namespace-scoped informers for namespace GVRs
-	if len(w.cmdNamespaceGVRs) > 0 {
-		w.createNamespaceScopedInformers(newNamespaces, workloadID)
+	if len(w.cmdNamespaceGVRs) == 0 {
+		w.logger.Info("workload-controller", "["+w.clusterName+"] ⚠️  No namespace GVRs configured, skipping controller creation for workload "+workloadID)
+		return
 	}
+	
+	w.logger.Info("workload-controller", "["+w.clusterName+"] 🚀 Creating dedicated controller for workload "+workloadID+" with "+strconv.Itoa(len(namespaces))+" namespaces")
+	
+	// Create config for this workload's namespaces
+	var resourceConfigs []faro.ResourceConfig
+	for _, gvr := range w.cmdNamespaceGVRs {
+		scope := w.determineGVRScope(gvr, w.discoverAllNamespacedGVRs())
+		resourceConfigs = append(resourceConfigs, faro.ResourceConfig{
+			GVR:               gvr,
+			Scope:             scope,
+			NamespacePatterns: namespaces, // Server-side filtering for this workload only
+		})
+	}
+	
+	workloadConfig := &faro.Config{
+		OutputDir:  fmt.Sprintf("%s/workload-%s", w.logDir, workloadID),
+		LogLevel:   "info",
+		JsonExport: true,
+		Resources:  resourceConfigs,
+	}
+	
+	// Create dedicated controller for this workload
+	controller := faro.NewController(w.client, w.logger, workloadConfig)
+	
+	// Create workload-specific event handler
+	handler := &WorkloadResourceHandler{
+		WorkloadID:   workloadID,
+		WorkloadName: workloadName,
+		Namespaces:   namespaces,
+		Monitor:      w,
+	}
+	controller.AddEventHandler(handler)
+	
+	// Set up readiness callback
+	controller.SetReadyCallback(func() {
+		w.logger.Info("workload-controller", "["+w.clusterName+"] ✅ Workload controller for "+workloadID+" is ready!")
+	})
+	
+	// Store the controller
+	w.mu.Lock()
+	w.workloadControllers[workloadID] = controller
+	w.mu.Unlock()
+	
+	// Start controller
+	go func() {
+		w.logger.Info("workload-controller", "["+w.clusterName+"] 🎯 Starting workload controller for "+workloadID)
+		if err := controller.Start(); err != nil {
+			w.logger.Error("workload-controller", "["+w.clusterName+"] Failed to start workload controller for "+workloadID+": "+err.Error())
+		}
+	}()
+	
+	w.logger.Info("workload-controller", 
+		"["+w.clusterName+"] ✅ Created workload controller for "+workloadID+" monitoring "+strconv.Itoa(len(w.cmdNamespaceGVRs))+" GVRs in "+strconv.Itoa(len(namespaces))+" namespaces")
 }
 
 // discoverWorkloadNamespaces finds all namespaces related to a workload (no logging - called by multiple functions)
@@ -351,6 +317,7 @@ func (w *WorkloadMonitor) handlePotentialWorkloadNamespace(namespaceName string)
 	for workloadID, workloadName := range existingWorkloads {
 		if strings.Contains(namespaceName, workloadID) {
 			w.logger.Info("workload-detection", "["+w.clusterName+"] 🔗 Found late-created namespace: "+namespaceName+" for workload "+workloadID)
+			// Re-trigger workload detection to update the controller
 			w.reevaluateWorkloadNamespaces(workloadID, workloadName)
 			break
 		}
@@ -365,28 +332,26 @@ func (w *WorkloadMonitor) reevaluateWorkloadNamespaces(workloadID, workloadName 
 	namespaces := w.discoverWorkloadNamespaces(workloadID, workloadName)
 	
 	w.mu.Lock()
-	var newNamespaces []string
-	
-	// Find truly new namespaces
-	for _, ns := range namespaces {
-		if !w.monitoredNamespaces[ns] {
-			w.monitoredNamespaces[ns] = true
-			w.namespaceToWorkloadID[ns] = workloadID
-			newNamespaces = append(newNamespaces, ns)
-		}
-	}
+	previousNamespaces := w.detectedWorkloads[workloadID]
+	hasController := w.workloadControllers[workloadID] != nil
+	w.detectedWorkloads[workloadID] = namespaces
 	w.mu.Unlock()
 	
-	if len(newNamespaces) == 0 {
-		w.logger.Info("workload-monitoring", "No new namespaces found for workload "+workloadID)
-		return
+	if len(namespaces) > len(previousNamespaces) {
+		w.logger.Info("workload-monitoring", 
+			"["+w.clusterName+"] 📋 Found "+strconv.Itoa(len(namespaces)-len(previousNamespaces))+" NEW namespaces for workload "+workloadID)
+		
+		if !hasController {
+			// Create controller if we don't have one yet
+			w.createWorkloadController(workloadID, workloadName, namespaces)
+		} else {
+			// TODO: In a full implementation, we might recreate the controller with updated namespaces
+			// For now, we log that new namespaces were found
+			w.logger.Info("workload-monitoring", "["+w.clusterName+"] ⚠️  Workload "+workloadID+" has new namespaces but controller already exists")
+		}
+	} else {
+		w.logger.Info("workload-monitoring", "["+w.clusterName+"] No new namespaces found for workload "+workloadID)
 	}
-	
-	w.logger.Info("workload-monitoring", 
-		"["+w.clusterName+"] 📋 Found " + strconv.Itoa(len(newNamespaces)) + " NEW namespaces for workload " + workloadID + ": [" + strings.Join(newNamespaces, ", ") + "]")
-	
-	// With client-side filtering, no need to add new configs - existing informers will capture events
-	w.logger.Info("workload-monitoring", "✅ New namespaces will be monitored by existing informers with client-side filtering")
 }
 
 // discoverAllNamespacedGVRs discovers all available namespaced GVRs in the cluster
@@ -543,35 +508,6 @@ func (w *WorkloadMonitor) filterGVRs(allGVRs []string) []string {
 	return filteredGVRs
 }
 
-// createNamespaceScopedInformers creates per-namespace informers for namespace GVRs
-func (w *WorkloadMonitor) createNamespaceScopedInformers(namespaces []string, workloadID string) {
-	var resourceConfigs []faro.ResourceConfig
-	
-	// Create one ResourceConfig per GVR with ALL namespaces for proper server-side filtering
-	for _, gvr := range w.cmdNamespaceGVRs {
-			scope := w.determineGVRScope(gvr, w.discoverAllNamespacedGVRs())
-			resourceConfig := faro.ResourceConfig{
-				GVR:               gvr,
-				Scope:             scope,
-			NamespacePatterns: namespaces, // Server-side filtering for ALL namespaces
-			}
-		resourceConfigs = append(resourceConfigs, resourceConfig)
-			
-			w.logger.Info("workload-informers", 
-			"["+w.clusterName+"] 📊 Creating namespace-scoped informer: "+gvr+" for namespaces ["+strings.Join(namespaces, ", ")+"] (workload: "+workloadID+")")
-	}
-	
-	// Add all configs at once
-	w.sharedController.AddResources(resourceConfigs)
-	
-	// Restart informers to pick up new namespace-scoped configurations
-	if err := w.sharedController.RestartInformers(); err != nil {
-		w.logger.Error("workload-informers", "Failed to restart informers for namespace-scoped GVRs: "+err.Error())
-	} else {
-		w.logger.Info("workload-informers", 
-			"["+w.clusterName+"] ✅ Added "+strconv.Itoa(len(w.cmdNamespaceGVRs))+" namespace-scoped informers for "+strconv.Itoa(len(namespaces))+" namespaces")
-	}
-}
 
 // detectClusterName attempts to detect the cluster name using kubeps1-style approach
 func detectClusterName(client *faro.KubernetesClient) string {
@@ -663,7 +599,9 @@ func main() {
 
 	// Create logger
 	logDir := "./logs/workload-monitor"
-	logger, err := faro.NewLogger(logDir)
+	// Create config for logger
+	loggerConfig := &faro.Config{OutputDir: logDir, JsonExport: true}
+	logger, err := faro.NewLogger(loggerConfig)
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
 	}
@@ -702,58 +640,55 @@ func main() {
 	monitor := &WorkloadMonitor{
 		client:                   client,
 		logger:                   logger,
+		workloadControllers:      make(map[string]*faro.Controller),
 		detectionLabel:           *detectionLabel,
 		workloadNamePattern:      namePattern,
 		workloadIDPattern:        *workloadIDPattern,
 		logDir:                   logDir,
 		clusterName:              detectedClusterName,
 		commandLine:              commandLine,
-		detectedWorkloads:        make(map[string]bool),
-		monitoredNamespaces:      make(map[string]bool),
-		namespaceToWorkloadID:    make(map[string]string),
+		detectedWorkloads:        make(map[string][]string),
 		workloadIDToWorkloadName: make(map[string]string),
 		cmdClusterGVRs:           cmdClusterGVRs,
 		cmdNamespaceGVRs:         cmdNamespaceGVRs,
 	}
 	
-	// Start comprehensive monitoring immediately with cluster/namespace GVR filtering
-	logger.Info("startup", "🔧 Setting up comprehensive monitoring with cluster/namespace GVR filtering")
+	// Start discovery controller for namespace monitoring
+	logger.Info("startup", "🔧 Setting up discovery controller for workload detection")
 	
-	// Discover all GVRs (both namespaced and cluster-scoped)
-	allNamespacedGVRs := monitor.discoverAllNamespacedGVRs()
-	allClusterScopedGVRs := monitor.discoverAllClusterScopedGVRs()
-	allGVRs := append(allNamespacedGVRs, allClusterScopedGVRs...)
+	// Create discovery config - only monitor namespaces for workload detection
+	var discoveryResourceConfigs []faro.ResourceConfig
 	
-	// Apply cluster/namespace GVR filtering
-	filteredGVRs := monitor.filterGVRs(allGVRs)
-	excludedCount := len(allGVRs) - len(filteredGVRs)
-	
-	logger.Info("startup", 
-		"📊 Discovered " + strconv.Itoa(len(allNamespacedGVRs)) + " namespaced + " + strconv.Itoa(len(allClusterScopedGVRs)) + " cluster-scoped = " + strconv.Itoa(len(allGVRs)) + " total GVRs → filtered to " + strconv.Itoa(len(filteredGVRs)) + " (excluded: " + strconv.Itoa(excludedCount) + ")")
-	
-	// Create comprehensive config with filtered GVRs
-	var resourceConfigs []faro.ResourceConfig
-	for _, gvr := range filteredGVRs {
-		scope := monitor.determineGVRScope(gvr, allNamespacedGVRs)
-		resourceConfigs = append(resourceConfigs, faro.ResourceConfig{
+	// Add cluster-scoped GVRs if specified
+	if len(cmdClusterGVRs) > 0 {
+		for _, gvr := range cmdClusterGVRs {
+			// Assume cluster GVRs are cluster-scoped (they should be validated separately)
+			discoveryResourceConfigs = append(discoveryResourceConfigs, faro.ResourceConfig{
 			GVR:   gvr,
-			Scope: scope,
-			// No NamespacePatterns = watch ALL namespaces, filter client-side
-		})
+				Scope: faro.ClusterScope,
+			})
+		}
 	}
 	
-	comprehensiveConfig := &faro.Config{
+	// Always add v1/namespaces for workload detection
+	discoveryResourceConfigs = append(discoveryResourceConfigs, faro.ResourceConfig{
+		GVR:   "v1/namespaces",
+		Scope: faro.ClusterScope,
+	})
+	
+	discoveryConfig := &faro.Config{
 		OutputDir: logDir,
 		LogLevel:  "info",
-		Resources: resourceConfigs,
+		JsonExport: true,
+		Resources: discoveryResourceConfigs,
 	}
 
-	// Create shared controller with comprehensive monitoring
-	controller := faro.NewController(client, logger, comprehensiveConfig)
-	monitor.sharedController = controller
+	// Create discovery controller
+	discoveryController := faro.NewController(client, logger, discoveryConfig)
+	monitor.discoveryController = discoveryController
 
-	// Register the monitor as an event handler
-	controller.AddEventHandler(monitor)
+	// Register the monitor as an event handler for discovery
+	discoveryController.AddEventHandler(monitor)
 
 	// Set up graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -770,13 +705,16 @@ func main() {
 		cancel()
 	}()
 
-	logger.Info("startup", "✅ Comprehensive workload monitor started with " + strconv.Itoa(len(resourceConfigs)) + " filtered informers")
-	logger.Info("startup", "🔍 Ready for workload detection and client-side filtering")
+	logger.Info("startup", "✅ Discovery controller configured with " + strconv.Itoa(len(discoveryResourceConfigs)) + " resource types")
+	logger.Info("startup", "🔍 Ready for workload detection and per-workload controller creation")
+	if len(cmdNamespaceGVRs) > 0 {
+		logger.Info("startup", "📋 Will create per-workload controllers for: " + strings.Join(cmdNamespaceGVRs, ", "))
+	}
 
-	// Start the controller in a goroutine
+	// Start the discovery controller in a goroutine
 	go func() {
-		if err := controller.Start(); err != nil {
-			logger.Error("startup", "Controller failed: "+err.Error())
+		if err := discoveryController.Start(); err != nil {
+			logger.Error("startup", "Discovery controller failed: "+err.Error())
 			os.Exit(1)
 		}
 	}()

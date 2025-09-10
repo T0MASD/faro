@@ -54,6 +54,15 @@ type JSONEvent struct {
 	Name      string            `json:"name"`
 	UID       string            `json:"uid,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty"`
+	
+	// Additional fields for v1/events
+	InvolvedObjectKind       string `json:"involvedObjectKind,omitempty"`
+	InvolvedObjectAPIVersion string `json:"involvedObjectAPIVersion,omitempty"`
+	InvolvedObjectName       string `json:"involvedObjectName,omitempty"`
+	InvolvedObjectNamespace  string `json:"involvedObjectNamespace,omitempty"`
+	Reason                   string `json:"reason,omitempty"`
+	Message                  string `json:"message,omitempty"`
+	Type                     string `json:"type,omitempty"`
 }
 
 // EventHandler interface for handling matched events via callbacks
@@ -62,7 +71,7 @@ type EventHandler interface {
 }
 
 // logJSONEvent creates and logs a structured JSON event
-func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string) {
+func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured) {
 	jsonEvent := JSONEvent{
 		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
 		EventType: eventType,
@@ -71,6 +80,19 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 		Name:      name,
 		UID:       uid,
 		Labels:    labels,
+	}
+
+	// Special handling for v1/events to extract involvedObject information
+	if gvr == "v1/events" && obj != nil {
+		if involvedObj, found, _ := unstructured.NestedMap(obj.Object, "involvedObject"); found {
+			jsonEvent.InvolvedObjectKind, _, _ = unstructured.NestedString(involvedObj, "kind")
+			jsonEvent.InvolvedObjectAPIVersion, _, _ = unstructured.NestedString(involvedObj, "apiVersion")
+			jsonEvent.InvolvedObjectName, _, _ = unstructured.NestedString(involvedObj, "name")
+			jsonEvent.InvolvedObjectNamespace, _, _ = unstructured.NestedString(involvedObj, "namespace")
+		}
+		jsonEvent.Reason, _, _ = unstructured.NestedString(obj.Object, "reason")
+		jsonEvent.Message, _, _ = unstructured.NestedString(obj.Object, "message")
+		jsonEvent.Type, _, _ = unstructured.NestedString(obj.Object, "type")
 	}
 
 	jsonData, err := json.Marshal(jsonEvent)
@@ -479,45 +501,17 @@ func (c *Controller) processAPIGroup(group, version string) error {
 	return nil
 }
 
-// isResourceWatchable checks if a resource supports watch operations
+// isResourceWatchable checks if a resource supports watch or list operations
 func (c *Controller) isResourceWatchable(resource metav1.APIResource) bool {
-	// Check if the resource supports the "watch" verb
+	// Loop over resource verbs and return true if "watch" or "list" is found
 	for _, verb := range resource.Verbs {
-		if verb == "watch" {
+		if verb == "watch" || verb == "list" {
 			return true
 		}
 	}
 	
-	// Known non-watchable resource types (even if they claim to support watch)
-	nonWatchableResources := map[string]bool{
-		"componentstatuses":                    true, // /v1
-		"bindings":                            true, // /v1
-		"projectrequests":                     true, // project.openshift.io/v1
-		"appliedclusterresourcequotas":        true, // quota.openshift.io/v1
-		"selfsubjectaccessreviews":            true, // authorization.k8s.io/v1
-		"selfsubjectrulesreviews":             true, // authorization.k8s.io/v1
-		"selfsubjectreviews":                  true, // authentication.k8s.io/v1
-		"localsubjectaccessreviews":           true, // authorization.k8s.io/v1
-		"localresourceaccessreviews":          true, // authorization.openshift.io/v1
-		"tokenreviews":                        true, // oauth.openshift.io/v1
-		"podsecuritypolicyreviews":            true, // security.openshift.io/v1
-		"podsecuritypolicyselfsubjectreviews": true, // security.openshift.io/v1
-		"podsecuritypolicysubjectreviews":     true, // security.openshift.io/v1
-		"processedtemplates":                  true, // template.openshift.io/v1
-		"imagestreammappings":                 true, // image.openshift.io/v1
-	}
-	
-	// Check against known non-watchable resources
-	if nonWatchableResources[resource.Name] {
-		return false
-	}
-	
-	// Additional check for metrics resources (they often don't support watch properly)
-	if strings.Contains(resource.Group, "metrics") {
-		return false
-	}
-	
-	return true
+	// If we reach here, neither "watch" nor "list" verb was found
+	return false
 }
 
 // startCRDWatcher starts a CRD informer to watch for new CustomResourceDefinitions
@@ -1312,7 +1306,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 			}
 			
 			// Log JSON event for DELETE
-			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, "", nil)
+			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, "", nil, nil)
 			
 			// Create a minimal unstructured object for DELETE events
 			// We can't get the full object since it's deleted, but we can extract key info
@@ -1420,7 +1414,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 			}
 			
 			// Log JSON event for export
-			c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels())
+			c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels(), obj)
 			
 			break // Only process once per object
 	}

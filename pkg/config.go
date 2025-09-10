@@ -184,6 +184,9 @@ func (c *Config) GetLogLevel() int {
 
 // GetLogDir returns the directory where log files should be stored
 func (c *Config) GetLogDir() string {
+	if c.OutputDir == "" {
+		return "" // Console-only mode, no log files
+	}
 	return filepath.Join(c.OutputDir, "logs")
 }
 

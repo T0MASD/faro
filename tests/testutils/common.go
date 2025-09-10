@@ -77,44 +77,31 @@ func DeleteNamespace(t *testing.T, client kubernetes.Interface, name string) {
 	}
 }
 
-// ReadJSONEvents reads JSON events from Faro's export files or log files
+// ReadJSONEvents reads JSON events from Faro's dedicated JSON export files ONLY
 func ReadJSONEvents(t *testing.T, logDir string) []FaroJSONEvent {
 	t.Helper()
 	
-	// Try to find JSON export files first
+	// Find JSON export files - ONLY location we support
 	jsonPattern := filepath.Join(logDir, "logs", "events-*.json")
 	jsonFiles, err := filepath.Glob(jsonPattern)
-	if err == nil && len(jsonFiles) > 0 {
-		// Use the latest JSON export file
-		latestFile := jsonFiles[len(jsonFiles)-1]
-		return readJSONFromFile(t, latestFile)
+	if err != nil || len(jsonFiles) == 0 {
+		// Also try logDir directly as alternative location
+		jsonPattern = filepath.Join(logDir, "events-*.json")
+		jsonFiles, err = filepath.Glob(jsonPattern)
 	}
 	
-	// Fallback: check logDir directly
-	jsonPattern = filepath.Join(logDir, "events-*.json")
-	jsonFiles, err = filepath.Glob(jsonPattern)
-	if err == nil && len(jsonFiles) > 0 {
-		latestFile := jsonFiles[len(jsonFiles)-1]
-		return readJSONFromFile(t, latestFile)
+	if err != nil || len(jsonFiles) == 0 {
+		t.Fatalf("❌ CRITICAL: No JSON export files found in %s - json_export: true MUST be set in config passed to NewLogger. Tests MUST use JSON data for validation, never log parsing!", logDir)
 	}
 	
-	// Final fallback: parse JSON from log content
-	t.Log("No JSON export files found, checking log content for JSON events...")
-	logPattern := filepath.Join(logDir, "logs", "*.log")
-	logFiles, err := filepath.Glob(logPattern)
-	if err != nil || len(logFiles) == 0 {
-		logPattern = filepath.Join(logDir, "*.log")
-		logFiles, _ = filepath.Glob(logPattern)
+	// Use the latest JSON export file
+	latestFile := jsonFiles[len(jsonFiles)-1]
+	events := readJSONFromFile(t, latestFile)
+	if len(events) == 0 {
+		t.Fatalf("❌ CRITICAL: JSON export file %s is empty or invalid - check that events are being properly exported", latestFile)
 	}
 	
-	if len(logFiles) > 0 {
-		content, err := os.ReadFile(logFiles[len(logFiles)-1])
-		if err == nil {
-			return parseJSONFromLog(t, string(content))
-		}
-	}
-	
-	return []FaroJSONEvent{}
+	return events
 }
 
 // readJSONFromFile reads and parses JSON events from a dedicated JSON export file
@@ -123,8 +110,7 @@ func readJSONFromFile(t *testing.T, filename string) []FaroJSONEvent {
 	
 	content, err := os.ReadFile(filename)
 	if err != nil {
-		t.Logf("Failed to read JSON file %s: %v", filename, err)
-		return []FaroJSONEvent{}
+		t.Fatalf("❌ CRITICAL: Failed to read JSON file %s: %v", filename, err)
 	}
 	
 	var events []FaroJSONEvent
@@ -136,38 +122,15 @@ func readJSONFromFile(t *testing.T, filename string) []FaroJSONEvent {
 		}
 		
 		var event FaroJSONEvent
-		if err := json.Unmarshal([]byte(line), &event); err == nil {
-			events = append(events, event)
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			t.Fatalf("❌ CRITICAL: Failed to parse JSON event in file %s, line: %s, error: %v", filename, line, err)
 		}
+		events = append(events, event)
 	}
 	
 	return events
 }
 
-// parseJSONFromLog extracts JSON events from log file content
-func parseJSONFromLog(t *testing.T, logContent string) []FaroJSONEvent {
-	t.Helper()
-	
-	var events []FaroJSONEvent
-	lines := strings.Split(logContent, "\n")
-	
-	for _, line := range lines {
-		// Look for JSON event lines
-		if strings.Contains(line, `{"timestamp":`) {
-			// Extract JSON part (everything after the last occurrence of {)
-			jsonStart := strings.LastIndex(line, `{"timestamp":`)
-			if jsonStart != -1 {
-				jsonPart := line[jsonStart:]
-				var event FaroJSONEvent
-				if err := json.Unmarshal([]byte(jsonPart), &event); err == nil {
-					events = append(events, event)
-				}
-			}
-		}
-	}
-	
-	return events
-}
 
 // Contains checks if a slice contains a string
 func Contains(slice []string, item string) bool {

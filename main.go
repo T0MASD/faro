@@ -26,20 +26,10 @@ func main() {
 	klog.InitFlags(nil)
 	defer klog.Flush()
 
-	// Create initial logger with info level for startup messages
-	tempLogger, err := faro.NewLogger("./logs")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create initial logger: %v\n", err)
-		os.Exit(1)
-	}
-	
-	tempLogger.Info("main", fmt.Sprintf("Faro %s initializing...", version))
-
-	// Load minimalistic config from command line args (handles version flag)
+	// Load config from command line args (handles version flag)
 	config, err := faro.LoadConfigWithVersion(version, commit, date, builtBy)
 	if err != nil {
-		tempLogger.Error("main", fmt.Sprintf("Error loading config: %v", err))
-		tempLogger.Shutdown()
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -47,12 +37,9 @@ func main() {
 	if config.LogLevel == "debug" {
 		flag.Set("v", "1") // Enable klog verbosity level 1 for debug messages
 	}
-	
-	tempLogger.Info("main", fmt.Sprintf("Config loaded, switching to configured log directory: %s", config.GetLogDir()))
-	tempLogger.Shutdown()
 
-	// Create final logger with config-specified log directory and JSON export option
-	logger, err := faro.NewLoggerWithJSON(config.GetLogDir(), config.JsonExport)
+	// Create logger with config-specified settings
+	logger, err := faro.NewLogger(config)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)
 		os.Exit(1)

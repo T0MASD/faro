@@ -3,9 +3,7 @@ package integration
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -103,7 +101,7 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 	// Setup test environment
 	parentNamespace := "faro-integration-parent"
 	targetNamespace := "faro-integration-target"
-	logDir := "./logs/integration-dynamic"
+	logDir := "./logs/TestDynamicNamespaceDiscovery"
 	
 	// Ensure log directory exists
 	testutils.EnsureLogDir(t, logDir)
@@ -138,7 +136,7 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 		t.Fatalf("Failed to create Faro Kubernetes client: %v", err)
 	}
 	
-	logger, err := faro.NewLogger(discoveryConfig.GetLogDir())
+	logger, err := faro.NewLogger(discoveryConfig)
 	if err != nil {
 		t.Fatalf("Failed to create Faro logger: %v", err)
 	}
@@ -261,29 +259,28 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 	// Give controllers time to shut down gracefully
 	time.Sleep(500 * time.Millisecond)
 	
-	// Verify the test worked by checking logs (string validation for readiness)
+	// Verify the test worked using JSON data ONLY - NO LOG FILE FALLBACKS!
 	t.Log("🔍 Verifying dynamic discovery functionality...")
 	
-	logFiles, err := filepath.Glob(filepath.Join(logDir, "logs", "*.log"))
-	if err != nil || len(logFiles) == 0 {
-		t.Fatalf("No Faro log files found in %s", filepath.Join(logDir, "logs"))
-	}
-	
-	logContent, err := os.ReadFile(logFiles[0])
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
-	
-	// String validation: Verify that parent namespace was detected in logs
-	if !strings.Contains(string(logContent), parentNamespace) {
-		t.Errorf("Parent namespace %s not found in logs", parentNamespace)
-	} else {
-		t.Logf("✅ Parent namespace %s detected in logs", parentNamespace)
-	}
-	
-	// JSON validation: Verify captured events
+	// Verify that parent namespace was detected by checking JSON events
 	t.Log("🔍 Verifying JSON export events...")
 	jsonEvents := testutils.ReadJSONEvents(t, logDir)
+	
+	// Verify parent namespace exists in JSON events
+	parentFound := false
+	for _, event := range jsonEvents {
+		if event.GVR == "v1/namespaces" && event.Name == parentNamespace {
+			parentFound = true
+			break
+		}
+	}
+	if !parentFound {
+		t.Errorf("❌ Parent namespace %s not found in JSON events", parentNamespace)
+	} else {
+		t.Logf("✅ Parent namespace %s detected in JSON events", parentNamespace)
+	}
+	
+	// Continue with JSON validation of captured events
 	
 	// What we CONFIGURED to capture:
 	// - All namespaces (cluster-scoped monitoring)
