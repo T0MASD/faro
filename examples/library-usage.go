@@ -62,7 +62,9 @@ func main() {
 	}
 	
 	// 3. Create logger
-	logger, err := faro.NewLogger("./logs")
+	// Create config for logger
+	config := &faro.Config{OutputDir: "./logs", JsonExport: true}
+	logger, err := faro.NewLogger(config)
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
 	}

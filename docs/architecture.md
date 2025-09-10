@@ -264,7 +264,7 @@ if err != nil {
 }
 
 // Create logger
-logger, err := faro.NewLoggerWithJSON(config.OutputDir, config.JsonExport)
+logger, err := faro.NewLogger(config)
 if err != nil {
     log.Fatal(err)
 }

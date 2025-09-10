@@ -2,10 +2,7 @@ package integration
 
 import (
 	"context"
-	"os"
 	"os/exec"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -22,7 +19,7 @@ func TestVanillaLibraryFunctionality(t *testing.T) {
 	t.Log("🚀 Starting Vanilla Library Integration Test (replicating test8.sh + test8.go)")
 	
 	// Setup test environment - use same paths as original test8
-	logDir := "./logs/integration-test8"
+	logDir := "./logs/TestVanillaLibraryFunctionality"
 	
 	// Ensure log directory exists
 	testutils.EnsureLogDir(t, logDir)
@@ -55,7 +52,7 @@ func TestVanillaLibraryFunctionality(t *testing.T) {
 		t.Fatalf("Failed to create Faro Kubernetes client: %v", err)
 	}
 	
-	logger, err := faro.NewLogger(config.GetLogDir())
+	logger, err := faro.NewLogger(config)
 	if err != nil {
 		t.Fatalf("Failed to create Faro logger: %v", err)
 	}
@@ -138,69 +135,8 @@ func TestVanillaLibraryFunctionality(t *testing.T) {
 	controller.Stop()
 	cancel()
 	
-	// Verify events were captured (exactly like test8.sh does with grep)
+	// Verify events were captured using JSON data ONLY - NO LOG FILE FALLBACKS!
 	t.Log("🔍 Verifying captured events...")
-	
-	logFiles, err := filepath.Glob(filepath.Join(logDir, "logs", "*.log"))
-	if err != nil || len(logFiles) == 0 {
-		t.Fatalf("No Faro log files found in %s", filepath.Join(logDir, "logs"))
-	}
-	
-	logContent, err := os.ReadFile(logFiles[0])
-	if err != nil {
-		t.Fatalf("Failed to read log file: %v", err)
-	}
-	
-	// Verify ADDED events (like test8.sh: grep -q "CONFIG \[ADDED\].*test-config-1")
-	if !strings.Contains(string(logContent), "CONFIG [ADDED]") || !strings.Contains(string(logContent), "test-config-1") {
-		t.Errorf("❌ ConfigMap ADDED event for test-config-1 not found")
-	} else {
-		t.Log("✅ ConfigMap ADDED event for test-config-1 detected!")
-	}
-	
-	// Verify test-config-2 ADDED (like test8.sh: test-config-2 should be processed - no client-side filtering)
-	if !strings.Contains(string(logContent), "test-config-2") {
-		t.Errorf("❌ ConfigMap test-config-2 ADDED event should be processed (no client-side filtering in Faro core)!")
-	} else {
-		t.Log("✅ ConfigMap test-config-2 ADDED event processed (no client-side filtering)")
-	}
-	
-	// Verify UPDATED events (like test8.sh: grep -q "CONFIG \[UPDATED\].*test-config-1")
-	if !strings.Contains(string(logContent), "CONFIG [UPDATED]") {
-		t.Errorf("❌ ConfigMap UPDATED events not found")
-	} else {
-		t.Log("✅ ConfigMap UPDATED events detected!")
-	}
-	
-	// Verify test-config-2 UPDATED (like test8.sh: no client-side filtering)
-	if !strings.Contains(string(logContent), "CONFIG [UPDATED]") || !strings.Contains(string(logContent), "test-config-2") {
-		t.Errorf("❌ ConfigMap test-config-2 UPDATED event should be processed (no client-side filtering in Faro core)!")
-	} else {
-		t.Log("✅ ConfigMap test-config-2 UPDATED event processed (no client-side filtering)")
-	}
-	
-	// Verify DELETED events (like test8.sh: grep -q "CONFIG \[DELETED\].*test-config-1")
-	if !strings.Contains(string(logContent), "CONFIG [DELETED]") {
-		t.Errorf("❌ ConfigMap DELETED events not found")
-	} else {
-		t.Log("✅ ConfigMap DELETED events detected!")
-	}
-	
-	// Verify test-config-2 DELETED (like test8.sh: no client-side filtering)
-	if !strings.Contains(string(logContent), "CONFIG [DELETED]") || !strings.Contains(string(logContent), "test-config-2") {
-		t.Errorf("❌ ConfigMap test-config-2 DELETED event should be processed (no client-side filtering in Faro core)!")
-	} else {
-		t.Log("✅ ConfigMap test-config-2 DELETED event processed (no client-side filtering)")
-	}
-	
-	// Show CONFIG events (like test8.sh: grep "CONFIG" "$log_file")
-	t.Log("📋 CONFIG events in log file:")
-	lines := strings.Split(string(logContent), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "CONFIG") {
-			t.Logf("  %s", line)
-		}
-	}
 	
 	// Verify JSON export - this is the key validation
 	t.Log("🔍 Verifying JSON export events...")

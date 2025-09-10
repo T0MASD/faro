@@ -23,13 +23,8 @@ type Logger struct {
 	mu       sync.RWMutex
 }
 
-// NewLogger creates a new callback-based logger with console and file handlers
-func NewLogger(logDir string) (*Logger, error) {
-	return NewLoggerWithJSON(logDir, false)
-}
-
-// NewLoggerWithJSON creates a logger with optional JSON file separation
-func NewLoggerWithJSON(logDir string, separateJSON bool) (*Logger, error) {
+// NewLogger creates a new callback-based logger from config
+func NewLogger(config *Config) (*Logger, error) {
 	logger := &Logger{
 		handlers: make([]LogHandler, 0),
 	}
@@ -38,6 +33,7 @@ func NewLoggerWithJSON(logDir string, separateJSON bool) (*Logger, error) {
 	logger.AddHandler(&ConsoleLogHandler{})
 	
 	// Add file handler if logDir is specified
+	logDir := config.GetLogDir()
 	if logDir != "" {
 		// Ensure log directory exists
 		if err := os.MkdirAll(logDir, 0755); err != nil {
@@ -59,7 +55,7 @@ func NewLoggerWithJSON(logDir string, separateJSON bool) (*Logger, error) {
 		fmt.Printf("FARO_LOG_FILE: %s\n", logPath)
 		
 		// Add JSON file handler if requested
-		if separateJSON {
+		if config.JsonExport {
 			jsonPath := fmt.Sprintf("%s/events-%s.json", logDir, timestamp)
 			jsonFile, err := os.OpenFile(jsonPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 			if err != nil {

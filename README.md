@@ -102,7 +102,7 @@ if err != nil {
 
 // Create controller
 client, _ := faro.NewKubernetesClient()
-logger, _ := faro.NewLoggerWithJSON(config.OutputDir, config.JsonExport)
+logger, _ := faro.NewLogger(config)
 controller := faro.NewController(client, logger, config)
 
 // Register event handler
