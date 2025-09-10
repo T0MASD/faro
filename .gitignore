@@ -7,3 +7,5 @@ scratch/
 work/
 faro
 dist/
+# Test artifacts
+test_import
