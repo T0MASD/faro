@@ -9,7 +9,7 @@ before:
     # Validate library before release
     - go mod tidy
     - go mod download
-    - cd tests/unit && go test -v
+    - go test -v ./tests/unit/...
 
 # Skip binary builds entirely for library releases
 builds:
