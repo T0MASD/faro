@@ -150,7 +150,7 @@ type Controller struct {
 func NewController(client *KubernetesClient, logger *Logger, config *Config) *Controller {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	return &Controller{
+	controller := &Controller{
 		client:              client,
 		logger:              logger,
 		config:              config,
@@ -161,6 +161,9 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 		discoveredResources: make(map[string]*ResourceInfo),
 		eventHandlers:       make([]EventHandler, 0),
 	}
+	
+	logger.Debug("controller", "Created new controller instance")
+	return controller
 }
 
 // AddEventHandler registers an event handler for matched events
@@ -168,6 +171,7 @@ func (c *Controller) AddEventHandler(handler EventHandler) {
 	c.handlersMu.Lock()
 	defer c.handlersMu.Unlock()
 	c.eventHandlers = append(c.eventHandlers, handler)
+	c.logger.Debug("controller", fmt.Sprintf("Added event handler (total: %d)", len(c.eventHandlers)))
 }
 
 // SetReadyCallback sets a callback function to be called when Faro is fully initialized and ready
@@ -186,6 +190,7 @@ func (c *Controller) SetReadyCallback(callback func()) {
 func (c *Controller) IsReady() bool {
 	c.readyMu.Lock()
 	defer c.readyMu.Unlock()
+	c.logger.Debug("controller", fmt.Sprintf("Readiness check: %t", c.isReady))
 	return c.isReady
 }
 
@@ -195,9 +200,9 @@ func (c *Controller) AddResources(newResources []ResourceConfig) {
 	c.logger.Info("controller", fmt.Sprintf("Added %d new resource configurations", len(newResources)))
 }
 
-// RestartInformers restarts config-driven informers with the current configuration
-func (c *Controller) RestartInformers() error {
-	c.logger.Info("controller", "Restarting informers with updated configuration")
+// StartNewInformers starts informers only for newly added GVRs that don't have active informers
+func (c *Controller) StartNewInformers() error {
+	c.logger.Info("controller", "Starting informers for newly added GVRs")
 	return c.startConfigDrivenInformers()
 }
 
@@ -279,35 +284,35 @@ func (c *Controller) createLabelSelectorInformer(config InformerConfig, normaliz
 	// Handle namespace scope logic with server-side filtering
 	var namespace string
 	if config.Scope == apiextensionsv1.NamespaceScoped {
-		// Check if we have specific namespace patterns for server-side filtering
-		if len(normalizedConfigs) > 0 && len(normalizedConfigs[0].NamespacePatterns) > 0 {
-			// For now, use the first namespace pattern if it's a literal (no regex)
-			firstPattern := normalizedConfigs[0].NamespacePatterns[0]
-			
-			// Extract literal namespace name from common regex patterns
-			var literalNamespace string
-			
-			// Check if it's an exact match pattern like "^exact-namespace-name$"
-			if strings.HasPrefix(firstPattern, "^") && strings.HasSuffix(firstPattern, "$") && len(firstPattern) > 2 {
-				// Extract the middle part and check if it's literal
-				middle := firstPattern[1 : len(firstPattern)-1]
-				if !strings.ContainsAny(middle, ".*+?{}[]|()\\") {
-					literalNamespace = middle
+		// Collect all unique namespaces from all configs
+		allNamespaces := make(map[string]bool)
+		for _, nConfig := range normalizedConfigs {
+			for _, ns := range nConfig.NamespacePatterns {
+				if ns != "" { // Skip empty namespace patterns
+					allNamespaces[ns] = true
 				}
-			} else if !strings.ContainsAny(firstPattern, ".*+?^${}[]|()\\") {
-				// It's already a literal namespace name
-				literalNamespace = firstPattern
 			}
-			
-			if literalNamespace != "" {
-				namespace = literalNamespace
-				c.logger.Info("controller", fmt.Sprintf("Using server-side namespace filtering for %s: %s", config.GVRString, namespace))
-			} else {
-				namespace = "" // Fall back to client-side filtering for complex regex patterns
-				c.logger.Debug("controller", fmt.Sprintf("Using client-side namespace filtering for %s (regex pattern: %s)", config.GVRString, firstPattern))
+		}
+		
+		// If we have exactly one namespace, use server-side filtering for that namespace
+		if len(allNamespaces) == 1 {
+			for ns := range allNamespaces {
+				namespace = ns
+				c.logger.Info("controller", fmt.Sprintf("Single namespace config for %s: using server-side namespace filtering: %s", config.GVRString, namespace))
+				break
 			}
+		} else if len(allNamespaces) > 1 {
+			// Multiple namespaces - watch all namespaces, server will handle other filtering
+			namespace = ""
+			namespaceList := make([]string, 0, len(allNamespaces))
+			for ns := range allNamespaces {
+				namespaceList = append(namespaceList, ns)
+			}
+			c.logger.Info("controller", fmt.Sprintf("Multi-namespace config for %s: watching all namespaces, server-side filtering for %v", config.GVRString, namespaceList))
 		} else {
-		namespace = "" // Watch all namespaces, filter in event handler
+			// No specific namespaces - watch all namespaces
+			namespace = ""
+			c.logger.Info("controller", fmt.Sprintf("No namespace patterns for %s: watching all namespaces", config.GVRString))
 		}
 	}
 
@@ -323,7 +328,7 @@ func (c *Controller) createLabelSelectorInformer(config InformerConfig, normaliz
 	// Determine the field selector for name pattern (for server-side filtering)
 	var fieldSelector string
 	for _, nConfig := range normalizedConfigs {
-		c.logger.Info("controller", fmt.Sprintf("DEBUG: Checking normalized config - NamePattern: '%s'", nConfig.NamePattern))
+		c.logger.Debug("controller", fmt.Sprintf("Checking normalized config - NamePattern: '%s'", nConfig.NamePattern))
 		if nConfig.NamePattern != "" {
 			// For exact name matches, use field selector
 			if !strings.ContainsAny(nConfig.NamePattern, ".*+?^${}[]|()\\") {
@@ -367,6 +372,7 @@ func (c *Controller) createLabelSelectorInformer(config InformerConfig, normaliz
 	
 	return informer, nil
 }
+
 
 // Start initializes and starts the multi-layered informer architecture
 func (c *Controller) Start() error {
@@ -710,7 +716,7 @@ func (c *Controller) handleCRDDeleted(crdUnstructured *unstructured.Unstructured
 	c.stopCRDInformer(&crd)
 }
 
-// evaluateAndStartCRDInformer checks if a CRD matches configuration and starts an informer
+// evaluateAndStartCRDInformer checks if a CRD matches configuration and starts informers using multi-namespace approach
 func (c *Controller) evaluateAndStartCRDInformer(crd *apiextensionsv1.CustomResourceDefinition) {
 	if len(crd.Spec.Versions) == 0 {
 		c.logger.Warning("controller", fmt.Sprintf("CRD %s has no versions, skipping", crd.Name))
@@ -733,42 +739,84 @@ func (c *Controller) evaluateAndStartCRDInformer(crd *apiextensionsv1.CustomReso
 
 	c.logger.Debug("controller", fmt.Sprintf("Evaluating CRD %s (GVR: %s)", crd.Name, gvrString))
 
-	// Check if this GVR matches any configured namespace patterns
+	// Add to discovered resources first
+	resourceInfo := &ResourceInfo{
+		Group:      group,
+		Version:    version,
+		Resource:   resource,
+		Kind:       crd.Spec.Names.Kind,
+		Namespaced: crd.Spec.Scope == apiextensionsv1.NamespaceScoped,
+	}
+	c.discoveredResources[gvrString] = resourceInfo
+
+	// Build GVR and scope
+	gvr := schema.GroupVersionResource{
+		Group:    group,
+		Version:  version,
+		Resource: resource,
+	}
+
+	var scope apiextensionsv1.ResourceScope
+	if crd.Spec.Scope == apiextensionsv1.NamespaceScoped {
+		scope = apiextensionsv1.NamespaceScoped
+	} else {
+		scope = apiextensionsv1.ClusterScoped
+	}
+
+	// Convert NamespaceConfig to NormalizedConfig for consistency with regular informers
+	var normalizedConfigs []NormalizedConfig
+	
+	// Check if this GVR matches any configured patterns and collect matching configs
 	for _, nsConfig := range c.config.Namespaces {
 		if _, exists := nsConfig.Resources[gvrString]; exists {
-			c.logger.Info("controller", fmt.Sprintf("CRD %s matches configuration, starting dynamic informer (selected version: %s)", crd.Name, version))
-
-			// Add to discovered resources
-			resourceInfo := &ResourceInfo{
-				Group:      group,
-				Version:    version,
-				Resource:   resource,
-				Kind:       crd.Spec.Names.Kind,
-				Namespaced: crd.Spec.Scope == apiextensionsv1.NamespaceScoped,
+			c.logger.Info("controller", fmt.Sprintf("CRD %s matches configuration in namespace pattern %s", crd.Name, nsConfig.NamePattern))
+			
+			// Convert to NormalizedConfig
+			normalizedConfig := NormalizedConfig{
+				GVR:               gvrString,
+				NamespacePatterns: []string{nsConfig.NamePattern},
+				NamePattern:       "", // CRDs don't have name patterns in this context
+				LabelSelector:     "", // CRDs don't have label selectors in this context
 			}
-			c.discoveredResources[gvrString] = resourceInfo
-
-			// Start informer for this CRD
-			gvr := schema.GroupVersionResource{
-				Group:    group,
-				Version:  version,
-				Resource: resource,
-			}
-
-			var scope apiextensionsv1.ResourceScope
-			if crd.Spec.Scope == apiextensionsv1.NamespaceScoped {
-				scope = apiextensionsv1.NamespaceScoped
-			} else {
-				scope = apiextensionsv1.ClusterScoped
-			}
-
-			// Start the dynamic informer
-			c.wg.Add(1)
-			go c.startDynamicCRDInformer(crd.Name, gvr, scope, gvrString, nsConfig)
-
-			break // Only start one informer per CRD
+			normalizedConfigs = append(normalizedConfigs, normalizedConfig)
 		}
 	}
+
+	// Also check ResourceConfig for direct GVR matches
+	for _, resConfig := range c.config.Resources {
+		if resConfig.GVR == gvrString {
+			c.logger.Info("controller", fmt.Sprintf("CRD %s matches direct resource configuration", crd.Name))
+			
+			// Convert to NormalizedConfig
+			normalizedConfig := NormalizedConfig{
+				GVR:               gvrString,
+				NamespacePatterns: resConfig.NamespacePatterns,
+				NamePattern:       resConfig.NamePattern,
+				LabelSelector:     resConfig.LabelSelector,
+			}
+			normalizedConfigs = append(normalizedConfigs, normalizedConfig)
+		}
+	}
+
+	if len(normalizedConfigs) == 0 {
+		c.logger.Debug("controller", fmt.Sprintf("CRD %s does not match any configuration patterns", crd.Name))
+		return
+	}
+
+	c.logger.Info("controller", fmt.Sprintf("CRD %s matches configuration, starting dynamic informers (selected version: %s)", crd.Name, version))
+
+	// Check if we already have an active informer for this GVR
+	if _, exists := c.activeInformers.Load(gvrString); exists {
+		c.logger.Debug("controller", fmt.Sprintf("Dynamic informer for %s already active, skipping duplicate", gvrString))
+		return
+	}
+	
+	// Mark this GVR as having an active informer
+	c.activeInformers.Store(gvrString, true)
+	
+	// Start single unified informer per GVR that handles all namespaces
+	c.wg.Add(1)
+	go c.startDynamicCRDInformer(crd.Name, gvr, scope, gvrString, normalizedConfigs)
 }
 
 // selectCRDVersion selects the most appropriate version for monitoring a CRD
@@ -889,40 +937,32 @@ func (c *Controller) reconcileStartupCRDs() error {
 	return nil
 }
 
-// startDynamicCRDInformer starts a dynamic informer for a specific CRD
-func (c *Controller) startDynamicCRDInformer(crdName string, gvr schema.GroupVersionResource, scope apiextensionsv1.ResourceScope, gvrString string, nsConfig NamespaceConfig) {
+// startDynamicCRDInformer starts a unified dynamic informer for a CRD
+func (c *Controller) startDynamicCRDInformer(crdName string, gvr schema.GroupVersionResource, scope apiextensionsv1.ResourceScope, gvrString string, normalizedConfigs []NormalizedConfig) {
 	defer c.wg.Done()
-
-	// Create context for this specific informer
-	ctx, cancel := context.WithCancel(c.ctx)
-	defer cancel()
-
-	// Store the cancel function for graceful shutdown using GVR string as key
-	gvrKey := gvr.String()
-	c.cancellers.Store(gvrKey, cancel)
-	defer c.cancellers.Delete(gvrKey)
+	defer c.activeInformers.Delete(gvrString) // Remove from active tracking when stopped
 
 	// Create generic informer config
 	config := InformerConfig{
 		GVR:       gvr,
 		Scope:     scope,
 		GVRString: gvrString,
-		Context:   ctx,
+		Context:   c.ctx,
 		Name:      crdName,
 		HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
-			c.handleConfigDrivenEvent(eventType, obj, gvrString, nsConfig)
+			c.handleUnifiedNormalizedEvent(eventType, obj, gvrString, normalizedConfigs)
 		},
 	}
 	
-	// Create informer using generic factory
-	informer, err := c.createGenericInformer(config)
+	// Create informer using label selector factory (handles lister storage)
+	informer, err := c.createLabelSelectorInformer(config, normalizedConfigs)
 	if err != nil {
-		c.logger.Error("controller", fmt.Sprintf("Failed to create CRD informer: %v", err))
+		c.logger.Error("controller", fmt.Sprintf("Failed to create dynamic CRD informer: %v", err))
 		return
 	}
 	
 	// Run with consistent logging
-	c.runInformerWithLogging(informer, ctx, fmt.Sprintf("dynamic informer for CRD %s", crdName))
+	c.runInformerWithLogging(informer, c.ctx, fmt.Sprintf("dynamic CRD informer for %s", crdName))
 }
 
 // stopCRDInformer stops the informer for a specific CRD
@@ -992,7 +1032,7 @@ func (c *Controller) startConfigDrivenInformers() error {
 
 	informerCount := 0
 
-	// Start one informer per unique GVR with all matching normalized configs
+	// Start informers per unique GVR, creating separate informers for each namespace when needed
 	for gvrString, normalizedConfigs := range normalizedGVRs {
 		c.logger.Info("controller", fmt.Sprintf("Setting up informer for %s (matches %d configuration patterns)", gvrString, len(normalizedConfigs)))
 
@@ -1002,15 +1042,6 @@ func (c *Controller) startConfigDrivenInformers() error {
 			c.logger.Warning("controller", fmt.Sprintf("Resource %s not found in discovery results, skipping", gvrString))
 			continue
 		}
-
-		// Check if we already have an active informer for this GVR
-		if _, exists := c.activeInformers.Load(gvrString); exists {
-			c.logger.Debug("controller", fmt.Sprintf("Informer for %s already active, skipping duplicate", gvrString))
-			continue
-		}
-
-		// Mark this GVR as having an active informer
-		c.activeInformers.Store(gvrString, true)
 
 		// Create GVR and scope from discovered information
 		gvr := schema.GroupVersionResource{
@@ -1029,7 +1060,16 @@ func (c *Controller) startConfigDrivenInformers() error {
 		c.logger.Debug("controller", fmt.Sprintf("Resource %s: namespaced=%t, normalized configs=%d",
 			gvrString, resourceInfo.Namespaced, len(normalizedConfigs)))
 
-		// Start an informer that handles all matching normalized configurations
+		// Check if we already have an active informer for this GVR
+		if _, exists := c.activeInformers.Load(gvrString); exists {
+			c.logger.Debug("controller", fmt.Sprintf("Informer for %s already active, skipping duplicate", gvrString))
+			continue
+		}
+		
+		// Mark this GVR as having an active informer
+		c.activeInformers.Store(gvrString, true)
+		
+		// Start single unified informer per GVR that handles all namespaces
 		c.wg.Add(1)
 		go c.startUnifiedNormalizedInformer(gvr, scope, gvrString, normalizedConfigs)
 		informerCount++
@@ -1186,6 +1226,7 @@ func (c *Controller) GetActiveInformers() (builtin int, dynamic int) {
 		return true
 	})
 
+	c.logger.Debug("controller", fmt.Sprintf("Active informers: %d builtin, %d dynamic", builtin, dynamic))
 	return builtin, dynamic
 }
 
@@ -1276,9 +1317,10 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 
 	// At this point, we know the object is one we are configured to watch.
 
+	// Get lister for this GVR
 	listerInterface, exists := c.listers.Load(workItem.GVRString)
 	if !exists {
-		return fmt.Errorf("no lister found for GVR %s", workItem.GVRString)
+		return fmt.Errorf("no lister found for GVR %s (key: %s)", workItem.GVRString, workItem.Key)
 	}
 
 	lister, ok := listerInterface.(cache.GenericLister)
@@ -1358,51 +1400,75 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 	resourceNamespace := obj.GetNamespace()
 	resourceUID := obj.GetUID()
 
-	// SERVER-SIDE filtering only - process all events that reach here
+	// Apply namespace filtering when watching all namespaces
 	for _, config := range configs {
-		// All filtering is done server-side via Kubernetes API
-			// Create matched event for handlers
-			matchedEvent := MatchedEvent{
-				EventType: eventType,
-				Object:    obj,
-				GVR:       gvrString,
-				Key:       obj.GetNamespace() + "/" + obj.GetName(),
-				Config:    config,
-				Timestamp: time.Now(),
+		// Check if this config matches the resource's namespace
+		namespaceMatches := false
+		if len(config.NamespacePatterns) == 0 {
+			// No namespace patterns means match all namespaces
+			namespaceMatches = true
+		} else {
+			// Check if resource namespace matches any of the configured patterns
+			for _, pattern := range config.NamespacePatterns {
+				if pattern == "" {
+					// Empty pattern means all namespaces
+					namespaceMatches = true
+					break
+				} else if pattern == resourceNamespace {
+					// Exact namespace match
+					namespaceMatches = true
+					break
+				}
 			}
-			
-			// For cluster-scoped resources, key is just the name
-			if resourceNamespace == "" {
-				matchedEvent.Key = resourceName
-			}
-			
-			// Call event handlers (non-blocking)
-			c.handlersMu.RLock()
-			handlers := c.eventHandlers
-			c.handlersMu.RUnlock()
-			
-			for _, handler := range handlers {
-				// Call handler in goroutine to avoid blocking Faro
-				go func(h EventHandler, event MatchedEvent) {
-					if err := h.OnMatched(event); err != nil {
-						c.logger.Warning("controller", fmt.Sprintf("Event handler failed: %v", err))
-					}
-				}(handler, matchedEvent)
-			}
-			
-			// Log the matched event (preserve existing behavior)
-			if resourceNamespace != "" {
-				c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s, pattern: %s)",
-					eventType, gvrString, resourceNamespace, resourceName, resourceUID, config.GVR))
-			} else {
-				c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, pattern: %s)",
-					eventType, gvrString, resourceName, resourceUID, config.GVR))
-			}
-			
-			// Log JSON event for export
-			c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels(), obj)
-			
-			break // Only process once per object
+		}
+		
+		// Skip this config if namespace doesn't match
+		if !namespaceMatches {
+			continue
+		}
+		
+		// Create matched event for handlers
+		matchedEvent := MatchedEvent{
+			EventType: eventType,
+			Object:    obj,
+			GVR:       gvrString,
+			Key:       obj.GetNamespace() + "/" + obj.GetName(),
+			Config:    config,
+			Timestamp: time.Now(),
+		}
+		
+		// For cluster-scoped resources, key is just the name
+		if resourceNamespace == "" {
+			matchedEvent.Key = resourceName
+		}
+		
+		// Call event handlers (non-blocking)
+		c.handlersMu.RLock()
+		handlers := c.eventHandlers
+		c.handlersMu.RUnlock()
+		
+		for _, handler := range handlers {
+			// Call handler in goroutine to avoid blocking Faro
+			go func(h EventHandler, event MatchedEvent) {
+				if err := h.OnMatched(event); err != nil {
+					c.logger.Warning("controller", fmt.Sprintf("Event handler failed: %v", err))
+				}
+			}(handler, matchedEvent)
+		}
+		
+		// Log the matched event (preserve existing behavior)
+		if resourceNamespace != "" {
+			c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s, pattern: %s)",
+				eventType, gvrString, resourceNamespace, resourceName, resourceUID, config.GVR))
+		} else {
+			c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, pattern: %s)",
+				eventType, gvrString, resourceName, resourceUID, config.GVR))
+		}
+		
+		// Log JSON event for export
+		c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels(), obj)
+		
+		break // Only process once per object
 	}
 
 	return nil
@@ -1434,8 +1500,18 @@ func (c *Controller) startUnifiedConfigDrivenInformer(gvr schema.GroupVersionRes
 		return
 	}
 	
-	// Run with consistent logging
-	c.runInformerWithLogging(informer, c.ctx, fmt.Sprintf("unified config-driven informer for %s", gvrString))
+	// Run with consistent logging - include label selector info if present
+	description := fmt.Sprintf("unified config-driven informer for %s", gvrString)
+	if len(nsConfigs) > 0 {
+		// Look for label selector in the resource details
+		for _, nsConfig := range nsConfigs {
+			if resourceDetails, exists := nsConfig.Resources[gvrString]; exists && resourceDetails.LabelSelector != "" {
+				description = fmt.Sprintf("unified config-driven informer for %s (label selector: %s)", gvrString, resourceDetails.LabelSelector)
+				break
+			}
+		}
+	}
+	c.runInformerWithLogging(informer, c.ctx, description)
 }
 
 // handleConfigDrivenEvent processes events with NO client-side filtering
@@ -1476,6 +1552,7 @@ func (c *Controller) handleUnifiedConfigDrivenEvent(eventType string, obj *unstr
 	}
 }
 
+
 // startUnifiedNormalizedInformer starts an informer that handles multiple normalized configurations for the same GVR
 func (c *Controller) startUnifiedNormalizedInformer(gvr schema.GroupVersionResource, scope apiextensionsv1.ResourceScope, gvrString string, normalizedConfigs []NormalizedConfig) {
 	defer c.wg.Done()
@@ -1500,8 +1577,12 @@ func (c *Controller) startUnifiedNormalizedInformer(gvr schema.GroupVersionResou
 		return
 	}
 	
-	// Run with consistent logging
-	c.runInformerWithLogging(informer, c.ctx, fmt.Sprintf("unified config-driven informer for %s", gvrString))
+	// Run with consistent logging - include label selector info if present
+	description := fmt.Sprintf("unified config-driven informer for %s", gvrString)
+	if len(normalizedConfigs) > 0 && normalizedConfigs[0].LabelSelector != "" {
+		description = fmt.Sprintf("unified config-driven informer for %s (label selector: %s)", gvrString, normalizedConfigs[0].LabelSelector)
+	}
+	c.runInformerWithLogging(informer, c.ctx, description)
 }
 
 // handleUnifiedNormalizedEvent processes events with multiple normalized config-based filtering

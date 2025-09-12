@@ -1,0 +1,48 @@
+# Test 10 - Workload Monitor Dynamic Discovery Configuration
+# This test replicates the workload monitor functionality using Faro's static configuration
+# It simulates dynamic workload discovery by monitoring specific namespace patterns
+
+output_dir: "./logs/TestWorkloadMonitorSimulation"
+log_level: "debug"
+auto_shutdown_sec: 120
+json_export: true
+
+resources:
+  # Cluster-scoped namespace monitoring for workload discovery
+  - gvr: "v1/namespaces"
+    scope: "cluster"
+    name_pattern: "env-staging-.*"  # Matches workload namespace pattern
+    
+  # Pods in main workload namespace
+  - gvr: "v1/pods"
+    scope: "namespaced"
+    namespace_patterns:
+      - "env-staging-abc123"
+    
+  # Pods in app workload namespace  
+  - gvr: "v1/pods"
+    scope: "namespaced"
+    namespace_patterns:
+      - "env-staging-abc123-app"
+      
+  # Pods in db workload namespace
+  - gvr: "v1/pods"
+    scope: "namespaced"
+    namespace_patterns:
+      - "env-staging-abc123-db"
+      
+  # ConfigMaps across all workload namespaces
+  - gvr: "v1/configmaps"
+    scope: "namespaced"
+    namespace_patterns:
+      - "env-staging-abc123"
+      - "env-staging-abc123-app"
+      - "env-staging-abc123-db"
+      
+  # Events for dynamic GVR discovery simulation
+  - gvr: "v1/events"
+    scope: "namespaced"
+    namespace_patterns:
+      - "env-staging-abc123"
+      - "env-staging-abc123-app"
+      - "env-staging-abc123-db"

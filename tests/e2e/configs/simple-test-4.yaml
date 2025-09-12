@@ -1,6 +1,6 @@
 # Simple E2E Test 4 - Resource ConfigMap by Label
 output_dir: "./logs/test4"
-log_level: "info"
+log_level: "debug"
 auto_shutdown_sec: 120
 json_export: true
 

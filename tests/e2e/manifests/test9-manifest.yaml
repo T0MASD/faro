@@ -1,0 +1,156 @@
+---
+# Main namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-multi-main
+  labels:
+    test-scenario: "multi-namespace-controller-bug"
+    component: "main"
+---
+# App namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-multi-app
+  labels:
+    test-scenario: "multi-namespace-controller-bug"
+    component: "app"
+---
+# DB namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-multi-db
+  labels:
+    test-scenario: "multi-namespace-controller-bug"
+    component: "db"
+---
+# Job in main namespace
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: main-job
+  namespace: faro-multi-main
+  labels:
+    app: multi-namespace-test
+    component: main
+spec:
+  template:
+    metadata:
+      labels:
+        app: multi-namespace-test
+        component: main
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: main-worker
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "Main namespace job running"
+          sleep 10
+          echo "Main namespace job completed"
+---
+# ConfigMap in main namespace
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: main-config
+  namespace: faro-multi-main
+  labels:
+    app: multi-namespace-test
+    component: main
+data:
+  config.yaml: |
+    main:
+      enabled: true
+      namespace: faro-multi-main
+---
+# Job in app namespace
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: app-job
+  namespace: faro-multi-app
+  labels:
+    app: multi-namespace-test
+    component: app
+spec:
+  template:
+    metadata:
+      labels:
+        app: multi-namespace-test
+        component: app
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: app-worker
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "App namespace job running"
+          sleep 10
+          echo "App namespace job completed"
+---
+# ConfigMap in app namespace
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: faro-multi-app
+  labels:
+    app: multi-namespace-test
+    component: app
+data:
+  config.yaml: |
+    app:
+      enabled: true
+      namespace: faro-multi-app
+---
+# Job in db namespace
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-job
+  namespace: faro-multi-db
+  labels:
+    app: multi-namespace-test
+    component: db
+spec:
+  template:
+    metadata:
+      labels:
+        app: multi-namespace-test
+        component: db
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: db-worker
+        image: busybox:1.35
+        command:
+        - sh
+        - -c
+        - |
+          echo "DB namespace job running"
+          sleep 10
+          echo "DB namespace job completed"
+---
+# ConfigMap in db namespace
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-config
+  namespace: faro-multi-db
+  labels:
+    app: multi-namespace-test
+    component: db
+data:
+  config.yaml: |
+    db:
+      enabled: true
+      namespace: faro-multi-db

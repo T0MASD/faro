@@ -50,7 +50,7 @@ func (d *DynamicDiscoveryHandler) createTargetController(targetNS string) {
 	// Simplified config for target controller - no CRD discovery needed
 	config := &faro.Config{
 		OutputDir:       "./logs/integration-dynamic",
-		LogLevel:        "info",
+		LogLevel:        "debug",
 		JsonExport:      false, // Target controllers don't need JSON export
 		AutoShutdownSec: 0,
 		Resources: []faro.ResourceConfig{
@@ -120,7 +120,7 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 	// Discovery config - monitors all namespaces to detect parent
 	discoveryConfig := &faro.Config{
 		OutputDir:  logDir,
-		LogLevel:   "info",
+		LogLevel:   "debug",
 		JsonExport: true, // Enable JSON export for verification
 		Resources: []faro.ResourceConfig{
 			{

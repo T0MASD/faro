@@ -1,6 +1,6 @@
 # Simple E2E Test 1 - Namespace-centric ConfigMap by name
 output_dir: "./logs/test1"
-log_level: "info"
+log_level: "debug"
 auto_shutdown_sec: 120
 json_export: true
 

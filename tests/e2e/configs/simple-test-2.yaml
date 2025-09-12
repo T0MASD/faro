@@ -1,6 +1,6 @@
 # Simple E2E Test 2 - Resource-Centric ConfigMap Informer
 output_dir: "./logs/test2"
-log_level: "info"
+log_level: "debug"
 auto_shutdown_sec: 120
 json_export: true
 

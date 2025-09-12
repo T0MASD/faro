@@ -1,6 +1,6 @@
 # Simple E2E Test 7 - Two ConfigMap configs: namespace-centric + resource-centric
 output_dir: "./logs/test7"
-log_level: "info"
+log_level: "debug"
 auto_shutdown_sec: 120
 json_export: true
 

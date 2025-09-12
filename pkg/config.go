@@ -237,15 +237,18 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 				}
 			}
 			
-			normalizedMap[resConfig.GVR] = append(normalizedMap[resConfig.GVR], NormalizedConfig{
-				GVR: resConfig.GVR,
-				ResourceDetails: ResourceDetails{
-					LabelSelector: resConfig.LabelSelector, // SERVER-SIDE filtering only
-				},
-				NamespacePatterns: namespacePatterns, // Literal namespace names only
-				NamePattern:       resConfig.NamePattern, // SERVER-SIDE name filtering
-				LabelSelector:     resConfig.LabelSelector, // SERVER-SIDE filtering only
-			})
+			// FIX: Create separate NormalizedConfig for each namespace to ensure proper informer creation
+			for _, namespace := range namespacePatterns {
+				normalizedMap[resConfig.GVR] = append(normalizedMap[resConfig.GVR], NormalizedConfig{
+					GVR: resConfig.GVR,
+					ResourceDetails: ResourceDetails{
+						LabelSelector: resConfig.LabelSelector, // SERVER-SIDE filtering only
+					},
+					NamespacePatterns: []string{namespace}, // Single namespace per config
+					NamePattern:       resConfig.NamePattern, // SERVER-SIDE name filtering
+					LabelSelector:     resConfig.LabelSelector, // SERVER-SIDE filtering only
+				})
+			}
 		}
 	}
 	

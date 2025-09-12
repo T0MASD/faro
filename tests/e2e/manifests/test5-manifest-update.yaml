@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-5
+  labels:
+    test-label: "faro-namespace"
+    workload-type: "e2e-test"
+    updated: "true"  # Added label to trigger update event

@@ -429,31 +429,57 @@ func getNamespaceFromManifest(manifestFile string) string {
 }
 
 func readJSONEvents(logDir string) ([]FaroJSONEvent, error) {
+	// First try to find a separate JSON export file
 	pattern := filepath.Join(logDir, "logs", "events-*.json")
 	files, err := filepath.Glob(pattern)
+	if err == nil && len(files) > 0 {
+		content, err := os.ReadFile(files[len(files)-1])
+		if err != nil {
+			return nil, err
+		}
+		return parseJSONEvents(string(content))
+	}
+
+	// Fallback: extract JSON events from the main Faro log file
+	// Look for the most recent Faro log file in output/logs/
+	logPattern := filepath.Join("output", "logs", "faro-*.log")
+	logFiles, err := filepath.Glob(logPattern)
 	if err != nil {
 		return nil, err
 	}
-	if len(files) == 0 {
-		return nil, nil
+	if len(logFiles) == 0 {
+		return nil, fmt.Errorf("no Faro log files found")
 	}
 
-	content, err := os.ReadFile(files[len(files)-1])
+	// Read the most recent log file
+	content, err := os.ReadFile(logFiles[len(logFiles)-1])
 	if err != nil {
 		return nil, err
 	}
 
+	return parseJSONEvents(string(content))
+}
+
+func parseJSONEvents(content string) ([]FaroJSONEvent, error) {
 	var events []FaroJSONEvent
-	for _, line := range strings.Split(string(content), "\n") {
+	for _, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
-		var event FaroJSONEvent
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue
+		
+		// Look for JSON events in log lines (they start with {"timestamp")
+		if strings.Contains(line, `{"timestamp"`) {
+			// Extract the JSON part from the log line
+			jsonStart := strings.Index(line, `{"timestamp"`)
+			if jsonStart >= 0 {
+				jsonStr := line[jsonStart:]
+				var event FaroJSONEvent
+				if err := json.Unmarshal([]byte(jsonStr), &event); err == nil {
+					events = append(events, event)
+				}
+			}
 		}
-		events = append(events, event)
 	}
 	return events, nil
 }
@@ -504,13 +530,16 @@ func TestFaroTest5NamespaceOnly(t *testing.T) {
 
 			configFile := "configs/simple-test-5.yaml"
 			manifestFile := "manifests/test5-manifest.yaml"
+			updateManifestFile := "manifests/test5-manifest-update.yaml"
 			logDir := "logs/test5"
-			expectedEvents := []FaroJSONEvent{
-				{EventType: "ADDED", GVR: "v1/namespaces", Name: "faro-test-5"},
-				{EventType: "DELETED", GVR: "v1/namespaces", Name: "faro-test-5"},
+			
+			// Generate expected events dynamically based on config and manifests
+			expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
+			if err != nil {
+				t.Fatalf("Failed to generate expected events: %v", err)
 			}
 
-			runNamespaceOnlyTestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
 			return ctx
 		}).Feature()
 
@@ -567,174 +596,45 @@ func TestFaroTest8MultipleNamespaces(t *testing.T) {
 
 			configFile := "configs/simple-test-8.yaml"
 			manifestFile := "manifests/test8-manifest.yaml"
+			updateManifestFile := "manifests/test8-manifest-update.yaml"
 			logDir := "logs/test8"
-			expectedEvents := []FaroJSONEvent{
-				{EventType: "ADDED", GVR: "v1/namespaces", Name: "faro-test-8a"},
-				{EventType: "ADDED", GVR: "v1/namespaces", Name: "faro-test-8b"},
-				{EventType: "DELETED", GVR: "v1/namespaces", Name: "faro-test-8a"},
-				{EventType: "DELETED", GVR: "v1/namespaces", Name: "faro-test-8b"},
+			
+			// Generate expected events dynamically based on config and manifests
+			expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
+			if err != nil {
+				t.Fatalf("Failed to generate expected events: %v", err)
 			}
 
-			runMultipleNamespacesTestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
 			return ctx
 		}).Feature()
 
 	testenv.Test(t, feature)
 }
 
-func runNamespaceOnlyTestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Config, configFile string, manifestFile string, logDir string, expectedEvents []FaroJSONEvent) {
-	// Start Faro
-	faroCmd := exec.CommandContext(ctx, "../../faro", "-config", configFile)
-	
-	// Capture stdout and stderr to monitor initialization
-	stdout, err := faroCmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("Failed to get stdout pipe: %v", err)
-	}
-	stderr, err := faroCmd.StderrPipe()
-	if err != nil {
-		t.Fatalf("Failed to get stderr pipe: %v", err)
-	}
-	
-	if err := faroCmd.Start(); err != nil {
-		t.Fatalf("Failed to start Faro: %v", err)
-	}
-	defer func() {
-		if faroCmd.Process != nil {
-			faroCmd.Process.Kill()
-			faroCmd.Wait()
-		}
-	}()
+func TestFaroTest9MultiNamespaceControllerBug(t *testing.T) {
+	feature := features.New("Faro Test 9 - Multi-Namespace Controller Configuration Bug").
+		Assess("should monitor resources in ALL configured namespaces, not just the first one", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 
-	// Wait for Faro to be ready by monitoring its logs
-	if err := waitForFaroReady(t, stdout, stderr); err != nil {
-		t.Fatalf("Faro failed to initialize: %v", err)
-	}
+			configFile := "configs/simple-test-9.yaml"
+			manifestFile := "manifests/test9-manifest.yaml"
+			updateManifestFile := "manifests/test9-manifest-update.yaml"
+			logDir := "logs/test9"
+			
+			// Generate expected events dynamically based on config and manifests
+			expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
+			if err != nil {
+				t.Fatalf("Failed to generate expected events: %v", err)
+			}
 
-	// Apply manifest (create namespace)
-	t.Log("Applying manifest...")
-	applyCmd := exec.Command("kubectl", "apply", "-f", manifestFile)
-	if err := applyCmd.Run(); err != nil {
-		t.Fatalf("Failed to apply manifest: %v", err)
-	}
-	defer func() {
-		// Clean up resources
-		deleteCmd := exec.Command("kubectl", "delete", "-f", manifestFile, "--ignore-not-found=true")
-		deleteCmd.Run()
-	}()
-	time.Sleep(1 * time.Second) // Reduced from 3s
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			return ctx
+		}).Feature()
 
-	// Delete manifest (delete namespace)
-	t.Log("Deleting manifest...")
-	deleteCmd := exec.Command("kubectl", "delete", "-f", manifestFile)
-	if err := deleteCmd.Run(); err != nil {
-		t.Logf("Failed to delete manifest: %v", err)
-	}
-	time.Sleep(4 * time.Second) // Reduced from 8s
-
-	// Stop Faro
-	faroCmd.Process.Kill()
-	faroCmd.Wait()
-
-	// Validate events
-	events, err := readJSONEvents(logDir)
-	if err != nil {
-		t.Fatalf("Failed to read events: %v", err)
-	}
-
-	// Show log locations
-	t.Logf("=== LOG LOCATIONS ===")
-	t.Logf("Faro logs: %s/logs/", logDir)
-	
-	// Find JSON export file
-	jsonPattern := filepath.Join(logDir, "logs", "events-*.json")
-	jsonFiles, err := filepath.Glob(jsonPattern)
-	if err == nil && len(jsonFiles) > 0 {
-		t.Logf("JSON export: %s", jsonFiles[len(jsonFiles)-1])
-	} else {
-		t.Logf("JSON export: Not found")
-	}
-	
-	displayFaroQueries(t, configFile)
-	validateEvents(t, expectedEvents, events)
+	testenv.Test(t, feature)
 }
 
-func runMultipleNamespacesTestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Config, configFile string, manifestFile string, logDir string, expectedEvents []FaroJSONEvent) {
-	// Start Faro
-	faroCmd := exec.CommandContext(ctx, "../../faro", "-config", configFile)
-	
-	// Capture stdout and stderr to monitor initialization
-	stdout, err := faroCmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("Failed to get stdout pipe: %v", err)
-	}
-	stderr, err := faroCmd.StderrPipe()
-	if err != nil {
-		t.Fatalf("Failed to get stderr pipe: %v", err)
-	}
-	
-	if err := faroCmd.Start(); err != nil {
-		t.Fatalf("Failed to start Faro: %v", err)
-	}
-	defer func() {
-		if faroCmd.Process != nil {
-			faroCmd.Process.Kill()
-			faroCmd.Wait()
-		}
-	}()
 
-	// Wait for Faro to be ready by monitoring its logs
-	if err := waitForFaroReady(t, stdout, stderr); err != nil {
-		t.Fatalf("Faro failed to initialize: %v", err)
-	}
-
-	// Apply manifest (create multiple namespaces)
-	t.Log("Applying manifest...")
-	applyCmd := exec.Command("kubectl", "apply", "-f", manifestFile)
-	if err := applyCmd.Run(); err != nil {
-		t.Fatalf("Failed to apply manifest: %v", err)
-	}
-	defer func() {
-		// Clean up resources
-		deleteCmd := exec.Command("kubectl", "delete", "-f", manifestFile, "--ignore-not-found=true")
-		deleteCmd.Run()
-	}()
-	time.Sleep(1 * time.Second) // Reduced from 3s
-
-	// Delete manifest (delete multiple namespaces)
-	t.Log("Deleting manifest...")
-	deleteCmd := exec.Command("kubectl", "delete", "-f", manifestFile)
-	if err := deleteCmd.Run(); err != nil {
-		t.Logf("Failed to delete manifest: %v", err)
-	}
-	time.Sleep(4 * time.Second) // Reduced from 8s - namespace deletions still need more time
-
-	// Stop Faro
-	faroCmd.Process.Kill()
-	faroCmd.Wait()
-
-	// Validate events
-	events, err := readJSONEvents(logDir)
-	if err != nil {
-		t.Fatalf("Failed to read events: %v", err)
-	}
-
-	// Show log locations
-	t.Logf("=== LOG LOCATIONS ===")
-	t.Logf("Faro logs: %s/logs/", logDir)
-	
-	// Find JSON export file
-	jsonPattern := filepath.Join(logDir, "logs", "events-*.json")
-	jsonFiles, err := filepath.Glob(jsonPattern)
-	if err == nil && len(jsonFiles) > 0 {
-		t.Logf("JSON export: %s", jsonFiles[len(jsonFiles)-1])
-	} else {
-		t.Logf("JSON export: Not found")
-	}
-	
-	displayFaroQueries(t, configFile)
-	validateEvents(t, expectedEvents, events)
-}
 
 func waitForFaroReady(t *testing.T, stdout, stderr io.ReadCloser) error {
 	// Create channels to monitor both stdout and stderr
@@ -929,3 +829,5 @@ func validateEvents(t *testing.T, expected []FaroJSONEvent, actual []FaroJSONEve
 		}
 	}
 }
+
+
