@@ -66,9 +66,13 @@ Two comparative tests were conducted using the workload-monitor binary:
   "uid": "9da70678-629b-47e7-ad32-d5e98986e5af",
   "timestamp": "2025-09-11T11:01:33.943440707Z",
   "eventType": "ADDED",
-  "involvedObjectKind": "Pod",
-  "involvedObjectName": "main-init-job-n6rbt",
-  "involvedObjectNamespace": "ocm-staging-abc123",
+  "involvedObject": {
+    "kind": "Pod",
+    "apiVersion": "v1",
+    "name": "main-init-job-n6rbt",
+    "namespace": "ocm-staging-abc123",
+    "uid": "08902981-a827-435b-b50e-bc061bb4b3a0"
+  },
   "reason": "Scheduled"
 }
 ```
@@ -83,7 +87,9 @@ Two comparative tests were conducted using the workload-monitor binary:
 
 **Available Linking Keys**:
 - Direct Pod Event: `v1/pods:ocm-staging-abc123/main-workload-job-wbvqn`
-- v1/events Reference: `involvedObjectNamespace/involvedObjectName = ocm-staging-abc123/main-init-job-n6rbt`
+- v1/events Reference: `involvedObject.namespace/involvedObject.name = ocm-staging-abc123/main-init-job-n6rbt`
+
+**Dynamic Structure**: Like `labels`, `involvedObject` includes all fields provided by Kubernetes without predefined structure, ensuring complete data capture.
 
 **Graph Relationship Example**:
 ```
@@ -100,6 +106,23 @@ While UIDs provide stronger guarantees, `namespace + name` is sufficient because
 2. The temporal context (timestamps) helps resolve any edge cases
 3. Graph databases can handle the relationship resolution efficiently
 4. The `involvedObject` in v1/events doesn't include UID anyway
+
+### DELETE Event Limitations
+
+For `v1/events` DELETE events, `involvedObject` data is **not available**:
+- The Kubernetes informer doesn't provide the full object for DELETE events
+- Only basic event metadata (name, namespace, timestamp) is available
+- No reconstruction is attempted - if the informer doesn't provide it, it's not included
+
+**Example DELETE Event JSON**:
+```json
+{
+  "gvr": "v1/events",
+  "namespace": "kube-system", 
+  "name": "etcd-0.18643f2ceb619d53",
+  "eventType": "DELETED"
+}
+```
 
 ## Architectural Implications
 

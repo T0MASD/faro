@@ -572,20 +572,29 @@ func detectClusterName(client *faro.KubernetesClient) string {
 
 func main() {
 	// Parse command line flags
-	detectionLabel := flag.String("workload-label", "app.kubernetes.io/name", "Label key to detect workloads (e.g., 'app.kubernetes.io/name')")
-	workloadPattern := flag.String("workload-pattern", ".*", "Regex pattern to match workload names")
-	workloadIDPattern := flag.String("workload-id-pattern", "{workload-id}.*", "Pattern to extract workload ID from namespace names (use {workload-id} as placeholder)")
-	clusterGVRsFlag := flag.String("clustergvrs", "", "Comma-separated list of cluster-scoped GVRs to monitor (e.g., v1/namespaces)")
-	namespaceGVRsFlag := flag.String("namespacegvrs", "", "Comma-separated list of namespace-scoped GVRs to create per-namespace informers for detected workloads")
+	discoverNamespaces := flag.String("discover-namespaces", "app.kubernetes.io/name~.*", "Find namespaces by label key and pattern (format: 'label-key~pattern')")
+	extractFromNamespace := flag.String("extract-from-namespace", "{workload-id}.*", "Pattern to extract workload identifier from namespace names (use {workload-id} as placeholder)")
+	clusterResources := flag.String("cluster-resources", "", "Comma-separated list of cluster-scoped GVRs to monitor (e.g., v1/namespaces)")
+	namespaceResources := flag.String("namespace-resources", "", "Comma-separated list of namespace-scoped GVRs to create per-namespace informers for detected workloads")
 	flag.Parse()
 
 	// Capture full command line for logging
 	commandLine := strings.Join(os.Args, " ")
 
+	// Parse discover-namespaces flag (format: "label-key~pattern")
+	var detectionLabel, workloadPattern string
+	if strings.Contains(*discoverNamespaces, "~") {
+		parts := strings.SplitN(*discoverNamespaces, "~", 2)
+		detectionLabel = parts[0]
+		workloadPattern = parts[1]
+	} else {
+		log.Fatalf("Invalid discover-namespaces format '%s'. Expected format: 'label-key~pattern'", *discoverNamespaces)
+	}
+
 	// Compile the regex pattern
-	namePattern, err := regexp.Compile(*workloadPattern)
+	namePattern, err := regexp.Compile(workloadPattern)
 	if err != nil {
-		log.Fatalf("Invalid regex pattern '%s': %v", *workloadPattern, err)
+		log.Fatalf("Invalid regex pattern '%s': %v", workloadPattern, err)
 	}
 
 	// Create Faro client
@@ -611,26 +620,27 @@ func main() {
 	logger.Info("startup", "🚀 Workload Monitor Starting (Scalable Version)")
 	logger.Info("startup", "🏛️  Cluster: "+detectedClusterName)
 	logger.Info("startup", "💻 Command: "+commandLine)
-	logger.Info("startup", "🏷️  Detection label: "+*detectionLabel)
-	logger.Info("startup", "📋 Workload pattern: "+*workloadPattern)
-	logger.Info("startup", "📁 Workload ID pattern: "+*workloadIDPattern)
-	if *clusterGVRsFlag != "" {
-		logger.Info("startup", "🌐 Cluster GVRs: "+*clusterGVRsFlag)
+	logger.Info("startup", "🔍 Discover namespaces: "+*discoverNamespaces)
+	logger.Info("startup", "🏷️  Detection label: "+detectionLabel)
+	logger.Info("startup", "📋 Workload pattern: "+workloadPattern)
+	logger.Info("startup", "📁 Extract from namespace: "+*extractFromNamespace)
+	if *clusterResources != "" {
+		logger.Info("startup", "🌐 Cluster resources: "+*clusterResources)
 	}
-	if *namespaceGVRsFlag != "" {
-		logger.Info("startup", "📋 Namespace GVRs (per-namespace): "+*namespaceGVRsFlag)
+	if *namespaceResources != "" {
+		logger.Info("startup", "📋 Namespace resources (per-namespace): "+*namespaceResources)
 	}
 
 	// Parse GVR lists from command line
 	var cmdClusterGVRs, cmdNamespaceGVRs []string
-	if *clusterGVRsFlag != "" {
-		cmdClusterGVRs = strings.Split(*clusterGVRsFlag, ",")
+	if *clusterResources != "" {
+		cmdClusterGVRs = strings.Split(*clusterResources, ",")
 		for i, gvr := range cmdClusterGVRs {
 			cmdClusterGVRs[i] = strings.TrimSpace(gvr)
 		}
 	}
-	if *namespaceGVRsFlag != "" {
-		cmdNamespaceGVRs = strings.Split(*namespaceGVRsFlag, ",")
+	if *namespaceResources != "" {
+		cmdNamespaceGVRs = strings.Split(*namespaceResources, ",")
 		for i, gvr := range cmdNamespaceGVRs {
 			cmdNamespaceGVRs[i] = strings.TrimSpace(gvr)
 		}
@@ -641,9 +651,9 @@ func main() {
 		client:                   client,
 		logger:                   logger,
 		workloadControllers:      make(map[string]*faro.Controller),
-		detectionLabel:           *detectionLabel,
+		detectionLabel:           detectionLabel,
 		workloadNamePattern:      namePattern,
-		workloadIDPattern:        *workloadIDPattern,
+		workloadIDPattern:        *extractFromNamespace,
 		logDir:                   logDir,
 		clusterName:              detectedClusterName,
 		commandLine:              commandLine,

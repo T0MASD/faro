@@ -55,20 +55,18 @@ type JSONEvent struct {
 	UID       string            `json:"uid,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty"`
 	
-	// Additional fields for v1/events
-	InvolvedObjectKind       string `json:"involvedObjectKind,omitempty"`
-	InvolvedObjectAPIVersion string `json:"involvedObjectAPIVersion,omitempty"`
-	InvolvedObjectName       string `json:"involvedObjectName,omitempty"`
-	InvolvedObjectNamespace  string `json:"involvedObjectNamespace,omitempty"`
-	Reason                   string `json:"reason,omitempty"`
-	Message                  string `json:"message,omitempty"`
-	Type                     string `json:"type,omitempty"`
+	// Additional fields for v1/events - dynamic like labels
+	InvolvedObject map[string]interface{} `json:"involvedObject,omitempty"`
+	Reason         string                 `json:"reason,omitempty"`
+	Message        string                 `json:"message,omitempty"`
+	Type           string                 `json:"type,omitempty"`
 }
 
 // EventHandler interface for handling matched events via callbacks
 type EventHandler interface {
 	OnMatched(event MatchedEvent) error
 }
+
 
 // logJSONEvent creates and logs a structured JSON event
 func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured) {
@@ -85,10 +83,7 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	// Special handling for v1/events to extract involvedObject information
 	if gvr == "v1/events" && obj != nil {
 		if involvedObj, found, _ := unstructured.NestedMap(obj.Object, "involvedObject"); found {
-			jsonEvent.InvolvedObjectKind, _, _ = unstructured.NestedString(involvedObj, "kind")
-			jsonEvent.InvolvedObjectAPIVersion, _, _ = unstructured.NestedString(involvedObj, "apiVersion")
-			jsonEvent.InvolvedObjectName, _, _ = unstructured.NestedString(involvedObj, "name")
-			jsonEvent.InvolvedObjectNamespace, _, _ = unstructured.NestedString(involvedObj, "namespace")
+			jsonEvent.InvolvedObject = involvedObj
 		}
 		jsonEvent.Reason, _, _ = unstructured.NestedString(obj.Object, "reason")
 		jsonEvent.Message, _, _ = unstructured.NestedString(obj.Object, "message")
@@ -1305,21 +1300,12 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				namespace = ""
 			}
 			
-			// Log JSON event for DELETE
+			// Log JSON event for DELETE - no involvedObject data available
 			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, "", nil, nil)
 			
 			// Create a minimal unstructured object for DELETE events
 			// We can't get the full object since it's deleted, but we can extract key info
 			deletedObj := &unstructured.Unstructured{}
-			
-			// Parse the key to get namespace and name
-			namespace, name, err := cache.SplitMetaNamespaceKey(workItem.Key)
-			if err != nil {
-				// For cluster-scoped resources, key is just the name
-				name = workItem.Key
-				namespace = ""
-			}
-			
 			deletedObj.SetName(name)
 			if namespace != "" {
 				deletedObj.SetNamespace(namespace)
