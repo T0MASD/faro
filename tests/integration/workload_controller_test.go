@@ -151,7 +151,7 @@ func (w *WorkloadDiscoveryHandler) createWorkloadController(workloadID, workload
 	// Create config for this workload's namespaces - watch for batch/v1/jobs
 	workloadConfig := &faro.Config{
 		OutputDir:  fmt.Sprintf("%s/workload-%s", w.logDir, workloadID),
-		LogLevel:   "info",
+		LogLevel:   "debug",
 		JsonExport: true,
 		Resources: []faro.ResourceConfig{
 			{
@@ -252,7 +252,7 @@ func TestWorkloadControllerPattern(t *testing.T) {
 	
 	discoveryConfig := &faro.Config{
 		OutputDir:  logDir,
-		LogLevel:   "info",
+		LogLevel:   "debug",
 		JsonExport: true,
 		Resources: []faro.ResourceConfig{
 			{

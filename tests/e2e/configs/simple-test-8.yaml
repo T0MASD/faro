@@ -3,7 +3,7 @@
 # that share the same label, demonstrating proper server-side filtering
 
 output_dir: "./logs/test8"
-log_level: "info"
+log_level: "debug"
 auto_shutdown_sec: 120
 json_export: true
 

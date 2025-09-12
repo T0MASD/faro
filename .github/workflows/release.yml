@@ -1,3 +1,4 @@
+---
 name: Library Release
 
 on:
@@ -20,16 +21,31 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: '1.24'
 
-      - name: Run unit tests
+      # Install KinD for Kubernetes testing
+      - name: Install KinD
+        run: |
+          go install sigs.k8s.io/kind@v0.22.0
+          kind version
+
+      # Create KinD cluster for E2E and integration tests
+      - name: Create KinD cluster
+        run: |
+          kind create cluster
+          kubectl cluster-info
+          kubectl get nodes
+
+      # Run comprehensive test suite (unit + e2e + integration)
+      - name: Run full test suite
         run: |
           go mod tidy
-          cd tests/unit && go test -v
+          make test
 
       - name: Validate library can be imported
         run: |
-          echo 'package main; import _ "github.com/T0MASD/faro/pkg"; func main() {}' > test_import.go
+          echo 'package main; import _ "github.com/T0MASD/faro/pkg"' \
+            'func main() {}' > test_import.go
           go mod tidy
           go build test_import.go
           rm test_import.go

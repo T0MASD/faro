@@ -1,0 +1,22 @@
+# Simple E2E Test 9 - Multiple namespaces monitoring
+output_dir: "./logs/test9"
+log_level: "debug"
+auto_shutdown_sec: 120
+json_export: true
+
+resources:
+  - gvr: "v1/namespaces"
+    scope: "cluster"
+    name_pattern: "faro-multi-.*"
+  - gvr: "batch/v1/jobs"
+    scope: "namespaced"
+    namespace_patterns:
+      - "faro-multi-main"
+      - "faro-multi-app"
+      - "faro-multi-db"
+  - gvr: "v1/configmaps"
+    scope: "namespaced"
+    namespace_patterns:
+      - "faro-multi-main"
+      - "faro-multi-app"
+      - "faro-multi-db"
