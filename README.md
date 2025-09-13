@@ -13,14 +13,14 @@
 **Go library for monitoring Kubernetes resource changes** with server-side filtering, JSON export, and readiness callbacks.
 
 > 📚 **Library-First**: Import into your Go applications for Kubernetes resource monitoring
-> 🔧 **Features**: Server-side filtering, JSON export, readiness callbacks, graceful shutdown
+> 🔧 **Features**: Server-side filtering (exact matching), JSON export, readiness callbacks, graceful shutdown
 > 🚀 **Simple**: `go get github.com/T0MASD/faro@latest`
 
 ## Why Faro?
 
 | **Feature** | **Faro Library** | **kubectl get --watch** | **Custom Controllers** |
 |-------------|------------------|-------------------------|------------------------|
-| **Server-side Filtering** | ✅ Namespace + name patterns | ❌ Basic selectors | ⚠️ Manual implementation |
+| **Server-side Filtering** | ✅ Exact matching + label selectors | ❌ Basic selectors | ⚠️ Manual implementation |
 | **JSON Export** | ✅ Structured event output | ❌ Text only | ⚠️ Custom serialization |
 | **Readiness Callbacks** | ✅ Programmatic notification | ❌ No readiness signal | ⚠️ Custom implementation |
 | **Graceful Shutdown** | ✅ Clean resource cleanup | ❌ Process termination | ⚠️ Manual handling |
@@ -32,7 +32,7 @@
 **Purpose**: Go library for Kubernetes resource monitoring with examples for specialized use cases.
 
 **Key Features**:
-- **Server-side Filtering**: Namespace and name pattern filtering via Kubernetes API
+- **Server-side Filtering**: Exact matching via Kubernetes API (no client-side filtering)
 - **JSON Export**: Structured event output for integration and analysis
 - **Readiness Callbacks**: Programmatic notification when controller is ready
 - **Graceful Shutdown**: Clean resource cleanup on termination
@@ -45,7 +45,7 @@
 
 - **Configuration**: YAML-driven resource and namespace configuration
 - **Controller**: Multi-layered informer management with readiness callbacks
-- **Filtering**: Server-side namespace and name pattern filtering
+- **Filtering**: Server-side exact matching only (no client-side filtering)
 - **Events**: JSON export and callback-based event handling
 - **Lifecycle**: Graceful startup and shutdown with proper cleanup
 
@@ -60,14 +60,14 @@ Config Load → API Discovery → Informer Creation → Readiness Callback → E
 ```
 Resource Change → Kubernetes Informer → Work Queue → Worker Goroutines → Event Handler Callbacks → Application Filtering
                         ↑                                                                              ↑
-                [Server-side filtering]                                                    [Application-specific filtering]
-                (namespaces, labels, field selectors)                                     (custom logic, complex patterns)
+                [Server-side filtering]                                                    [Application event handlers]
+                (exact names, labels, field selectors)                                    (custom filtering, business logic)
 ```
 
 ## Configuration Approaches
 
 ### Core Library Configuration
-YAML-based configuration with server-side filtering:
+YAML-based configuration with server-side filtering only:
 ```yaml
 # Enable JSON export
 json_export: true
@@ -75,20 +75,22 @@ output_dir: "./logs"
 
 # Monitor specific namespaces and resources
 namespaces:
-  - name_pattern: "prod-.*"
+  - name_pattern: "production"                    # Server-side exact match only
     resources:
       "v1/pods":
-        name_pattern: "web-.*"
-        label_selector: "app=nginx,tier=frontend"  # Server-side filtering
+        name_pattern: "web-server"                # Server-side exact match only
+        label_selector: "app=nginx,tier=frontend" # Server-side filtering
       "v1/configmaps":
-        name_pattern: "config-.*"                  # Server-side name filtering
+        name_pattern: "app-config"                # Server-side exact match
+        # name_pattern: "prod-.*"                 # Would cause WARNING + no filtering
 
 # Monitor resources across all namespaces
 resources:
   - gvr: "v1/configmaps"
     scope: "namespace"
-    namespace_patterns: ["test-.*"]
-    name_pattern: "app-config"                     # Server-side filtering
+    namespace_patterns: ["production"]           # Server-side exact match
+    name_pattern: "app-config"                   # Server-side exact match
+    label_selector: "app=web"                    # Server-side filtering
 ```
 
 ### Library Usage
@@ -114,12 +116,25 @@ controller.Start()
 
 ## Core Features
 
-### Server-side Filtering
-All filtering happens at the Kubernetes API level for efficiency:
-- **Namespace filtering**: `metadata.namespace` field selectors
-- **Name pattern filtering**: `metadata.name` field selectors  
-- **Label selectors**: Standard Kubernetes label selector syntax
-- **Faro core processing**: All events matching server-side filters are forwarded to application handlers
+### Filtering Architecture
+Faro implements **server-side filtering only** through the Kubernetes API:
+
+#### **Server-side Filtering** (Kubernetes API level)
+- **Exact namespace filtering**: `metadata.namespace=exact-name` field selectors
+- **Exact name filtering**: `metadata.name=exact-name` field selectors (no wildcards/regex)
+- **Label selectors**: Standard Kubernetes label selector syntax (`app=nginx,tier=frontend`)
+
+#### **No Client-side Filtering**
+Faro core does **not** implement client-side pattern matching or regex filtering. When regex patterns are configured:
+- Faro logs a **warning**: "Regex name patterns not supported for server-side filtering"
+- **No filtering is applied** - all events for that resource type are received
+- Applications must implement their own filtering in event handlers if needed
+
+**Important**: 
+- Kubernetes API does not support regex or wildcards in field selectors
+- Patterns containing `.*+?^${}[]|()\\` result in **no filtering** and a warning
+- Use exact matches for efficient server-side filtering
+- Implement custom filtering in your event handlers for complex patterns
 
 ### JSON Export
 Structured event output for integration:
@@ -182,9 +197,10 @@ Optimal resource efficiency through scope-based filtering:
 -label "api.openshift.com/name" -pattern "toda-.*" -workload-id-pattern "ocm-staging-(.+)"
 ```
 
-### **Traditional Label Filtering** (Core Library)
+### **Faro Core Filtering** (Library)
 - **Label Selector**: Server-side Kubernetes filtering (`app=nginx,tier=frontend`)
-- **Application Filtering**: Applications implement additional client-side filtering as needed (`version=^v[0-9]+\\.[0-9]+$`)
+- **Exact Name Matching**: Server-side field selector filtering (`metadata.name=exact-name`)
+- **No Pattern Matching**: Regex patterns result in warnings and no filtering (applications must implement custom filtering)
 
 ## Event Processing
 
@@ -197,7 +213,7 @@ Optimal resource efficiency through scope-based filtering:
 ### Application Event Processing Patterns
 
 **Event Handler Implementation:**
-- **Client-Side Filtering**: Applications implement additional filtering logic in event handlers for complex patterns and business rules
+- **Application Filtering**: Applications implement filtering logic in event handlers for complex patterns and business rules
 - **Worker Dispatchers**: Can be set up to process matched events and take further actions on resource activity:
   - Create, update, or delete related resources
   - Send notifications or alerts
@@ -212,7 +228,7 @@ type ResourceWorkerDispatcher struct {
 }
 
 func (d *ResourceWorkerDispatcher) OnMatched(event faro.MatchedEvent) error {
-    // Additional client-side filtering
+    // Additional application filtering
     if !d.shouldProcess(event) {
         return nil
     }
@@ -245,7 +261,7 @@ func (d *ResourceWorkerDispatcher) OnMatched(event faro.MatchedEvent) error {
 - **Watchability Validation**: Filters resources by 'watch' verb support, excludes problematic resources
 
 ### Performance and Reliability  
-- **Server-Side Filtering**: Faro core uses only server-side filtering; applications implement additional filtering as needed
+- **Server-side Filtering**: Exact matching for maximum efficiency; no client-side filtering overhead
 - **Work Queue Pattern**: 3 worker goroutines with rate limiting and exponential backoff
 - **Informer Deduplication**: Single informer per GVR regardless of configuration overlap
 - **Graceful Shutdown**: Context-based cancellation with proper resource cleanup
@@ -264,12 +280,13 @@ Monitor specific resources in namespaces:
 ```yaml
 # Monitor ConfigMaps in specific namespaces
 namespaces:
-  - name_pattern: "production-.*"
+  - name_pattern: "production"                # Server-side exact match
     resources:
       "v1/configmaps":
-        label_selector: "app=nginx"
+        label_selector: "app=nginx"           # Server-side filtering
       "v1/pods":
-        name_pattern: "web-.*"
+        name_pattern: "web-server"            # Server-side exact match
+        # name_pattern: "web-.*"              # Would cause WARNING + no filtering
 ```
 
 ### **Multi-Resource Monitoring**
@@ -278,11 +295,12 @@ Monitor multiple resource types with different filters:
 resources:
   - gvr: "v1/pods"
     scope: "Namespaced"
-    namespace_patterns: ["default", "kube-system"]
-    label_selector: "app=nginx"
+    namespace_patterns: ["default", "kube-system"]  # Server-side exact match
+    label_selector: "app=nginx"                     # Server-side filtering
   - gvr: "v1/namespaces"
     scope: "Cluster"
-    name_pattern: "prod-.*"
+    name_pattern: "production"                      # Server-side exact match
+    # name_pattern: "prod-.*"                       # Would cause WARNING + no filtering
 ```
 
 ## Usage
