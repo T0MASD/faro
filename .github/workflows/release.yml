@@ -44,8 +44,11 @@ jobs:
 
       - name: Validate library can be imported
         run: |
-          echo 'package main; import _ "github.com/T0MASD/faro/pkg"' \
-            'func main() {}' > test_import.go
+          cat > test_import.go << 'EOF'
+          package main
+          import _ "github.com/T0MASD/faro/pkg"
+          func main() {}
+          EOF
           go mod tidy
           go build test_import.go
           rm test_import.go
