@@ -50,7 +50,7 @@ func (d *DynamicDiscoveryHandler) createTargetController(targetNS string) {
 	// Simplified config for target controller - no CRD discovery needed
 	config := &faro.Config{
 		OutputDir:       "./logs/integration-dynamic",
-		LogLevel:        "debug",
+		LogLevel: "debug",
 		JsonExport:      false, // Target controllers don't need JSON export
 		AutoShutdownSec: 0,
 		Resources: []faro.ResourceConfig{
@@ -72,7 +72,7 @@ func (d *DynamicDiscoveryHandler) createTargetController(targetNS string) {
 		
 		if err := controller.Start(); err != nil {
 			// Log as warning instead of error - this is expected for some target controllers
-			d.t.Logf("⚠️  Target controller for %s had startup issue (non-critical): %v", targetNS, err)
+			d.t.Logf("⚠️  Target controller for %s had startup issue (non-fatal): %v", targetNS, err)
 		} else {
 			d.t.Logf("✅ Target controller started for namespace: %s", targetNS)
 		}
@@ -120,7 +120,7 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 	// Discovery config - monitors all namespaces to detect parent
 	discoveryConfig := &faro.Config{
 		OutputDir:  logDir,
-		LogLevel:   "debug",
+		LogLevel: "debug",
 		JsonExport: true, // Enable JSON export for verification
 		Resources: []faro.ResourceConfig{
 			{

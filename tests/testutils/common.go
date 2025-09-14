@@ -91,14 +91,14 @@ func ReadJSONEvents(t *testing.T, logDir string) []FaroJSONEvent {
 	}
 	
 	if err != nil || len(jsonFiles) == 0 {
-		t.Fatalf("❌ CRITICAL: No JSON export files found in %s - json_export: true MUST be set in config passed to NewLogger. Tests MUST use JSON data for validation, never log parsing!", logDir)
+		t.Fatalf("❌ ERROR: No JSON export files found in %s - json_export: true MUST be set in config passed to NewLogger. Tests MUST use JSON data for validation, never log parsing!", logDir)
 	}
 	
-	// Use the latest JSON export file
-	latestFile := jsonFiles[len(jsonFiles)-1]
-	events := readJSONFromFile(t, latestFile)
+	// Use the most recent JSON export file
+	mostRecentFile := jsonFiles[len(jsonFiles)-1]
+	events := readJSONFromFile(t, mostRecentFile)
 	if len(events) == 0 {
-		t.Fatalf("❌ CRITICAL: JSON export file %s is empty or invalid - check that events are being properly exported", latestFile)
+		t.Fatalf("❌ ERROR: JSON export file %s is empty or invalid - check that events are being properly exported", mostRecentFile)
 	}
 	
 	return events
@@ -110,7 +110,7 @@ func readJSONFromFile(t *testing.T, filename string) []FaroJSONEvent {
 	
 	content, err := os.ReadFile(filename)
 	if err != nil {
-		t.Fatalf("❌ CRITICAL: Failed to read JSON file %s: %v", filename, err)
+		t.Fatalf("❌ ERROR: Failed to read JSON file %s: %v", filename, err)
 	}
 	
 	var events []FaroJSONEvent
@@ -123,7 +123,7 @@ func readJSONFromFile(t *testing.T, filename string) []FaroJSONEvent {
 		
 		var event FaroJSONEvent
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			t.Fatalf("❌ CRITICAL: Failed to parse JSON event in file %s, line: %s, error: %v", filename, line, err)
+			t.Fatalf("❌ ERROR: Failed to parse JSON event in file %s, line: %s, error: %v", filename, line, err)
 		}
 		events = append(events, event)
 	}
@@ -205,7 +205,7 @@ func ApplyManifestWithWait(t *testing.T, manifestFile string, timeout time.Durat
 	}
 	
 	// TODO: Add resource waiting logic based on manifest content
-	// For now, use a shorter fixed delay
+	// Use a shorter fixed delay
 	time.Sleep(1 * time.Second)
 	
 	return nil
@@ -222,7 +222,7 @@ func DeleteManifestWithWait(t *testing.T, manifestFile string, timeout time.Dura
 	}
 	
 	// TODO: Add resource cleanup waiting logic
-	// For now, use a shorter fixed delay
+	// Use a shorter fixed delay
 	time.Sleep(1 * time.Second)
 	
 	return nil

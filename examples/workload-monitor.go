@@ -35,6 +35,7 @@ type WorkloadMonitor struct {
 	workloadNamePattern      *regexp.Regexp // Pattern to match workload names
 	workloadIDPattern        string        // Pattern to extract workload ID from namespace names (e.g., "ocm-staging-(.+)")
 	logDir                   string
+	logLevel                 string        // Log level for controllers
 	cmdClusterGVRs           []string      // Command-line cluster-scoped GVRs
 	cmdNamespaceGVRs         []string      // Command-line namespace-scoped GVRs (per-namespace informers)
 	
@@ -150,7 +151,7 @@ func (w *WorkloadMonitor) logResourceEvent(event faro.MatchedEvent, workloadID, 
 		}
 	}
 	
-	w.logger.Info("workload-handler", logMessage)
+	// Removed redundant workload-handler logging - already covered by Faro core [controller] CONFIG logs
 	
 	// Keep detailed JSON logging for JSON export (but not stdout)
 	uid := event.Object.GetUID()
@@ -286,7 +287,7 @@ func (w *WorkloadMonitor) ensureUnifiedControllerStarted() error {
     // Create unified controller for workload resources
 	unifiedConfig := &faro.Config{
 		OutputDir:  w.logDir,
-		LogLevel:   "debug",  // Changed to debug to capture debug messages
+		LogLevel:   w.logLevel,  // Use same log level as main logger
 		JsonExport: true,
         Resources:  []faro.ResourceConfig{}, // Start empty, resources added dynamically
     }
@@ -901,6 +902,7 @@ func main() {
 	extractFromNamespace := flag.String("extract-from-namespace", "{workload-id}.*", "Pattern to extract workload identifier from namespace names (use {workload-id} as placeholder)")
 	clusterResources := flag.String("cluster-resources", "", "Comma-separated list of cluster-scoped GVRs to monitor (e.g., v1/namespaces)")
 	namespaceResources := flag.String("namespace-resources", "", "Comma-separated list of namespace-scoped GVRs to create per-namespace informers for detected workloads")
+	logLevel := flag.String("log-level", "info", "Log level (debug, info, warning, error, fatal)")
 	flag.Parse()
 
 	// Capture full command line for logging
@@ -931,10 +933,18 @@ func main() {
 	// Auto-detect cluster name from kubectl context
 	detectedClusterName := detectClusterName(client)
 
+	// Validate log level
+	validLevels := map[string]bool{
+		"debug": true, "info": true, "warning": true, "error": true, "fatal": true,
+	}
+	if !validLevels[*logLevel] {
+		log.Fatalf("Invalid log level '%s'. Valid levels: debug, info, warning, error, fatal", *logLevel)
+	}
+
 	// Create logger
 	logDir := "./logs/workload-monitor"
 	// Create config for logger
-	loggerConfig := &faro.Config{OutputDir: logDir, JsonExport: true}
+	loggerConfig := &faro.Config{OutputDir: logDir, LogLevel: *logLevel, JsonExport: true}
 	logger, err := faro.NewLogger(loggerConfig)
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
@@ -979,6 +989,7 @@ func main() {
 		workloadNamePattern:      namePattern,
 		workloadIDPattern:        *extractFromNamespace,
 		logDir:                   logDir,
+		logLevel:                 *logLevel,
 		clusterName:              detectedClusterName,
 		commandLine:              commandLine,
 		detectedWorkloads:        make(map[string][]string),
@@ -1022,7 +1033,7 @@ func main() {
 	
 	discoveryConfig := &faro.Config{
 		OutputDir: logDir,
-		LogLevel:  "debug",  // Changed to debug to capture debug messages
+		LogLevel:  *logLevel,  // Use command line log level
 		JsonExport: true,
 		Resources: discoveryResourceConfigs,
 	}

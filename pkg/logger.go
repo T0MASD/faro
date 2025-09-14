@@ -2,6 +2,7 @@ package faro
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"sync"
@@ -9,6 +10,8 @@ import (
 
 	"k8s.io/klog/v2"
 )
+
+var klogInitOnce sync.Once
 
 // LogHandler interface for handling log messages via callbacks
 type LogHandler interface {
@@ -23,10 +26,23 @@ type Logger struct {
 	mu       sync.RWMutex
 }
 
-// NewLogger creates a new callback-based logger from config
+// NewLogger creates a callback-based logger from config
 func NewLogger(config *Config) (*Logger, error) {
 	logger := &Logger{
 		handlers: make([]LogHandler, 0),
+	}
+	
+	// Initialize klog flags only once globally
+	klogInitOnce.Do(func() {
+		klog.InitFlags(nil)
+	})
+	
+	// Configure klog verbosity based on log level
+	// This ensures debug messages are only shown when log level is debug
+	if config.LogLevel == "debug" {
+		flag.Set("v", "1") // Enable klog verbosity level 1 for debug messages
+	} else {
+		flag.Set("v", "0") // Disable debug verbosity for non-debug levels
 	}
 	
 	// Add console handler (always present)
@@ -49,7 +65,9 @@ func NewLogger(config *Config) (*Logger, error) {
 			return nil, fmt.Errorf("failed to create log file: %v", err)
 		}
 		
-		logger.AddHandler(&FileLogHandler{file: logFile})
+		// Convert log level string to integer for filtering
+		minLevel := config.GetLogLevel()
+		logger.AddHandler(&FileLogHandler{file: logFile, minLevel: minLevel})
 		
 		// Log file path to stdout for test identification
 		fmt.Printf("FARO_LOG_FILE: %s\n", logPath)
@@ -133,8 +151,9 @@ func (ch *ConsoleLogHandler) Close() error {
 
 // FileLogHandler handles logging to file
 type FileLogHandler struct {
-	file *os.File
-	mu   sync.Mutex
+	file     *os.File
+	mu       sync.Mutex
+	minLevel int // Minimum log level to write (-1=debug, 0=info, 1=warning, 2=error, 3=fatal)
 }
 
 func (fh *FileLogHandler) Name() string {
@@ -147,6 +166,11 @@ func (fh *FileLogHandler) WriteLog(level int, component, message string, timesta
 	
 	if fh.file == nil {
 		return fmt.Errorf("file handler is closed")
+	}
+	
+	// Filter messages based on configured minimum log level
+	if level < fh.minLevel {
+		return nil // Skip messages below the minimum level
 	}
 	
 	logLine := fmt.Sprintf("[%s] %s", component, message)

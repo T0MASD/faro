@@ -105,7 +105,7 @@ func (c *Controller) SetReadyCallback(callback func()) {
     defer c.readyMu.Unlock()
     c.onReady = callback
     
-    // Trigger immediately if already ready
+    // Trigger callback if ready
     if c.isReady && callback != nil {
         callback()
     }

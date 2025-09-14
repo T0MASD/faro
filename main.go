@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -22,8 +21,6 @@ var (
 )
 
 func main() {
-	// Initialize klog first with default settings
-	klog.InitFlags(nil)
 	defer klog.Flush()
 
 	// Load config from command line args (handles version flag)
@@ -33,12 +30,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Set klog verbosity based on config log level
-	if config.LogLevel == "debug" {
-		flag.Set("v", "1") // Enable klog verbosity level 1 for debug messages
-	}
-
-	// Create logger with config-specified settings
+	// Create logger with config-specified settings (klog verbosity is handled by NewLogger)
+	// Note: klog.InitFlags is called inside NewLogger after setting verbosity
 	logger, err := faro.NewLogger(config)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create logger: %v\n", err)

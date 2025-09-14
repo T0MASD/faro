@@ -1,6 +1,6 @@
 # Logger Component
 
-Callback-based logging system with pluggable handlers.
+Callback-based logging system with pluggable handlers and comprehensive log level control.
 
 ## Core Structure
 
@@ -69,15 +69,24 @@ sequenceDiagram
 
 ### Logger Creation
 ```go
-func NewLogger(logDir string) (*Logger, error) {
+func NewLogger(config *Config) (*Logger, error) {
     logger := &Logger{
         handlers: make([]LogHandler, 0),
+    }
+    
+    // Configure klog verbosity based on log level
+    // This ensures debug messages are only shown when log level is debug
+    if config.LogLevel == "debug" {
+        flag.Set("v", "1") // Enable klog verbosity level 1 for debug messages
+    } else {
+        flag.Set("v", "0") // Disable debug verbosity for non-debug levels
     }
     
     // Always add console handler
     logger.AddHandler(&ConsoleLogHandler{})
     
     // Add file handler if logDir specified
+    logDir := config.GetLogDir()
     if logDir != "" {
         if err := os.MkdirAll(logDir, 0755); err != nil {
             return nil, fmt.Errorf("failed to create log directory: %v", err)
@@ -91,6 +100,16 @@ func NewLogger(logDir string) (*Logger, error) {
             return nil, fmt.Errorf("failed to create file handler: %v", err)
         }
         logger.AddHandler(fileHandler)
+        
+        // Add JSON handler if requested
+        if config.JsonExport {
+            jsonPath := fmt.Sprintf("%s/events-%s.json", logDir, timestamp)
+            jsonHandler, err := NewJSONFileHandler(jsonPath)
+            if err != nil {
+                return nil, fmt.Errorf("failed to create JSON handler: %v", err)
+            }
+            logger.AddHandler(jsonHandler)
+        }
     }
     
     return logger, nil
@@ -172,6 +191,38 @@ l.logFile.WriteString(fmt.Sprintf("%s\n", fileLogLine))
 l.logFile.Sync() // Force immediate write
 ```
 
+## Log Level Control
+
+### How It Works
+The logger controls klog verbosity based on the configuration:
+
+```mermaid
+graph TD
+    A[Config.LogLevel] --> B{Level Check}
+    B -->|debug| C[flag.Set v=1]
+    B -->|info/warning/error| D[flag.Set v=0]
+    
+    C --> E[klog.V(1).Info shows debug]
+    D --> F[klog.V(1).Info hidden]
+    
+    E --> G[Console shows debug messages]
+    F --> H[Console hides debug messages]
+    
+    G --> I[All levels written to file]
+    H --> I
+```
+
+### Configuration Examples
+```go
+// Clean console output - debug messages hidden
+config := &faro.Config{LogLevel: "info"}
+logger, _ := faro.NewLogger(config)  // Sets klog verbosity to 0
+
+// Verbose console output - debug messages shown
+config := &faro.Config{LogLevel: "debug"}  
+logger, _ := faro.NewLogger(config)  // Sets klog verbosity to 1
+```
+
 ## Log Levels
 
 ```mermaid
@@ -195,6 +246,14 @@ graph LR
         C --> M[W]
         D --> N[E]
         E --> O[F]
+    end
+    
+    subgraph "Verbosity Control"
+        F --> L1[Shown only if v>=1]
+        G --> L2[Always shown]
+        H --> L3[Always shown]
+        I --> L4[Always shown]
+        J --> L5[Always shown]
     end
 ```
 

@@ -97,7 +97,7 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	}
 
 	// Log as JSON for the JSONFileHandler to pick up
-	c.logger.Info("controller", string(jsonData))
+	c.logger.Debug("controller", string(jsonData))
 }
 
 // InformerConfig holds configuration for creating a generic informer
@@ -146,7 +146,7 @@ type Controller struct {
 	isReady   bool
 }
 
-// NewController creates a new informer-based controller
+// NewController creates an informer-based controller
 func NewController(client *KubernetesClient, logger *Logger, config *Config) *Controller {
 	ctx, cancel := context.WithCancel(context.Background())
 
