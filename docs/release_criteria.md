@@ -73,7 +73,7 @@
 ### 15. Validate docs/architecture.md with accordance to test results and pkg/*.go
 - [ ] Validate architecture documentation against test evidence and all source code
 
-### 16. Make sure README.md is correct and ready
+### 16. Verify README.md is correct and complete
 - [ ] Validate README.md accuracy and completeness for release
 
 ### 17. Create executive summary document

@@ -49,7 +49,7 @@ Resource Event → Informer → Work Queue → Worker → Event Handler Callback
 - **Informer Management**: Dynamic creation/destruction with server-side filtering
 - **Worker Pool**: Asynchronous event processing with rate limiting and retries
 - **Event Handlers**: Callback interface for library consumers
-- **CRD Watcher**: Dynamic informer creation for new CustomResourceDefinitions
+- **CRD Watcher**: Dynamic informer creation for CustomResourceDefinitions
 
 ### Work Queue System
 - **Pattern**: Standard Kubernetes controller pattern with `workqueue.RateLimitingInterface`
@@ -133,7 +133,7 @@ resources:
 2. **API Discovery**: Enumerate cluster API resources (395 resources from 34 API groups)
 3. **Watchability Validation**: Filter resources by 'watch' verb support, exclude problematic resources
 4. **Informer Creation**: Create informers for configured resources with server-side filtering
-5. **CRD Watcher**: Start monitoring for new CustomResourceDefinition additions
+5. **CRD Watcher**: Start monitoring for CustomResourceDefinition additions
 6. **Worker Pool**: Start event processing workers (default: 3 goroutines)
 7. **Readiness Callback**: Signal "Multi-layered informer architecture started successfully"
 
@@ -161,7 +161,7 @@ resources:
 6. **JSON Export**: Optional structured event export to timestamped files
 
 **CRD Discovery:**
-1. **CRD Monitoring**: Watch for new CustomResourceDefinition additions
+1. **CRD Monitoring**: Watch for CustomResourceDefinition additions
 2. **Dynamic Informer Creation**: Automatically create informers for matching CRDs
 3. **Lifecycle Management**: Handle CRD deletion and informer cleanup
 
@@ -307,7 +307,7 @@ controller.Stop()
 - **Reliability**: Use proven Kubernetes filtering mechanisms
 
 ### Dynamic Informer Management
-- **CRD Support**: Automatic informer creation for new CustomResourceDefinitions
+- **CRD Support**: Automatic informer creation for CustomResourceDefinitions
 - **Lifecycle Management**: Proper creation/destruction of informers
 - **Resource Efficiency**: Only create informers for configured resources
 - **Graceful Shutdown**: Clean termination of all informers and workers

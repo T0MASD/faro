@@ -164,7 +164,7 @@ cd tests/integration && go test -v -run TestVanillaLibrary
 4. Use table-driven tests for multiple scenarios
 
 ### Adding E2E Tests
-1. Add new test functions to `tests/e2e/faro_test.go`
+1. Add test functions to `tests/e2e/faro_test.go`
 2. Create corresponding configs in `tests/e2e/configs/`
 3. Create Kubernetes manifests in `tests/e2e/manifests/`
 4. Follow the pattern: config → expected data → K8s actions → validation
@@ -201,7 +201,7 @@ cat logs/test1/logs/events-*.json
 
 ## 📈 Test Metrics
 
-### Current Coverage
+### Test Coverage
 - **Unit Tests**: 4 test functions, 11 sub-tests
 - **E2E Tests**: 8 comprehensive scenarios
 - **Integration Tests**: 2 specialized tests

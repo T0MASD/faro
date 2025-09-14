@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document analyzes the relationship between direct Kubernetes resource monitoring (e.g., `v1/pods`, `batch/v1/jobs`) and `v1/events` monitoring in the context of Faro's workload monitoring capabilities. The key finding is that **v1/events complements rather than duplicates direct GVR monitoring**, and the current intelligent deduplication approach causes critical data loss.
+This document analyzes the relationship between direct Kubernetes resource monitoring (e.g., `v1/pods`, `batch/v1/jobs`) and `v1/events` monitoring in the context of Faro's workload monitoring capabilities. The key finding is that **v1/events complements rather than duplicates direct GVR monitoring**, and the intelligent deduplication approach causes data loss.
 
 ## Background
 
@@ -15,7 +15,7 @@ Two comparative tests were conducted using the workload-monitor binary:
 - **Test 1**: Direct GVR monitoring only (`batch/v1/jobs`, `v1/pods`, `v1/services`, `v1/configmaps`, `apps/v1/deployments`)
 - **Test 2**: Enhanced monitoring with `v1/events` and intelligent deduplication enabled
 
-## Critical Findings
+## Key Findings
 
 ### 1. Fundamental Data Type Differences
 
@@ -37,11 +37,11 @@ Two comparative tests were conducted using the workload-monitor binary:
 |------------|------------------|---------------------|-----------|
 | Pod ADDED | 6 events | 0 events | ❌ 100% loss |
 | Pod UPDATED | 36 events | 0 events | ❌ 100% loss |
-| Pod Operational | 0 events | 18 events | ✅ New data |
+| Pod Operational | 0 events | 18 events | ✅ Additional data |
 | Job ADDED | 36 events | 3 events | ❌ 92% loss |
-| Job Operational | 0 events | 6 events | ✅ New data |
+| Job Operational | 0 events | 6 events | ✅ Additional data |
 
-**Result**: Test 2 lost critical lifecycle data while gaining operational context.
+**Result**: Test 2 lost lifecycle data while gaining operational context.
 
 ### 3. Sample Data Comparison
 
@@ -126,7 +126,7 @@ For `v1/events` DELETE events, `involvedObject` data is **not available**:
 
 ## Architectural Implications
 
-### Current Deduplication Approach (BROKEN)
+### Deduplication Approach Analysis
 
 ```
 ❌ WRONG: v1/events replaces direct GVR monitoring
@@ -206,11 +206,11 @@ if involvedObjectKind == "Pod" {
 
 ## Conclusion
 
-The analysis definitively proves that **v1/events complements rather than duplicates direct GVR monitoring**. The intelligent deduplication approach is fundamentally flawed and causes critical data loss. 
+The analysis definitively proves that **v1/events complements rather than duplicates direct GVR monitoring**. The intelligent deduplication approach is fundamentally flawed and causes data loss. 
 
 For graph database ingestion, the combination of both data streams provides the complete picture needed for comprehensive workload analysis, with `gvr + namespace + name` serving as an excellent relationship key.
 
-The current deduplication logic must be removed, and v1/events should be treated as enrichment data alongside, not replacement for, direct resource monitoring.
+The deduplication logic should be removed, and v1/events should be treated as enrichment data alongside, not replacement for, direct resource monitoring.
 
 ## Test Evidence
 

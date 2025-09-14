@@ -18,7 +18,7 @@ type KubernetesClient struct {
 	Config    *rest.Config
 }
 
-// NewKubernetesClient creates a new Kubernetes client
+// NewKubernetesClient creates a Kubernetes client
 func NewKubernetesClient() (*KubernetesClient, error) {
 	// Try in-cluster config first
 	config, err := rest.InClusterConfig()

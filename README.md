@@ -14,7 +14,7 @@
 
 > 📚 **Library-First**: Import into your Go applications for Kubernetes resource monitoring
 > 🔧 **Features**: Server-side filtering (exact matching), JSON export, readiness callbacks, graceful shutdown
-> 🚀 **Simple**: `go get github.com/T0MASD/faro@latest`
+> 🚀 **Simple**: `go get github.com/T0MASD/faro`
 
 ## Why Faro?
 
@@ -102,9 +102,9 @@ if err != nil {
     log.Fatal(err)
 }
 
-// Create controller
+// Create controller (note: logger must be created with config for proper log level control)
 client, _ := faro.NewKubernetesClient()
-logger, _ := faro.NewLogger(config)
+logger, _ := faro.NewLogger(config)  // Log level from config is configured here
 controller := faro.NewController(client, logger, config)
 
 // Register event handler
@@ -115,6 +115,33 @@ controller.Start()
 ```
 
 ## Core Features
+
+### Log Level Control
+Faro provides comprehensive log level control:
+
+```go
+// Clean logs - debug messages hidden from console
+config := &faro.Config{
+    LogLevel: "info",    // Only info, warning, error messages shown
+    // ... other config
+}
+
+// Verbose logs - all messages including debug shown  
+config := &faro.Config{
+    LogLevel: "debug",   // All messages including debug shown
+    // ... other config
+}
+
+// Logger creation configures the log level to klog verbosity
+logger, err := faro.NewLogger(config)  // klog verbosity configured here
+```
+
+**Key Points:**
+- **Log level is configured during logger creation** - not just stored in config
+- **klog verbosity is automatically configured** based on the log level
+- **Debug messages only appear when LogLevel is "debug"**
+- **All log levels are written to files** regardless of console verbosity
+- **JSON export always works** regardless of console log level
 
 ### Filtering Architecture
 Faro implements **server-side filtering only** through the Kubernetes API:
@@ -181,7 +208,7 @@ Optimal resource efficiency through scope-based filtering:
 
 #### **Cluster GVRs** (Cluster-Wide)
 - ✅ **Minimal cluster monitoring** - only essential cluster-scoped resources
-- ✅ **Workload detection** - typically just `v1/namespaces`
+- ✅ **Workload detection** - typically `v1/namespaces`
 - ✅ **Low resource usage** - single informers for detection
 - ✅ **Explicit inclusion** - no complex allowlist/denylist logic
 
@@ -269,6 +296,7 @@ func (d *ResourceWorkerDispatcher) OnMatched(event faro.MatchedEvent) error {
 
 ### Observability
 - **Structured Logging**: Key-value logging with configurable levels (debug, info, warning, error)
+- **Log Level Control**: klog verbosity configuration ensures debug messages only appear when requested
 - **Event Prefixing**: Clear `CONFIG [EVENT_TYPE]` prefixes for filtered events
 - **Async Processing**: Non-blocking log operations with channel-based queueing
 - **Auto-Shutdown**: Configurable timeout for testing and automation scenarios
@@ -416,7 +444,7 @@ make tag-major           # Create major version tag and trigger release
 ### Installation
 
 ```bash
-go get github.com/T0MASD/faro@latest
+go get github.com/T0MASD/faro
 ```
 
 ### Quick Start
@@ -437,17 +465,10 @@ func main() {
         log.Fatal(err)
     }
     
-    // Create logger
-    logger, err := faro.NewLogger("./logs")
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer logger.Shutdown()
-    
-    // Create configuration
+    // Create configuration (must be created before logger for proper log level control)
     config := &faro.Config{
         OutputDir: "./output",
-        LogLevel:  "info",
+        LogLevel:  "info",  // Controls console verbosity: "debug" shows all messages, "info" hides debug messages
         JsonExport: true,
         Resources: []faro.ResourceConfig{
             {
@@ -458,6 +479,13 @@ func main() {
             },
         },
     }
+    
+    // Create logger with configuration (log level is configured during logger creation)
+    logger, err := faro.NewLogger(config)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer logger.Shutdown()
     
     // Create and start controller
     controller := faro.NewController(client, logger, config)
