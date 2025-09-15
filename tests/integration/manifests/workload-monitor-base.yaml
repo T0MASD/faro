@@ -39,7 +39,6 @@ metadata:
   labels:
     app: workload-test
     component: main
-    workload-id: abc123
 spec:
   containers:
   - name: main-worker
@@ -61,7 +60,6 @@ metadata:
   labels:
     app: workload-test
     component: main
-    workload-id: abc123
 data:
   workload.yaml: |
     workload:

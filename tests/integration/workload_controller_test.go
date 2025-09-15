@@ -75,17 +75,13 @@ func (w *WorkloadDiscoveryHandler) handleNamespaceDetection(event faro.MatchedEv
 	
 	w.t.Logf("🔍 Detected workload namespace: %s (workload: %s)", namespaceName, workloadName)
 	
-	// Extract workload ID from the workload-id label instead of parsing namespace name
-	workloadID, hasWorkloadID := labels["workload-id"]
-	if !hasWorkloadID {
-		// Fallback: try to extract from namespace name using pattern faro-(id)
-		matches := w.workloadIDPattern.FindStringSubmatch(namespaceName)
-		if len(matches) < 2 {
-			w.t.Logf("⚠️  Namespace %s has no workload-id label and doesn't match pattern", namespaceName)
-			return nil
-		}
-		workloadID = matches[1]
+	// Extract workload ID from namespace name using pattern faro-(id)
+	matches := w.workloadIDPattern.FindStringSubmatch(namespaceName)
+	if len(matches) < 2 {
+		w.t.Logf("⚠️  Namespace %s doesn't match workload ID pattern", namespaceName)
+		return nil
 	}
+	workloadID := matches[1]
 	
 	w.t.Logf("✅ Extracted workload ID: %s from namespace: %s", workloadID, namespaceName)
 	
@@ -325,7 +321,6 @@ func TestWorkloadControllerPattern(t *testing.T) {
 				Name: nsName,
 				Labels: map[string]string{
 					"workload-name": "faro",
-					"workload-id":   workloadID,
 					"component":     []string{"main", "app", "db"}[i],
 				},
 			},
@@ -383,8 +378,7 @@ func TestWorkloadControllerPattern(t *testing.T) {
 				Name:      jobName,
 				Namespace: nsName,
 				Labels: map[string]string{
-					"app":         "hello-world",
-					"workload-id": workloadID,
+					"app": "hello-world",
 				},
 			},
 			Spec: batchv1.JobSpec{

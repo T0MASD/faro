@@ -899,7 +899,7 @@ func (w *WorkloadMonitor) logDynamicGVRSummary() {
 func main() {
 	// Parse command line flags
 	discoverNamespaces := flag.String("discover-namespaces", "app.kubernetes.io/name~.*", "Find namespaces by label key and pattern (format: 'label-key~pattern')")
-	extractFromNamespace := flag.String("extract-from-namespace", "{workload-id}.*", "Pattern to extract workload identifier from namespace names (use {workload-id} as placeholder)")
+	extractFromNamespace := flag.String("extract-from-namespace", "ocm-staging-(.+)", "Regex pattern to extract workload identifier from namespace names (use capture group)")
 	clusterResources := flag.String("cluster-resources", "", "Comma-separated list of cluster-scoped GVRs to monitor (e.g., v1/namespaces)")
 	namespaceResources := flag.String("namespace-resources", "", "Comma-separated list of namespace-scoped GVRs to create per-namespace informers for detected workloads")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warning, error, fatal)")
