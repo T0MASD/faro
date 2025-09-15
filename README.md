@@ -441,6 +441,85 @@ make tag-minor           # Create minor version tag and trigger release
 make tag-major           # Create major version tag and trigger release
 ```
 
+### GitHub Actions Workflows
+
+The project includes comprehensive GitHub Actions workflows for automated testing and log collection:
+
+#### CI Workflow (`.github/workflows/ci.yml`)
+- **Triggers**: Push to `main`/`develop` branches, pull requests
+- **Features**:
+  - Runs full test suite (unit, integration, E2E)
+  - Uploads test logs and JSON events as artifacts with 30-day retention
+  - Matrix testing with different log levels
+  - Automatic log level analysis (Debug vs Info message counts)
+  - Event analysis (event types, counts, samples)
+  - Collects logs and events from all test directories
+
+#### Release Workflow (`.github/workflows/release.yml`)
+- **Triggers**: Version tags (`v*`)
+- **Features**:
+  - Runs comprehensive test suite before release
+  - Uploads release test logs and JSON events with 90-day retention
+  - Creates GitHub releases with GoReleaser
+
+#### Manual Test Log Workflow (`.github/workflows/test-logs.yml`)
+- **Triggers**: Manual dispatch with configurable parameters
+- **Features**:
+  - Configurable log level (debug, info, warning, error)
+  - Configurable test duration
+  - Detailed log level and event analysis with reporting
+  - Uploads workload monitor logs, JSON events, unit test logs, and summary reports
+
+#### Artifact Structure
+All workflows use the [GitHub Actions upload-artifact@v4](https://github.com/actions/upload-artifact) action to upload test logs:
+
+```yaml
+- name: Upload test logs
+  uses: actions/upload-artifact@v4
+  with:
+    name: test-logs-${{ github.run_number }}-${{ github.sha }}
+    path: test-logs/
+    retention-days: 30
+```
+
+**Artifact Types**:
+- `test-logs-*`: Complete test execution logs and JSON events with analysis
+- `workload-monitor-logs-*`: Workload monitor specific logs and events
+- `e2e-logs-*`: End-to-end test logs and events
+- `integration-logs-*`: Integration test logs and events
+- `release-test-logs-*`: Release validation logs and events
+- `test-summary-*`: Workflow execution summaries
+
+**Analysis Features**: Each artifact includes automated analysis of:
+- **Log Levels**: Debug (`^D`) vs info (`^I`) message counts and percentages
+- **Events**: JSON event counts, event type distribution, and sample events
+- **Verification**: Confirms that the logging level fix works correctly (debug messages show as `D`, not `I`)
+- **GitHub Actions Integration**: Uses `.github/scripts/analyze-test-logs.sh` for consistent analysis across all workflows
+
+#### Analysis Scripts
+
+The project includes reusable analysis scripts for both local development and CI/CD:
+
+**`.github/scripts/analyze-test-logs.sh`** - GitHub Actions optimized script:
+- Generates JSON and Markdown reports
+- Sets GitHub Actions outputs for workflow integration
+- Validates logging behavior with PASS/FAIL status
+- Integrates with GitHub Actions step summaries
+
+**`scripts/test-log-analysis.sh`** - Local development script:
+- Simulates GitHub Actions analysis locally
+- Provides immediate feedback during development
+- Generates comprehensive analysis reports
+
+**Usage Examples:**
+```bash
+# Local development
+./scripts/test-log-analysis.sh debug 30
+
+# GitHub Actions (used automatically in workflows)
+./.github/scripts/analyze-test-logs.sh debug 30 output-dir
+```
+
 ### Installation
 
 ```bash

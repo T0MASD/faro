@@ -1,0 +1,88 @@
+---
+name: Validate Logging Levels
+
+on:
+  workflow_call:
+    inputs:
+      log-level:
+        description: 'Log level to test'
+        required: true
+        type: string
+      test-duration:
+        description: 'Test duration in seconds'
+        required: false
+        default: '15'
+        type: string
+    outputs:
+      validation-status:
+        description: 'Validation result (PASS/FAIL/NO_LOGS)'
+        value: ${{ jobs.validate.outputs.validation-status }}
+      debug-count:
+        description: 'Number of debug messages found'
+        value: ${{ jobs.validate.outputs.debug-count }}
+      info-count:
+        description: 'Number of info messages found'
+        value: ${{ jobs.validate.outputs.info-count }}
+      event-count:
+        description: 'Number of JSON events found'
+        value: ${{ jobs.validate.outputs.event-count }}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      validation-status: ${{ steps.analyze.outputs.validation_status }}
+      debug-count: ${{ steps.analyze.outputs.debug_count }}
+      info-count: ${{ steps.analyze.outputs.info_count }}
+      event-count: ${{ steps.analyze.outputs.event_count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install KinD
+        run: |
+          go install sigs.k8s.io/kind@v0.22.0
+          kind create cluster
+          kubectl cluster-info
+
+      - name: Run logging validation
+        id: analyze
+        run: |
+          go mod tidy
+          ./.github/scripts/analyze-test-logs.sh ${{ inputs.log-level }} ${{ inputs.test-duration }} validation-results
+
+      - name: Upload validation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logging-validation-${{ inputs.log-level }}-${{ github.run_number }}
+          path: validation-results/
+          retention-days: 14
+
+      - name: Display results summary
+        if: always()
+        run: |
+          echo "## Logging Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Log Level:** ${{ inputs.log-level }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Duration:** ${{ inputs.test-duration }}s" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.analyze.outputs.validation_status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Counts:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Debug messages: ${{ steps.analyze.outputs.debug_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Info messages: ${{ steps.analyze.outputs.info_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "- JSON events: ${{ steps.analyze.outputs.event_count }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "validation-results/analysis-report.md" ]; then
+            echo "## Detailed Analysis" >> $GITHUB_STEP_SUMMARY
+            cat validation-results/analysis-report.md >> $GITHUB_STEP_SUMMARY
+          fi

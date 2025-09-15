@@ -1,0 +1,137 @@
+---
+name: Test Log Upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      log-level:
+        description: 'Log level for testing'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+        - debug
+        - info
+        - warning
+        - error
+      test-duration:
+        description: 'Test duration in seconds'
+        required: false
+        default: '30'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test-log-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install KinD
+        run: |
+          go install sigs.k8s.io/kind@v0.22.0
+          kind create cluster
+          kubectl cluster-info
+
+      - name: Build workload monitor
+        run: |
+          go mod tidy
+          cd examples && go build -o workload-monitor workload-monitor.go
+
+      - name: Run workload monitor and analyze results
+        id: analyze
+        run: |
+          # Use the GitHub Actions analysis script
+          ./.github/scripts/analyze-test-logs.sh ${{ inputs.log-level }} ${{ inputs.test-duration }} test-logs-${{ inputs.log-level }}
+
+      - name: Upload test logs with analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ inputs.log-level }}-${{ github.run_number }}
+          path: test-logs-${{ inputs.log-level }}/
+          retention-days: 30
+
+      - name: Run unit tests and upload logs
+        run: |
+          mkdir -p unit-test-logs
+          cd tests/unit && go test -v 2>&1 | tee ../../unit-test-logs/unit-test-output.log || true
+
+      - name: Upload unit test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-logs-${{ github.run_number }}
+          path: unit-test-logs/
+          retention-days: 30
+
+      - name: Create test summary
+        if: always()
+        run: |
+          mkdir -p test-summary
+          
+          # Get validation status from the analysis script output
+          VALIDATION_STATUS=$(grep "validation_status" test-logs-${{ inputs.log-level }}/github-actions-analysis.json | cut -d'"' -f4 2>/dev/null || echo "UNKNOWN")
+          
+          cat > test-summary/workflow-summary.md << EOF
+          # Test Log Upload Summary
+          
+          **Workflow Run:** ${{ github.run_number }}  
+          **Triggered by:** ${{ github.actor }}  
+          **Commit:** ${{ github.sha }}  
+          **Branch:** ${{ github.ref_name }}  
+          **Log Level:** ${{ inputs.log-level }}  
+          **Test Duration:** ${{ inputs.test-duration }}s  
+          **Validation Status:** $VALIDATION_STATUS  
+          **Generated:** $(date)
+          
+          ## Artifacts Generated
+          
+          1. **test-logs-${{ inputs.log-level }}-${{ github.run_number }}** - Workload monitor logs with comprehensive analysis
+             - Raw logs and JSON events
+             - \`github-actions-analysis.json\` - Machine-readable analysis
+             - \`analysis-report.md\` - Human-readable analysis report
+          2. **unit-test-logs-${{ github.run_number }}** - Unit test execution logs
+          3. **test-summary-${{ github.run_number }}** - This summary report
+          
+          ## Analysis Features
+          
+          The analysis script (\`.github/scripts/analyze-test-logs.sh\`) provides:
+          - **Log Level Validation**: Verifies debug messages show as \`D\` prefix, info as \`I\`
+          - **Event Analysis**: Counts and categorizes JSON events by type
+          - **GitHub Actions Integration**: Sets outputs and provides structured reports
+          - **Validation Results**: PASS/FAIL status for logging behavior
+          
+          ## Log Level Verification
+          
+          The test verifies that:
+          - Debug messages show as \`D\` prefix when log-level=debug
+          - Info messages show as \`I\` prefix 
+          - When log-level=info, debug messages are filtered out (0 \`D\` messages)
+          - When log-level=debug, both debug and info messages are shown
+          
+          **Current Status:** $VALIDATION_STATUS
+          
+          Check the uploaded artifacts for detailed analysis reports.
+          EOF
+          
+          # Copy the analysis report if it exists
+          if [ -f "test-logs-${{ inputs.log-level }}/analysis-report.md" ]; then
+            cp "test-logs-${{ inputs.log-level }}/analysis-report.md" test-summary/
+          fi
+
+      - name: Upload test summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-summary-${{ github.run_number }}
+          path: test-summary/
+          retention-days: 30

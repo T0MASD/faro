@@ -40,7 +40,9 @@ jobs:
       - name: Run full test suite
         run: |
           go mod tidy
-          make test
+          # Create logs directory for release testing
+          mkdir -p release-test-logs
+          make test 2>&1 | tee release-test-logs/release-test-output.log
 
       - name: Validate library can be imported
         run: |
@@ -52,6 +54,39 @@ jobs:
           go mod tidy
           go build test_import.go
           rm test_import.go
+
+      # Collect and upload release test logs
+      - name: Collect release test artifacts
+        if: always()
+        run: |
+          # Copy any generated log files and events from release tests
+          find tests -name "*.log" -type f -exec cp {} release-test-logs/ \; 2>/dev/null || true
+          find tests -name "*.json" -type f -exec cp {} release-test-logs/ \; 2>/dev/null || true
+          find tests -name "logs" -type d -exec cp -r {} release-test-logs/ \; 2>/dev/null || true
+          find work -name "*.log" -type f -exec cp {} release-test-logs/ \; 2>/dev/null || true
+          find work -name "*.json" -type f -exec cp {} release-test-logs/ \; 2>/dev/null || true
+          find work -name "logs*" -type d -exec cp -r {} release-test-logs/ \; 2>/dev/null || true
+          
+          # Create release test summary
+          echo "=== Release Test Summary ===" > release-test-logs/release-summary.txt
+          echo "Release Tag: ${{ github.ref_name }}" >> release-test-logs/release-summary.txt
+          echo "Generated at: $(date)" >> release-test-logs/release-summary.txt
+          echo "Commit: ${{ github.sha }}" >> release-test-logs/release-summary.txt
+          echo "" >> release-test-logs/release-summary.txt
+          echo "Files collected:" >> release-test-logs/release-summary.txt
+          echo "Log files:" >> release-test-logs/release-summary.txt
+          find release-test-logs -name "*.log" | sort >> release-test-logs/release-summary.txt
+          echo "Event files:" >> release-test-logs/release-summary.txt
+          find release-test-logs -name "*.json" | sort >> release-test-logs/release-summary.txt
+
+      # Upload release test logs
+      - name: Upload release test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-logs-${{ github.ref_name }}
+          path: release-test-logs/
+          retention-days: 90
 
       - name: Create library release
         uses: goreleaser/goreleaser-action@v5

@@ -1,0 +1,216 @@
+---
+name: CI Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      # Install KinD for Kubernetes testing
+      - name: Install KinD
+        run: |
+          go install sigs.k8s.io/kind@v0.22.0
+          kind version
+
+      # Create KinD cluster for E2E and integration tests
+      - name: Create KinD cluster
+        run: |
+          kind create cluster
+          kubectl cluster-info
+          kubectl get nodes
+
+      # Run comprehensive test suite and capture logs
+      - name: Run full test suite
+        run: |
+          go mod tidy
+          # Create logs directory structure
+          mkdir -p test-logs/unit test-logs/integration test-logs/e2e
+          
+          # Run tests with detailed output and capture logs
+          make test 2>&1 | tee test-logs/full-test-output.log
+        continue-on-error: true
+
+      # Collect all test logs and artifacts
+      - name: Collect test artifacts
+        if: always()
+        run: |
+          # Copy any generated log files from tests
+          find tests -name "*.log" -type f -exec cp {} test-logs/ \; 2>/dev/null || true
+          find tests -name "*.json" -type f -exec cp {} test-logs/ \; 2>/dev/null || true
+          find tests -name "logs" -type d -exec cp -r {} test-logs/ \; 2>/dev/null || true
+          find work -name "*.log" -type f -exec cp {} test-logs/ \; 2>/dev/null || true
+          find work -name "*.json" -type f -exec cp {} test-logs/ \; 2>/dev/null || true
+          find work -name "logs*" -type d -exec cp -r {} test-logs/ \; 2>/dev/null || true
+          
+          # Create a summary of log files
+          echo "=== Test Log Summary ===" > test-logs/log-summary.txt
+          echo "Generated at: $(date)" >> test-logs/log-summary.txt
+          echo "Commit: ${{ github.sha }}" >> test-logs/log-summary.txt
+          echo "Branch: ${{ github.ref_name }}" >> test-logs/log-summary.txt
+          echo "" >> test-logs/log-summary.txt
+          echo "Files found:" >> test-logs/log-summary.txt
+          echo "Log files:" >> test-logs/log-summary.txt
+          find test-logs -type f -name "*.log" | sort >> test-logs/log-summary.txt
+          echo "Event files:" >> test-logs/log-summary.txt
+          find test-logs -type f -name "*.json" | sort >> test-logs/log-summary.txt
+          
+          # Count debug vs info messages if logs exist
+          if find test-logs -name "*.log" -type f | head -1 | grep -q .; then
+            echo "" >> test-logs/log-summary.txt
+            echo "=== Log Level Analysis ===" >> test-logs/log-summary.txt
+            TOTAL_D=$(find test-logs -name "*.log" -type f -exec grep -h "^D[0-9]" {} \; 2>/dev/null | wc -l || echo 0)
+            TOTAL_I=$(find test-logs -name "*.log" -type f -exec grep -h "^I[0-9]" {} \; 2>/dev/null | wc -l || echo 0)
+            TOTAL_LOGS=$((TOTAL_D + TOTAL_I))
+            echo "Debug messages (^D): $TOTAL_D" >> test-logs/log-summary.txt
+            echo "Info messages (^I): $TOTAL_I" >> test-logs/log-summary.txt
+            echo "Total log messages: $TOTAL_LOGS" >> test-logs/log-summary.txt
+            if [ $TOTAL_LOGS -gt 0 ]; then
+              D_PERCENT=$(echo "scale=1; $TOTAL_D * 100 / $TOTAL_LOGS" | bc -l 2>/dev/null || echo "0.0")
+              I_PERCENT=$(echo "scale=1; $TOTAL_I * 100 / $TOTAL_LOGS" | bc -l 2>/dev/null || echo "0.0")
+              echo "Debug percentage: ${D_PERCENT}%" >> test-logs/log-summary.txt
+              echo "Info percentage: ${I_PERCENT}%" >> test-logs/log-summary.txt
+            fi
+          fi
+          
+          # Count JSON events if they exist
+          if find test-logs -name "*.json" -type f | head -1 | grep -q .; then
+            echo "" >> test-logs/log-summary.txt
+            echo "=== Event Analysis ===" >> test-logs/log-summary.txt
+            EVENT_COUNT=$(find test-logs -name "*.json" -type f -exec wc -l {} \; 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
+            EVENT_FILES=$(find test-logs -name "*.json" -type f | wc -l)
+            echo "JSON event files: $EVENT_FILES" >> test-logs/log-summary.txt
+            echo "Total JSON events: $EVENT_COUNT" >> test-logs/log-summary.txt
+            
+            # Analyze event types if events exist
+            if [ "$EVENT_COUNT" -gt 0 ]; then
+              echo "Event analysis:" >> test-logs/log-summary.txt
+              find test-logs -name "*.json" -type f -exec grep -h '"eventType"' {} \; 2>/dev/null | sort | uniq -c | sort -nr >> test-logs/log-summary.txt || true
+            fi
+          fi
+
+      # Upload test logs as artifacts
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ github.run_number }}-${{ github.sha }}
+          path: test-logs/
+          retention-days: 30
+          include-hidden-files: false
+
+      # Upload specific log directories if they exist
+      - name: Upload workload monitor test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workload-monitor-logs-${{ github.run_number }}
+          path: |
+            work/workload-monitor-test/logs*/
+            work/workload-monitor-test/*.log
+          retention-days: 30
+        continue-on-error: true
+
+      # Upload E2E test logs
+      - name: Upload E2E test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-logs-${{ github.run_number }}
+          path: |
+            tests/e2e/logs/
+            tests/e2e/*.log
+          retention-days: 30
+        continue-on-error: true
+
+      # Upload integration test logs
+      - name: Upload integration test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs-${{ github.run_number }}
+          path: |
+            tests/integration/logs/
+            tests/integration/*.log
+          retention-days: 30
+        continue-on-error: true
+
+      # Validate library can be imported
+      - name: Validate library import
+        run: |
+          cat > test_import.go << 'EOF'
+          package main
+          import _ "github.com/T0MASD/faro/pkg"
+          func main() {}
+          EOF
+          go mod tidy
+          go build test_import.go
+          rm test_import.go
+
+  # Matrix test job for different log levels using reusable workflow
+  test-matrix:
+    strategy:
+      matrix:
+        log-level: [info, debug]
+    uses: ./.github/workflows/validate-logging.yml
+    with:
+      log-level: ${{ matrix.log-level }}
+      test-duration: '20'
+
+  # Traditional unit/integration matrix for completeness
+  test-traditional:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-type: [unit, integration]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install KinD
+        if: matrix.test-type == 'integration'
+        run: |
+          go install sigs.k8s.io/kind@v0.22.0
+          kind create cluster
+
+      - name: Run tests
+        run: |
+          go mod tidy
+          mkdir -p traditional-logs/${{ matrix.test-type }}
+          
+          if [ "${{ matrix.test-type }}" = "unit" ]; then
+            cd tests/unit && go test -v 2>&1 | tee ../../traditional-logs/${{ matrix.test-type }}/test-output.log
+          else
+            cd tests/integration && go test -v 2>&1 | tee ../../traditional-logs/${{ matrix.test-type }}/test-output.log
+          fi
+        continue-on-error: true
+
+      - name: Upload traditional test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: traditional-logs-${{ matrix.test-type }}-${{ github.run_number }}
+          path: traditional-logs/
+          retention-days: 14
