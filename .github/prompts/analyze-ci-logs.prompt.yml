@@ -1,0 +1,118 @@
+name: Faro CI Log Analysis
+description: Analyze GitHub Actions CI logs and JSON events for the Faro Kubernetes monitoring system
+model: openai/gpt-4o
+modelParameters:
+  temperature: 0.1
+messages:
+  - role: system
+    content: |
+      You are analyzing CI logs and JSON events from the Faro Kubernetes monitoring system. 
+      Faro watches Kubernetes resources and exports events in both human-readable logs and structured JSON format.
+      
+      You will be provided with log files and JSON event files from GitHub Actions CI runs.
+      Your task is to analyze these files for consistency, health, and proper functionality.
+  - role: user
+    content: |
+      Please analyze the provided Faro CI logs and JSON events. Focus on the following areas:
+
+      ## 1. Event Consistency Verification
+      - Compare each "CONFIG [EVENT_TYPE]" log entry with its corresponding JSON event
+      - Verify data consistency between formats:
+        - `CONFIG [ADDED]` ↔ `"eventType":"ADDED"`
+        - `v1/configmaps namespace/name` ↔ `"gvr":"v1/configmaps","namespace":"...","name":"..."`
+        - `(UID: xxx)` ↔ `"uid":"xxx"`
+      - Report any missing events or data mismatches
+      - Count total events in logs vs JSON files
+
+      ## 2. Test Execution Health
+      - Identify test outcomes (PASS/FAIL) for each test suite
+      - Report test execution times and performance metrics
+      - Note any error patterns, panics, or unexpected failures
+      - Check for proper test cleanup and resource deletion
+
+      ## 3. System Behavior Validation
+      - Verify API discovery process (should find ~52 Kubernetes resources)
+      - Check informer startup sequence and CRD reconciliation
+      - Validate multi-layered informer architecture initialization
+      - Confirm proper shutdown sequences
+
+      ## 4. JSON Export Functionality
+      - Verify JSON files are created with correct naming pattern: `events-YYYYMMDD-HHMMSS.json`
+      - Check that only allowed components (`controller`, `cluster-handler`) generate JSON events
+      - Validate JSON structure and required fields (timestamp, eventType, gvr, namespace, name, uid)
+      - Ensure invalid JSON content is filtered out
+
+      ## 5. Workload Controller Pattern Analysis
+      - For integration tests, verify workload ID annotations are present
+      - Check namespace creation and job lifecycle management
+      - Validate server-side filtering effectiveness
+      - Confirm proper event handler callbacks
+
+      ## 6. Log Prefix Verification
+      - Confirm log entries use correct prefixes:
+        - Debug logs: `D0915 HH:MM:SS.microseconds PID logger.go:133]`
+        - Info logs: `I0915 HH:MM:SS.microseconds PID logger.go:147]`
+        - Warning logs: `W0915 HH:MM:SS.microseconds PID logger.go:154]`
+        - Error logs: `E0915 HH:MM:SS.microseconds PID logger.go:161]`
+
+      ## Expected Patterns:
+
+      **Successful Event Processing Sequence:**
+      ```
+      1. D0915 ... [controller] Queueing [EVENT_TYPE] event for [GVR] [NAMESPACE]/[NAME]
+      2. I0915 ... [controller] CONFIG [EVENT_TYPE] [GVR] [NAMESPACE]/[NAME] (UID: [UID], pattern: [GVR])
+      3. D0915 ... [controller] {"timestamp":"...","eventType":"[EVENT_TYPE]","gvr":"[GVR]",...}
+      ```
+
+      **Successful Test Completion:**
+      ```
+      - "✅ INTEGRATION TEST COMPLETED SUCCESSFULLY!"
+      - "✅ Phase X - [Description]: SUCCESS"
+      - Proper resource cleanup messages
+      ```
+
+      ## Output Format:
+
+      Please provide a structured report with:
+
+      ### 📊 Executive Summary
+      - Overall test health status
+      - Total events processed and consistency rate
+      - Key findings and any critical issues
+
+      ### 🔍 Detailed Analysis
+      - Event consistency results with specific counts
+      - Test execution summary with timings
+      - System behavior validation results
+      - JSON export functionality assessment
+
+      ### ⚠️ Issues & Anomalies
+      - Any missing or mismatched events
+      - Performance concerns or unusual patterns
+      - Failed tests or error conditions
+      - Recommendations for investigation
+
+      ### ✅ Validation Results
+      - Confirmation of expected behaviors
+      - Successful test patterns observed
+      - System health indicators
+
+      Focus on actionable insights and highlight any deviations from expected Faro behavior.
+
+      Files to analyze: {{files}}
+testData:
+  - files: |
+      ci/tests/e2e/logs/test1/logs/faro-20250915-194223.log
+      ci/tests/e2e/logs/test1/logs/events-20250915-194223.json
+    expected: |
+      Should identify CONFIG log entries and matching JSON events with consistent data
+evaluators:
+  - name: Report should contain Executive Summary
+    string:
+      contains: "Executive Summary"
+  - name: Report should analyze event consistency
+    string:
+      contains: "Event consistency"
+  - name: Report should identify test outcomes
+    string:
+      contains: "test"

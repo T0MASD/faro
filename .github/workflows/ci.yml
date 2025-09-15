@@ -1,16 +1,17 @@
 ---
-name: Library Release
+name: CI Tests
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,28 +37,29 @@ jobs:
           kubectl cluster-info
           kubectl get nodes
 
-      # Run comprehensive test suite (unit + e2e + integration)
+      # Run comprehensive test suite
       - name: Run full test suite
         run: |
           go mod tidy
           make test
 
-      # Collect and upload release test logs and events
-      - name: Upload release test logs and events
+      # Collect and upload test logs and events
+      - name: Upload test logs and events
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: release-test-logs-${{ github.ref_name }}
+          name: test-logs-${{ github.run_number }}
           path: |
             work/
             tests/**/*.log
             tests/**/*.json
             **/*.log
             **/*.json
-          retention-days: 90
+          retention-days: 30
         continue-on-error: true
 
-      - name: Validate library can be imported
+      # Validate library can be imported
+      - name: Validate library import
         run: |
           cat > test_import.go << 'EOF'
           package main
@@ -67,13 +69,3 @@ jobs:
           go mod tidy
           go build test_import.go
           rm test_import.go
-
-
-      - name: Create library release
-        uses: goreleaser/goreleaser-action@v5
-        with:
-          distribution: goreleaser
-          version: latest
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

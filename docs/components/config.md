@@ -16,8 +16,8 @@ type Config struct {
 type NormalizedConfig struct {
     GVR               string          // Group/Version/Resource
     ResourceDetails   ResourceDetails // Filtering criteria (SERVER-SIDE only)
-    NamespacePatterns []string        // Literal namespace names only (for server-side filtering)
-    NamePattern       string          // Exact name for resource name filtering (server-side)
+    NamespaceNames []string        // Literal namespace names only (for server-side filtering)
+    NameSelector       string          // Exact name for resource name filtering (server-side)
     LabelSelector     string          // Kubernetes label selector for SERVER-SIDE filtering only
 }
 ```
@@ -27,10 +27,10 @@ type NormalizedConfig struct {
 ### Namespace-Centric Format
 ```yaml
 namespaces:
-  - name_pattern: "faro-test-1"  # Literal namespace name for server-side filtering
+  - name_selector: "faro-test-1"  # Literal namespace name for server-side filtering
     resources:
       "v1/configmaps":
-        name_pattern: "test-config-1"  # Exact name for server-side field selector
+        name_selector: "test-config-1"  # Exact name for server-side field selector
         label_selector: "app=faro-test"  # Server-side label filtering
 ```
 
@@ -39,8 +39,8 @@ namespaces:
 resources:
   - gvr: "v1/configmaps"
     scope: "Namespaced"
-    namespace_patterns: ["faro-test-2"]  # Literal namespace names only
-    name_pattern: "test-config-1"        # Exact name for server-side filtering
+    namespace_names: ["faro-test-2"]  # Literal namespace names only
+    name_selector: "test-config-1"        # Exact name for server-side filtering
     label_selector: "app=faro-test"      # Server-side label filtering
 ```
 
@@ -68,7 +68,7 @@ graph TD
     
     subgraph "Resource Processing"
         D --> D1[For each resource]
-        D1 --> D2[Determine namespace patterns]
+        D1 --> D2[Determine namespace selectors]
         D2 --> D3[Create NormalizedConfig entry]
     end
 ```
@@ -111,7 +111,7 @@ classDiagram
     }
     
     class NamespaceConfig {
-        +string NamePattern
+        +string NameSelector
         +map[string]ResourceDetails Resources
         +GetMatchingResources() []string
     }
@@ -119,8 +119,8 @@ classDiagram
     class ResourceConfig {
         +string GVR
         +Scope Scope
-        +[]string NamespacePatterns
-        +string NamePattern
+        +[]string NamespaceNames
+        +string NameSelector
         +string LabelSelector
     }
     
@@ -131,8 +131,8 @@ classDiagram
     class NormalizedConfig {
         +string GVR
         +ResourceDetails ResourceDetails
-        +[]string NamespacePatterns
-        +string NamePattern
+        +[]string NamespaceNames
+        +string NameSelector
         +string LabelSelector
     }
     
@@ -190,10 +190,10 @@ Uses standard Kubernetes label selector syntax for server-side filtering:
 ```yaml
 # Namespace-centric format
 namespaces:
-  - name_pattern: "faro-test-1"  # Literal namespace name
+  - name_selector: "faro-test-1"  # Literal namespace name
     resources:
       "v1/configmaps":
-        name_pattern: "test-config-1"        # Exact name for field selector
+        name_selector: "test-config-1"        # Exact name for field selector
         label_selector: "app=faro-test"      # Server-side label filtering
 ```
 
@@ -223,8 +223,8 @@ For exact resource name matches, Faro uses Kubernetes field selectors:
 resources:
   - gvr: "v1/configmaps"
     scope: "Namespaced"
-    namespace_patterns: ["faro-test-2"]  # Literal namespace names
-    name_pattern: "test-config-1"        # Creates metadata.name=test-config-1 field selector
+    namespace_names: ["faro-test-2"]  # Literal namespace names
+    name_selector: "test-config-1"        # Creates metadata.name=test-config-1 field selector
     label_selector: "app=faro-test"      # Server-side label filtering
 ```
 
@@ -261,7 +261,7 @@ resources:
 - **Invalid Label Selector**: Kubernetes API validation errors
 - **Invalid Field Selector**: Field selector syntax validation
 - **Graceful Degradation**: Skip invalid selectors, continue with valid ones
-- **Logging**: Warning messages for invalid selector patterns
+- **Logging**: Warning messages for invalid selector selectors
 
 ## Performance Characteristics
 

@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: faro-test-1
+  name: faro-test-7
   labels:
     test-label: "faro-namespace"
     workload-type: "e2e-test"
@@ -10,7 +10,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: test-config-1
-  namespace: faro-test-1
+  namespace: faro-test-7
   labels:
     app: "faro-test"
 data:
@@ -21,7 +21,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: test-config-2
-  namespace: faro-test-1
+  namespace: faro-test-7
   labels:
     app: "faro-test"
 data:

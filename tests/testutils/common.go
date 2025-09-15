@@ -22,13 +22,14 @@ import (
 // FaroJSONEvent represents the structure of JSON events exported by Faro
 // This is the canonical definition used across all test suites
 type FaroJSONEvent struct {
-	Timestamp string            `json:"timestamp"`
-	EventType string            `json:"eventType"`
-	GVR       string            `json:"gvr"`
-	Namespace string            `json:"namespace,omitempty"`
-	Name      string            `json:"name"`
-	UID       string            `json:"uid,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
+	Timestamp   string            `json:"timestamp"`
+	EventType   string            `json:"eventType"`
+	GVR         string            `json:"gvr"`
+	Namespace   string            `json:"namespace,omitempty"`
+	Name        string            `json:"name"`
+	UID         string            `json:"uid,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 // CreateKubernetesClients creates both standard and dynamic Kubernetes clients

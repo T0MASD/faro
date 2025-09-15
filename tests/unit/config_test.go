@@ -60,8 +60,8 @@ func TestConfigNormalization(t *testing.T) {
 			{
 				GVR:               "v1/configmaps",
 				Scope:             faro.NamespaceScope,
-				NamespacePatterns: []string{"test-namespace"},
-				NamePattern:       "test-config",
+		NamespaceNames: []string{"test-namespace"},
+		NameSelector:   "test-config",
 				LabelSelector:     "app=test",
 			},
 		},
@@ -82,8 +82,8 @@ func TestConfigNormalization(t *testing.T) {
 		t.Errorf("expected 1 config for v1/configmaps, got %d", len(configs))
 	} else {
 		config := configs[0]
-		if config.NamePattern != "test-config" {
-			t.Errorf("expected NamePattern 'test-config', got '%s'", config.NamePattern)
+	if config.NameSelector != "test-config" {
+		t.Errorf("expected NameSelector 'test-config', got '%s'", config.NameSelector)
 		}
 		if config.LabelSelector != "app=test" {
 			t.Errorf("expected LabelSelector 'app=test', got '%s'", config.LabelSelector)

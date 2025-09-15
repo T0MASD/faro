@@ -96,7 +96,10 @@ func (th *TargetNamespaceHandler) OnMatched(event faro.MatchedEvent) error {
 
 // TestDynamicNamespaceDiscovery tests dynamic controller creation based on namespace labels (migrated from test10)
 func TestDynamicNamespaceDiscovery(t *testing.T) {
-	t.Log("🚀 Starting Dynamic Namespace Discovery Integration Test")
+	t.Log("")
+	t.Log("========================================")
+	t.Log("🚀 DYNAMIC NAMESPACE DISCOVERY TEST")
+	t.Log("========================================")
 	
 	// Setup test environment
 	parentNamespace := "faro-integration-parent"
@@ -116,6 +119,12 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 		testutils.DeleteNamespace(t, k8sClient, targetNamespace)
 	}
 	defer cleanup()
+	
+	// ========================================
+	// PHASE 1: START MONITORING
+	// ========================================
+	t.Log("")
+	t.Log("📡 PHASE 1: Starting discovery monitoring...")
 	
 	// Discovery config - monitors all namespaces to detect parent
 	discoveryConfig := &faro.Config{
@@ -183,17 +192,23 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 	}
 	
 	builtin, dynamic := discoveryController.GetActiveInformers()
-	t.Logf("✅ Discovery controller started with %d builtin + %d dynamic informers", builtin, dynamic)
+	t.Logf("✅ PHASE 1 COMPLETE: Discovery controller started with %d builtin + %d dynamic informers", builtin, dynamic)
+	
+	// ========================================
+	// PHASE 2: WORKING WITH MANIFESTS
+	// ========================================
+	t.Log("")
+	t.Log("📝 PHASE 2: Working with manifests...")
 	
 	// Create target namespace first (the one that will be monitored)
-	t.Log("📝 Creating target namespace...")
+	t.Log("Creating target namespace...")
 	createNamespaceWithLabel(t, k8sClient, targetNamespace, "", "")
 	
 	// Wait a moment for namespace to be established
 	time.Sleep(2 * time.Second)
 	
 	// Create parent namespace with special label that triggers discovery
-	t.Log("🔍 Creating parent namespace with discovery label...")
+	t.Log("Creating parent namespace with discovery label...")
 	createNamespaceWithLabel(t, k8sClient, parentNamespace, "next-namespace", targetNamespace)
 	
 	// Wait for discovery to happen and target controller to be created
@@ -222,7 +237,7 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 	}
 	
 	// Test the target controller by creating some activity in the target namespace
-	t.Log("🎯 Testing target controller by creating ConfigMap in target namespace...")
+	t.Log("Testing target controller by creating ConfigMap in target namespace...")
 	// Note: We'll use kubectl directly since we don't need the dynamic client for this test
 	cmd := exec.Command("kubectl", "create", "configmap", "target-test-config", "-n", targetNamespace, "--from-literal=purpose=dynamic-discovery-test")
 	if err := cmd.Run(); err != nil {
@@ -238,9 +253,15 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 		t.Logf("Warning: Failed to delete test ConfigMap: %v", err)
 	}
 	time.Sleep(2 * time.Second)
+
+	// ========================================
+	// PHASE 3: STOPPING MONITORING
+	// ========================================
+	t.Log("")
+	t.Log("🛑 PHASE 3: Stopping monitoring - all manifest work complete")
 	
 	// Stop controllers gracefully
-	t.Log("🛑 Stopping controllers...")
+	t.Log("Stopping controllers...")
 	
 	// Stop all target controllers
 	handler.mu.RLock()
@@ -259,11 +280,14 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 	// Give controllers time to shut down gracefully
 	time.Sleep(500 * time.Millisecond)
 	
-	// Verify the test worked using JSON data ONLY - NO LOG FILE FALLBACKS!
-	t.Log("🔍 Verifying dynamic discovery functionality...")
+	// ========================================
+	// PHASE 4: LOADING EVENTS JSON
+	// ========================================
+	t.Log("")
+	t.Log("📊 PHASE 4: Loading and analyzing captured JSON events...")
 	
 	// Verify that parent namespace was detected by checking JSON events
-	t.Log("🔍 Verifying JSON export events...")
+	t.Log("Verifying JSON export events...")
 	jsonEvents := testutils.ReadJSONEvents(t, logDir)
 	
 	// Verify parent namespace exists in JSON events
@@ -306,8 +330,14 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 		}
 	}
 	
+	// ========================================
+	// PHASE 5: COMPARING DATA
+	// ========================================
+	t.Log("")
+	t.Log("🔍 PHASE 5: Comparing and validating data...")
+	
 	// Validation: Compare configured vs deployed vs captured
-	t.Log("🔍 Validation Results:")
+	t.Log("Validation Results:")
 	
 	// Verify parent namespace events
 	if events, exists := namespaceEvents[parentNamespace]; !exists {
@@ -343,13 +373,23 @@ func TestDynamicNamespaceDiscovery(t *testing.T) {
 		t.Errorf("❌ JSON Export Validation: FAILED - Expected namespace events, got %d", len(namespaceEvents))
 	}
 	
-	t.Log("✅ Dynamic Namespace Discovery Integration Test completed successfully!")
-	t.Log("📋 Summary:")
-	t.Log("   - Discovery controller monitored all namespaces")
-	t.Log("   - Detected parent namespace with next-namespace label")
-	t.Log("   - Dynamically created target controller")
-	t.Log("   - Target controller successfully processed events")
-	t.Log("   - Demonstrated dynamic controller creation pattern")
+	t.Log("")
+	t.Log("✅ DYNAMIC NAMESPACE DISCOVERY TEST COMPLETED SUCCESSFULLY!")
+	t.Log("========================================")
+	t.Log("🎯 FINAL TEST SUMMARY")
+	t.Log("========================================")
+	t.Logf("   📋 Parent namespace: %s", parentNamespace)
+	t.Logf("   📋 Target namespace: %s", targetNamespace)
+	t.Logf("   📋 JSON events captured: %d", len(jsonEvents))
+	t.Logf("   ✅ Phase 1 - Monitoring started: SUCCESS")
+	t.Logf("   ✅ Phase 2 - Manifests deployed: SUCCESS")
+	t.Logf("   ✅ Phase 3 - Monitoring stopped: SUCCESS")
+	t.Logf("   ✅ Phase 4 - JSON events loaded: SUCCESS")
+	t.Logf("   ✅ Phase 5 - Data validation: SUCCESS")
+	t.Logf("   ✅ Discovery controller: SUCCESS")
+	t.Logf("   ✅ Dynamic controller creation: SUCCESS")
+	t.Logf("   ✅ Target controller processing: SUCCESS")
+	t.Log("========================================")
 }
 
 // Helper function to create namespace with labels

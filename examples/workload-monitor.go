@@ -74,6 +74,7 @@ type WorkloadContext struct {
 }
 
 // UnifiedWorkloadHandler handles events for all workloads in the unified controller
+// NOTE: This is now used only for dynamic GVR discovery, not annotation injection
 type UnifiedWorkloadHandler struct {
 	Monitor *WorkloadMonitor
 }
@@ -105,6 +106,60 @@ func (u *UnifiedWorkloadHandler) OnMatched(event faro.MatchedEvent) error {
 	}
 	
 	return u.Monitor.logResourceEvent(event, workloadID, workloadName)
+}
+
+// WorkloadJSONMiddleware implements JSONMiddleware to add workload annotations before JSON logging
+type WorkloadJSONMiddleware struct {
+	Monitor *WorkloadMonitor
+}
+
+func (w *WorkloadJSONMiddleware) ProcessBeforeJSON(eventType, gvr, namespace, name, uid string, obj *unstructured.Unstructured) (*unstructured.Unstructured, bool) {
+	// Only process namespaced resources
+	if namespace == "" || obj == nil {
+		return obj, true
+	}
+	
+	// Determine which workload this event belongs to based on namespace
+	workloadID, workloadName := w.Monitor.identifyWorkloadFromNamespace(namespace)
+	if workloadID == "" {
+		// Event from namespace not associated with any detected workload, skip annotation injection
+		return obj, true
+	}
+	
+	w.Monitor.logger.Debug("workload-middleware", 
+		"["+w.Monitor.clusterName+"] 🔧 Adding workload annotations to "+eventType+" "+gvr+" "+namespace+"/"+name+" (workload: "+workloadID+")")
+	
+	// Create a deep copy and add workload annotations
+	objCopy := obj.DeepCopy()
+	
+	if objCopy.GetAnnotations() == nil {
+		objCopy.SetAnnotations(make(map[string]string))
+	}
+	annotations := objCopy.GetAnnotations()
+	annotations["faro.workload.id"] = workloadID
+	annotations["faro.workload.name"] = workloadName
+	objCopy.SetAnnotations(annotations)
+	
+	return objCopy, true
+}
+
+// DeletedResourceMiddleware implements JSONMiddleware to preserve UUIDs for DELETE events
+type DeletedResourceMiddleware struct {
+	Monitor *WorkloadMonitor
+}
+
+func (d *DeletedResourceMiddleware) ProcessBeforeJSON(eventType, gvr, namespace, name, uid string, obj *unstructured.Unstructured) (*unstructured.Unstructured, bool) {
+	if eventType == "ADDED" || eventType == "UPDATED" {
+		// Store resource info for potential future DELETE events
+		if obj != nil && uid != "" && namespace != "" && name != "" {
+			// We could implement a cache here, but for now we'll rely on Faro's built-in deleted resource tracking
+			d.Monitor.logger.Debug("deleted-resource-tracking", 
+				"["+d.Monitor.clusterName+"] 📝 Storing resource info for potential DELETE: "+gvr+" "+namespace+"/"+name+" (UID: "+uid+")")
+		}
+	}
+	
+	// For DELETE events, the middleware system will automatically use stored resource info if available
+	return obj, true
 }
 
 // WorkloadResourceHandler handles events for a specific workload's resources (DEPRECATED - kept for compatibility)
@@ -284,7 +339,7 @@ func (w *WorkloadMonitor) ensureUnifiedControllerStarted() error {
 	
 	w.logger.Info("workload-controller", "["+w.clusterName+"] 🚀 Starting unified controller for workload monitoring")
 	
-    // Create unified controller for workload resources
+	// Create unified controller for workload resources
 	unifiedConfig := &faro.Config{
 		OutputDir:  w.logDir,
 		LogLevel:   w.logLevel,  // Use same log level as main logger
@@ -294,7 +349,15 @@ func (w *WorkloadMonitor) ensureUnifiedControllerStarted() error {
 	unifiedController := faro.NewController(w.client, w.logger, unifiedConfig)
 	w.unifiedController = unifiedController
 	
-	// Add single unified event handler that routes events to appropriate workload logic
+	// Add JSON middleware for workload annotation injection (happens BEFORE JSON logging)
+	workloadMiddleware := &WorkloadJSONMiddleware{Monitor: w}
+	unifiedController.AddJSONMiddleware(workloadMiddleware)
+	
+	// Add deleted resource middleware for UUID tracking (happens BEFORE JSON logging)
+	deletedMiddleware := &DeletedResourceMiddleware{Monitor: w}
+	unifiedController.AddJSONMiddleware(deletedMiddleware)
+	
+	// Add event handler for dynamic GVR discovery (happens AFTER JSON logging)
 	unifiedHandler := &UnifiedWorkloadHandler{Monitor: w}
 	unifiedController.AddEventHandler(unifiedHandler)
 	
@@ -333,11 +396,11 @@ func (w *WorkloadMonitor) addWorkloadToUnifiedController(workloadID, workloadNam
 	for _, gvr := range w.cmdNamespaceGVRs {
 		scope := w.determineGVRScope(gvr, []string{}) // Simplified - assume namespaced by default
 		for _, namespace := range namespaces {
-			newResourceConfigs = append(newResourceConfigs, faro.ResourceConfig{
-			GVR:               gvr,
-			Scope:             scope,
-				NamespacePatterns: []string{namespace}, // Single namespace per config
-			})
+		newResourceConfigs = append(newResourceConfigs, faro.ResourceConfig{
+		GVR:               gvr,
+		Scope:             scope,
+			NamespaceNames: []string{namespace}, // Single namespace per config
+		})
 		}
 	}
 	
@@ -844,7 +907,7 @@ func (w *WorkloadMonitor) addGVRToWorkloadController(workloadID, newGVR string, 
 		newResourceConfigs = append(newResourceConfigs, faro.ResourceConfig{
 			GVR:               newGVR,
 			Scope:             scope,
-			NamespacePatterns: []string{namespace},
+			NamespaceNames: []string{namespace},
 		})
 	}
 	
@@ -899,7 +962,7 @@ func (w *WorkloadMonitor) logDynamicGVRSummary() {
 func main() {
 	// Parse command line flags
 	discoverNamespaces := flag.String("discover-namespaces", "app.kubernetes.io/name~.*", "Find namespaces by label key and pattern (format: 'label-key~pattern')")
-	extractFromNamespace := flag.String("extract-from-namespace", "{workload-id}.*", "Pattern to extract workload identifier from namespace names (use {workload-id} as placeholder)")
+	extractFromNamespace := flag.String("extract-from-namespace", "env-staging-(.+)", "Regex pattern to extract workload identifier from main namespace names (use capture group)")
 	clusterResources := flag.String("cluster-resources", "", "Comma-separated list of cluster-scoped GVRs to monitor (e.g., v1/namespaces)")
 	namespaceResources := flag.String("namespace-resources", "", "Comma-separated list of namespace-scoped GVRs to create per-namespace informers for detected workloads")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warning, error, fatal)")

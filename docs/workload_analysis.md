@@ -3,13 +3,13 @@
 ## Step 1: Workload Detection
 
 ### Objective
-Extract unique workloads from production events based on namespace labeling patterns.
+Extract unique workloads from production events based on namespace labeling selectors.
 
 ### Detection Criteria
 - **Source**: `prod_events.json` file
 - **Resource Filter**: `gvr == "v1/namespaces"`
 - **Label Requirement**: `api.openshift.com/name` label must be present
-- **Namespace Pattern**: Extract workload ID from `ocm-staging-{workload_id}` pattern
+- **Namespace Regex**: Extract workload ID from `ocm-staging-{workload_id}` regex
 
 ### Required Output Format
 ```json
@@ -37,7 +37,7 @@ For each workload ID, identify all associated namespaces that belong to that wor
 ### Detection Criteria
 - **Source**: `prod_events.json` file
 - **Resource Filter**: `gvr == "v1/namespaces"`
-- **Pattern Match**: Namespace name contains the workload ID
+- **Regex Match**: Namespace name contains the workload ID
 - **Input**: Workload IDs from Step 1
 
 ### Required Output Format
