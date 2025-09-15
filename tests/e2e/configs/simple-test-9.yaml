@@ -1,13 +1,21 @@
 # Simple E2E Test 9 - Multiple namespaces monitoring
+# NOTE: Fixed regex pattern to use exact names for server-side filtering
 output_dir: "./logs/test9"
 log_level: "debug"
 auto_shutdown_sec: 120
 json_export: true
 
 resources:
+  # Monitor specific namespaces instead of regex pattern
   - gvr: "v1/namespaces"
     scope: "cluster"
-    name_pattern: "faro-multi-.*"
+    name_pattern: "faro-multi-main"
+  - gvr: "v1/namespaces"
+    scope: "cluster"
+    name_pattern: "faro-multi-app"
+  - gvr: "v1/namespaces"
+    scope: "cluster"
+    name_pattern: "faro-multi-db"
   - gvr: "batch/v1/jobs"
     scope: "namespaced"
     namespace_patterns:

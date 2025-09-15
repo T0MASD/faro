@@ -98,6 +98,23 @@ func (u *UnifiedWorkloadHandler) OnMatched(event faro.MatchedEvent) error {
 		return nil
 	}
 	
+	// RACE CONDITION FIX: Create a deep copy before modifying annotations
+	// This prevents concurrent modification of the shared object
+	objCopy := event.Object.DeepCopy()
+	
+	// Inject workload ID and workload name into object annotations for Faro JSON logging
+	// This ensures both workload ID and workload name appear in Faro's JSON logs for ANY tracked GVR
+	if objCopy.GetAnnotations() == nil {
+		objCopy.SetAnnotations(make(map[string]string))
+	}
+	annotations := objCopy.GetAnnotations()
+	annotations["faro.workload.id"] = workloadID
+	annotations["faro.workload.name"] = workloadName
+	objCopy.SetAnnotations(annotations)
+	
+	// Update the event object to use our modified copy
+	event.Object = objCopy
+	
 	// Handle dynamic GVR discovery from v1/events
 	if event.GVR == "v1/events" {
 		namespaces := u.Monitor.getWorkloadNamespaces(workloadID)
@@ -899,7 +916,7 @@ func (w *WorkloadMonitor) logDynamicGVRSummary() {
 func main() {
 	// Parse command line flags
 	discoverNamespaces := flag.String("discover-namespaces", "app.kubernetes.io/name~.*", "Find namespaces by label key and pattern (format: 'label-key~pattern')")
-	extractFromNamespace := flag.String("extract-from-namespace", "ocm-staging-(.+)", "Regex pattern to extract workload identifier from namespace names (use capture group)")
+	extractFromNamespace := flag.String("extract-from-namespace", "env-staging-(.+)", "Regex pattern to extract workload identifier from main namespace names (use capture group)")
 	clusterResources := flag.String("cluster-resources", "", "Comma-separated list of cluster-scoped GVRs to monitor (e.g., v1/namespaces)")
 	namespaceResources := flag.String("namespace-resources", "", "Comma-separated list of namespace-scoped GVRs to create per-namespace informers for detected workloads")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warning, error, fatal)")

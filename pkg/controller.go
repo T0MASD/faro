@@ -47,13 +47,14 @@ type MatchedEvent struct {
 
 // JSONEvent represents a structured JSON event for export
 type JSONEvent struct {
-	Timestamp string            `json:"timestamp"`
-	EventType string            `json:"eventType"`
-	GVR       string            `json:"gvr"`
-	Namespace string            `json:"namespace,omitempty"`
-	Name      string            `json:"name"`
-	UID       string            `json:"uid,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
+	Timestamp   string            `json:"timestamp"`
+	EventType   string            `json:"eventType"`
+	GVR         string            `json:"gvr"`
+	Namespace   string            `json:"namespace,omitempty"`
+	Name        string            `json:"name"`
+	UID         string            `json:"uid,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 	
 	// Additional fields for v1/events - dynamic like labels
 	InvolvedObject map[string]interface{} `json:"involvedObject,omitempty"`
@@ -68,26 +69,42 @@ type EventHandler interface {
 }
 
 
+
 // logJSONEvent creates and logs a structured JSON event
 func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured) {
+	var annotations map[string]string
+	var timestamp string
+	var objCopy *unstructured.Unstructured
+	
+	if obj != nil {
+		// RACE CONDITION FIX: Create a deep copy to avoid concurrent map access
+		// The original object might be modified by other goroutines (informers, controllers, etc.)
+		objCopy = obj.DeepCopy()
+		annotations = objCopy.GetAnnotations()
+		timestamp = objCopy.GetCreationTimestamp().UTC().Format(time.RFC3339Nano)
+	} else {
+		timestamp = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	
 	jsonEvent := JSONEvent{
-		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		EventType: eventType,
-		GVR:       gvr,
-		Namespace: namespace,
-		Name:      name,
-		UID:       uid,
-		Labels:    labels,
+		Timestamp:   timestamp,
+		EventType:   eventType,
+		GVR:         gvr,
+		Namespace:   namespace,
+		Name:        name,
+		UID:         uid,
+		Labels:      labels,
+		Annotations: annotations,
 	}
 
 	// Special handling for v1/events to extract involvedObject information
-	if gvr == "v1/events" && obj != nil {
-		if involvedObj, found, _ := unstructured.NestedMap(obj.Object, "involvedObject"); found {
+	if gvr == "v1/events" && objCopy != nil {
+		if involvedObj, found, _ := unstructured.NestedMap(objCopy.Object, "involvedObject"); found {
 			jsonEvent.InvolvedObject = involvedObj
 		}
-		jsonEvent.Reason, _, _ = unstructured.NestedString(obj.Object, "reason")
-		jsonEvent.Message, _, _ = unstructured.NestedString(obj.Object, "message")
-		jsonEvent.Type, _, _ = unstructured.NestedString(obj.Object, "type")
+		jsonEvent.Reason, _, _ = unstructured.NestedString(objCopy.Object, "reason")
+		jsonEvent.Message, _, _ = unstructured.NestedString(objCopy.Object, "message")
+		jsonEvent.Type, _, _ = unstructured.NestedString(objCopy.Object, "type")
 	}
 
 	jsonData, err := json.Marshal(jsonEvent)
@@ -126,7 +143,8 @@ type Controller struct {
 	workers   int // Number of worker goroutines
 
 	// API discovery results
-	discoveredResources map[string]*ResourceInfo // map[GVR] -> ResourceInfo
+	discoveredResources   map[string]*ResourceInfo // map[GVR] -> ResourceInfo
+	discoveredResourcesMu sync.RWMutex             // Protects discoveredResources map
 
 	// Informer lifecycle management - using GVR string as consistent key
 	cancellers      sync.Map // map[string]context.CancelFunc for informer shutdown
@@ -443,7 +461,10 @@ func (c *Controller) discoverAPIResources() error {
 		}
 	}
 
-	c.logger.Info("controller", fmt.Sprintf("Discovery completed: %d resources found", len(c.discoveredResources)))
+	c.discoveredResourcesMu.RLock()
+	resourceCount := len(c.discoveredResources)
+	c.discoveredResourcesMu.RUnlock()
+	c.logger.Info("controller", fmt.Sprintf("Discovery completed: %d resources found", resourceCount))
 	return nil
 }
 
@@ -492,11 +513,13 @@ func (c *Controller) processAPIGroup(group, version string) error {
 		}
 
 		// Avoid overwriting if we already have this exact GVR (from previous version processing)
+		c.discoveredResourcesMu.Lock()
 		if _, exists := c.discoveredResources[gvrKey]; !exists {
 			c.discoveredResources[gvrKey] = resourceInfo
 			c.logger.Debug("controller", fmt.Sprintf("Discovered resource: %s (Kind: %s, Namespaced: %t)",
 				gvrKey, resource.Kind, resource.Namespaced))
 		}
+		c.discoveredResourcesMu.Unlock()
 	}
 
 	return nil
@@ -618,7 +641,10 @@ func (c *Controller) handleCRDAdded(crdUnstructured *unstructured.Unstructured) 
 	gvrString := fmt.Sprintf("%s/%s/%s", group, version, resource)
 
 	// Check if this exact CRD (same group/version/resource) was already discovered during initial API discovery
-	if _, alreadyDiscovered := c.discoveredResources[gvrString]; alreadyDiscovered {
+	c.discoveredResourcesMu.RLock()
+	_, alreadyDiscovered := c.discoveredResources[gvrString]
+	c.discoveredResourcesMu.RUnlock()
+	if alreadyDiscovered {
 		c.logger.Debug("controller", fmt.Sprintf("CRD %s (exact GVR: %s) already discovered during startup, skipping", crd.Name, gvrString))
 		return
 	}
@@ -747,7 +773,9 @@ func (c *Controller) evaluateAndStartCRDInformer(crd *apiextensionsv1.CustomReso
 		Kind:       crd.Spec.Names.Kind,
 		Namespaced: crd.Spec.Scope == apiextensionsv1.NamespaceScoped,
 	}
+	c.discoveredResourcesMu.Lock()
 	c.discoveredResources[gvrString] = resourceInfo
+	c.discoveredResourcesMu.Unlock()
 
 	// Build GVR and scope
 	gvr := schema.GroupVersionResource{
@@ -909,7 +937,10 @@ func (c *Controller) reconcileStartupCRDs() error {
 		}
 
 		// Check if we already have this in discovered resources
-		if _, exists := c.discoveredResources[gvrString]; exists {
+		c.discoveredResourcesMu.RLock()
+		_, exists := c.discoveredResources[gvrString]
+		c.discoveredResourcesMu.RUnlock()
+		if exists {
 			c.logger.Debug("controller", fmt.Sprintf("CRD %s already in discovered resources, skipping reconciliation", gvrString))
 			skippedCount++
 			continue
@@ -1006,12 +1037,14 @@ func (c *Controller) stopCRDInformer(crd *apiextensionsv1.CustomResourceDefiniti
 	resource = crd.Spec.Names.Plural
 	gvrString = fmt.Sprintf("%s/%s/%s", group, version, resource)
 
+	c.discoveredResourcesMu.Lock()
 	if _, exists := c.discoveredResources[gvrString]; exists {
 		delete(c.discoveredResources, gvrString)
 		c.logger.Debug("controller", fmt.Sprintf("Removed %s from discovered resources", gvrString))
 	} else {
 		c.logger.Debug("controller", fmt.Sprintf("Resource %s not found in discovered resources (already cleaned up)", gvrString))
 	}
+	c.discoveredResourcesMu.Unlock()
 }
 
 // startConfigDrivenInformers starts informers based on config and discovery results
@@ -1037,7 +1070,9 @@ func (c *Controller) startConfigDrivenInformers() error {
 		c.logger.Info("controller", fmt.Sprintf("Setting up informer for %s (matches %d configuration patterns)", gvrString, len(normalizedConfigs)))
 
 		// Look up resource info from discovery
+		c.discoveredResourcesMu.RLock()
 		resourceInfo, found := c.discoveredResources[gvrString]
+		c.discoveredResourcesMu.RUnlock()
 		if !found {
 			c.logger.Warning("controller", fmt.Sprintf("Resource %s not found in discovery results, skipping", gvrString))
 			continue
@@ -1355,13 +1390,14 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 			
 			// Call OnMatched handlers for DELETE events
 			for _, config := range workItem.Configs {
+				// RACE CONDITION FIX: Create a deep copy for event handlers to avoid concurrent access
 				matchedEvent := MatchedEvent{
 					EventType: "DELETED",
-					Object:    deletedObj,
+					Object:    deletedObj.DeepCopy(), // Deep copy to prevent concurrent access by event handlers
 					GVR:       workItem.GVRString,
 					Key:       workItem.Key,
 					Config:    config,
-					Timestamp: time.Now(),
+					Timestamp: time.Now(), // DELETE events don't have the full object, so use current time
 				}
 				
 				// Call event handlers (non-blocking)
@@ -1428,13 +1464,14 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 		}
 		
 		// Create matched event for handlers
+		// RACE CONDITION FIX: Create a deep copy for event handlers to avoid concurrent access
 		matchedEvent := MatchedEvent{
 			EventType: eventType,
-			Object:    obj,
+			Object:    obj.DeepCopy(), // Deep copy to prevent concurrent access by event handlers
 			GVR:       gvrString,
 			Key:       obj.GetNamespace() + "/" + obj.GetName(),
 			Config:    config,
-			Timestamp: time.Now(),
+			Timestamp: obj.GetCreationTimestamp().Time,
 		}
 		
 		// For cluster-scoped resources, key is just the name
