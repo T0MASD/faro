@@ -5,7 +5,8 @@ auto_shutdown_sec: 120
 json_export: true
 
 # Monitor cluster-scoped namespace resource
+# NOTE: Changed from "faro-*" (shell glob) to exact name for server-side filtering
 resources:
   - gvr: "v1/namespaces"
     scope: "Cluster"
-    name_pattern: "faro-*"
+    name_pattern: "faro-test-5"

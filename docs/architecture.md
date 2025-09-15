@@ -17,7 +17,7 @@ Kubernetes resource monitoring Go library with informer-based event processing.
 
 ### Configuration System (`pkg/config.go`)
 - **YAML Configuration**: Supports both namespace-centric and resource-centric formats
-- **Server-Side Filtering**: Label selectors, namespace patterns, and exact resource names
+- **Server-Side Filtering**: Label selectors, namespace names, and exact resource names
 - **Normalization**: Converts both config formats to unified internal representation
 - **Validation**: Config validation with sensible defaults
 
@@ -52,7 +52,7 @@ Resource Event → Informer → Work Queue → Worker → Event Handler Callback
 - **CRD Watcher**: Dynamic informer creation for CustomResourceDefinitions
 
 ### Work Queue System
-- **Pattern**: Standard Kubernetes controller pattern with `workqueue.RateLimitingInterface`
+- **Approach**: Standard Kubernetes controller approach with `workqueue.RateLimitingInterface`
 - **Workers**: Configurable goroutine pool (default: 3)
 - **Retry Logic**: Exponential backoff for failed event processing
 - **Event Types**: ADDED, UPDATED, DELETED with proper object key extraction
@@ -102,12 +102,12 @@ auto_shutdown_sec: 120
 json_export: true
 
 namespaces:
-  - name_pattern: "prod-.*"
+  - name_selector: "prod-.*"
     resources:
       "v1/pods":
         label_selector: "app=nginx"
       "v1/configmaps":
-        name_pattern: "config-.*"
+        name_selector: "config-.*"
 ```
 
 **Resource-Centric Configuration:**
@@ -119,11 +119,11 @@ json_export: true
 resources:
   - gvr: "v1/pods"
     scope: "Namespaced"
-    namespace_patterns: ["default", "kube-system"]
+    namespace_names: ["default", "kube-system"]
     label_selector: "app=nginx"
   - gvr: "v1/namespaces"
     scope: "Cluster"
-    name_pattern: "prod-.*"
+    name_selector: "prod-.*"
 ```
 
 ## Runtime Behavior
@@ -196,12 +196,12 @@ Faro leverages Kubernetes API server-side filtering for optimal efficiency and p
 Resource Event → Informer → Work Queue → Worker → Event Handler Callbacks → Application Filtering
                      ↑                                                              ↑
               [Server-side filtering]                                    [Application-specific filtering]
-              (namespaces, labels, names)                                (custom logic, complex patterns)
+              (namespaces, labels, names)                                (custom logic, complex selectors)
 ```
 
 **Processing Responsibilities:**
 - **Faro Core**: Handles server-side filtering via Kubernetes API selectors and forwards all matching events
-- **Applications**: Implement additional client-side filtering logic in event handlers as needed for complex patterns, business logic, or advanced matching criteria
+- **Applications**: Implement additional client-side filtering logic in event handlers as needed for complex selectors, business logic, or advanced matching criteria
 - **Worker Dispatchers**: Can be set up to process matched events and take further actions on resource activity:
   - Create, update, or delete related resources
   - Send notifications or alerts  
@@ -218,7 +218,7 @@ log_level: "info"
 json_export: true
 
 namespaces:
-  - name_pattern: "default"
+  - name_selector: "default"
     resources:
       "v1/pods":
         label_selector: "app=nginx"
@@ -229,8 +229,8 @@ namespaces:
 resources:
   - gvr: "v1/configmaps"
     scope: "Namespaced"
-    namespace_patterns: ["kube-system", "default"]
-    name_pattern: "config-.*"
+    namespace_names: ["kube-system", "default"]
+    name_selector: "config-.*"
 ```
 
 ## Library Interface

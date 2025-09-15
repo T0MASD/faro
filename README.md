@@ -75,21 +75,21 @@ output_dir: "./logs"
 
 # Monitor specific namespaces and resources
 namespaces:
-  - name_pattern: "production"                    # Server-side exact match only
+  - name_selector: "production"                   # Server-side exact match only
     resources:
       "v1/pods":
-        name_pattern: "web-server"                # Server-side exact match only
+        name_selector: "web-server"               # Server-side exact match only
         label_selector: "app=nginx,tier=frontend" # Server-side filtering
       "v1/configmaps":
-        name_pattern: "app-config"                # Server-side exact match
-        # name_pattern: "prod-.*"                 # Would cause WARNING + no filtering
+name_selector: "app-config"               # Server-side exact match
+# name_selector: "prod-.*"                # Would cause WARNING + no filtering
 
 # Monitor resources across all namespaces
 resources:
   - gvr: "v1/configmaps"
     scope: "namespace"
-    namespace_patterns: ["production"]           # Server-side exact match
-    name_pattern: "app-config"                   # Server-side exact match
+namespace_names: ["production"]              # Server-side exact match
+name_selector: "app-config"                  # Server-side exact match
     label_selector: "app=web"                    # Server-side filtering
 ```
 
@@ -152,16 +152,16 @@ Faro implements **server-side filtering only** through the Kubernetes API:
 - **Label selectors**: Standard Kubernetes label selector syntax (`app=nginx,tier=frontend`)
 
 #### **No Client-side Filtering**
-Faro core does **not** implement client-side pattern matching or regex filtering. When regex patterns are configured:
-- Faro logs a **warning**: "Regex name patterns not supported for server-side filtering"
+Faro core does **not** implement client-side pattern matching or regex filtering. When regex selectors are configured:
+- Faro logs a **warning**: "Regex name selectors not supported for server-side filtering"
 - **No filtering is applied** - all events for that resource type are received
 - Applications must implement their own filtering in event handlers if needed
 
 **Important**: 
 - Kubernetes API does not support regex or wildcards in field selectors
-- Patterns containing `.*+?^${}[]|()\\` result in **no filtering** and a warning
+- Selectors containing `.*+?^${}[]|()\\` result in **no filtering** and a warning
 - Use exact matches for efficient server-side filtering
-- Implement custom filtering in your event handlers for complex patterns
+- Implement custom filtering in your event handlers for complex selectors
 
 ### JSON Export
 Structured event output for integration:
@@ -220,27 +220,27 @@ Optimal resource efficiency through scope-based filtering:
 
 ### **Label-Based Workload Detection**
 ```bash
-# Detect workloads by label and namespace pattern
--label "api.openshift.com/name" -pattern "toda-.*" -workload-id-pattern "ocm-staging-(.+)"
+# Detect workloads by label and namespace regex
+-label "api.openshift.com/name" -regex "toda-.*" -workload-id-regex "ocm-staging-(.+)"
 ```
 
 ### **Faro Core Filtering** (Library)
 - **Label Selector**: Server-side Kubernetes filtering (`app=nginx,tier=frontend`)
 - **Exact Name Matching**: Server-side field selector filtering (`metadata.name=exact-name`)
-- **No Pattern Matching**: Regex patterns result in warnings and no filtering (applications must implement custom filtering)
+- **No Pattern Matching**: Regex selectors result in warnings and no filtering (applications must implement custom filtering)
 
 ## Event Processing
 
 ### Core Library
 - **Work Queue Pattern**: Standard Kubernetes controller pattern with rate limiting
-- **Multi-Level Filtering**: Namespace → labels → name patterns
+- **Multi-Level Filtering**: Namespace → labels → name selectors
 - **Event Correlation**: Consistent key-based resource identification
 - **Error Handling**: Exponential backoff with maximum retry limits
 
-### Application Event Processing Patterns
+### Application Event Processing Approaches
 
 **Event Handler Implementation:**
-- **Application Filtering**: Applications implement filtering logic in event handlers for complex patterns and business rules
+- **Application Filtering**: Applications implement filtering logic in event handlers for complex selectors and business rules
 - **Worker Dispatchers**: Can be set up to process matched events and take further actions on resource activity:
   - Create, update, or delete related resources
   - Send notifications or alerts
@@ -248,7 +248,7 @@ Optimal resource efficiency through scope-based filtering:
   - Trigger workflows or automation
   - Apply business logic based on resource state
 
-**Example Worker Dispatcher Pattern:**
+**Example Worker Dispatcher Approach:**
 ```go
 type ResourceWorkerDispatcher struct {
     client kubernetes.Interface
@@ -308,13 +308,13 @@ Monitor specific resources in namespaces:
 ```yaml
 # Monitor ConfigMaps in specific namespaces
 namespaces:
-  - name_pattern: "production"                # Server-side exact match
+  - name_selector: "production"               # Server-side exact match
     resources:
       "v1/configmaps":
         label_selector: "app=nginx"           # Server-side filtering
       "v1/pods":
-        name_pattern: "web-server"            # Server-side exact match
-        # name_pattern: "web-.*"              # Would cause WARNING + no filtering
+name_selector: "web-server"           # Server-side exact match
+# name_selector: "web-.*"             # Would cause WARNING + no filtering
 ```
 
 ### **Multi-Resource Monitoring**
@@ -323,12 +323,12 @@ Monitor multiple resource types with different filters:
 resources:
   - gvr: "v1/pods"
     scope: "Namespaced"
-    namespace_patterns: ["default", "kube-system"]  # Server-side exact match
+    namespace_names: ["default", "kube-system"]     # Server-side exact match
     label_selector: "app=nginx"                     # Server-side filtering
   - gvr: "v1/namespaces"
     scope: "Cluster"
-    name_pattern: "production"                      # Server-side exact match
-    # name_pattern: "prod-.*"                       # Would cause WARNING + no filtering
+name_selector: "production"                     # Server-side exact match
+# name_selector: "prod-.*"                      # Would cause WARNING + no filtering
 ```
 
 ## Usage
@@ -441,6 +441,24 @@ make tag-minor           # Create minor version tag and trigger release
 make tag-major           # Create major version tag and trigger release
 ```
 
+### GitHub Actions Workflows
+
+The project includes simplified GitHub Actions workflows for automated testing:
+
+#### CI Workflow (`.github/workflows/ci.yml`)
+- **Triggers**: Push to `main`/`develop` branches, pull requests
+- **Features**:
+  - Runs full test suite (unit, integration, E2E)
+  - Validates library can be imported
+  - Simple and focused testing
+
+#### Release Workflow (`.github/workflows/release.yml`)
+- **Triggers**: Version tags (`v*`)
+- **Features**:
+  - Runs comprehensive test suite before release
+  - Validates library import
+  - Creates GitHub releases with GoReleaser
+
 ### Installation
 
 ```bash
@@ -523,6 +541,6 @@ make build  # Creates example CLI for testing
 ## Examples
 
 - **workload-monitor.go** - Workload monitoring with dynamic detection
-- **library-usage.go** - Basic library integration patterns
+- **library-usage.go** - Basic library integration approaches
 - **worker-dispatcher.go** - Advanced event processing with worker dispatchers for taking actions on resource activity
 - **E2E Tests** - Comprehensive validation suite for library and examples

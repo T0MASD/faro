@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -35,7 +36,7 @@ type WorkItem struct {
 	EventType string             // ADDED, UPDATED, DELETED
 }
 
-// MatchedEvent represents a filtered event that matched configuration patterns
+// MatchedEvent represents a filtered event that matched configuration criteria
 type MatchedEvent struct {
 	EventType string                      // ADDED, UPDATED, DELETED
 	Object    *unstructured.Unstructured  // Full Kubernetes object
@@ -47,13 +48,14 @@ type MatchedEvent struct {
 
 // JSONEvent represents a structured JSON event for export
 type JSONEvent struct {
-	Timestamp string            `json:"timestamp"`
-	EventType string            `json:"eventType"`
-	GVR       string            `json:"gvr"`
-	Namespace string            `json:"namespace,omitempty"`
-	Name      string            `json:"name"`
-	UID       string            `json:"uid,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
+	Timestamp   string            `json:"timestamp"`
+	EventType   string            `json:"eventType"`
+	GVR         string            `json:"gvr"`
+	Namespace   string            `json:"namespace,omitempty"`
+	Name        string            `json:"name"`
+	UID         string            `json:"uid,omitempty"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 	
 	// Additional fields for v1/events - dynamic like labels
 	InvolvedObject map[string]interface{} `json:"involvedObject,omitempty"`
@@ -67,27 +69,120 @@ type EventHandler interface {
 	OnMatched(event MatchedEvent) error
 }
 
+// JSONMiddleware interface for processing objects before JSON logging
+type JSONMiddleware interface {
+	// ProcessBeforeJSON is called before JSON logging to allow modification of the object
+	// Returns the modified object and whether to continue processing
+	ProcessBeforeJSON(eventType, gvr, namespace, name, uid string, obj *unstructured.Unstructured) (*unstructured.Unstructured, bool)
+}
 
-// logJSONEvent creates and logs a structured JSON event
+// DeletedResourceInfo holds information about deleted resources for UUID tracking
+type DeletedResourceInfo struct {
+	UID         string
+	Name        string
+	Namespace   string
+	GVR         string
+	Timestamp   time.Time
+	Annotations map[string]string
+}
+
+
+
+// logJSONEvent creates and logs a structured JSON event with middleware support
 func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured) {
+	var objCopy *unstructured.Unstructured
+	var annotations map[string]string
+	var timestamp string
+	var finalUID string = uid
+
+	// Handle DELETED events - try to get info from deleted resource cache
+	if eventType == "DELETED" {
+		c.handleDeletedResource(gvr, namespace, name, uid, labels, obj)
+		
+		// For DELETED events, try to get UID from cache if not provided
+		if uid == "" || uid == "unknown" {
+			if deletedInfo := c.getDeletedResourceInfo(gvr, namespace, name); deletedInfo != nil {
+				finalUID = deletedInfo.UID
+				if annotations == nil {
+					annotations = deletedInfo.Annotations
+				}
+			}
+		}
+	}
+	
+	// Create object copy for middleware processing
+	if obj != nil {
+		// RACE CONDITION FIX: Create a deep copy to avoid concurrent map access
+		objCopy = obj.DeepCopy()
+		
+		// Store resource info for future DELETED events
+		if eventType == "ADDED" || eventType == "UPDATED" {
+			c.storeResourceInfo(gvr, namespace, name, string(objCopy.GetUID()), objCopy.GetAnnotations())
+		}
+		
+		annotations = objCopy.GetAnnotations()
+		timestamp = objCopy.GetCreationTimestamp().UTC().Format(time.RFC3339Nano)
+	} else {
+		// For DELETED events, create a minimal object for middleware processing
+		objCopy = &unstructured.Unstructured{}
+		objCopy.SetName(name)
+		if namespace != "" {
+			objCopy.SetNamespace(namespace)
+		}
+		if finalUID != "" && finalUID != "unknown" {
+			objCopy.SetUID(types.UID(finalUID))
+		}
+		if annotations != nil {
+			objCopy.SetAnnotations(annotations)
+		}
+		timestamp = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+
+	// Apply JSON middleware to modify object before logging
+	c.middlewareMu.RLock()
+	middleware := c.jsonMiddleware
+	c.middlewareMu.RUnlock()
+	
+	processedObj := objCopy
+	shouldContinue := true
+	
+	for _, mw := range middleware {
+		if !shouldContinue {
+			break
+		}
+		processedObj, shouldContinue = mw.ProcessBeforeJSON(eventType, gvr, namespace, name, finalUID, processedObj)
+	}
+	
+	// Skip logging if middleware says not to continue
+	if !shouldContinue {
+		return
+	}
+	
+	// Update annotations and labels from processed object
+	if processedObj != nil {
+		annotations = processedObj.GetAnnotations()
+		labels = processedObj.GetLabels()
+	}
+	
 	jsonEvent := JSONEvent{
-		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
-		EventType: eventType,
-		GVR:       gvr,
-		Namespace: namespace,
-		Name:      name,
-		UID:       uid,
-		Labels:    labels,
+		Timestamp:   timestamp,
+		EventType:   eventType,
+		GVR:         gvr,
+		Namespace:   namespace,
+		Name:        name,
+		UID:         finalUID,
+		Labels:      labels,
+		Annotations: annotations,
 	}
 
 	// Special handling for v1/events to extract involvedObject information
-	if gvr == "v1/events" && obj != nil {
-		if involvedObj, found, _ := unstructured.NestedMap(obj.Object, "involvedObject"); found {
+	if gvr == "v1/events" && processedObj != nil {
+		if involvedObj, found, _ := unstructured.NestedMap(processedObj.Object, "involvedObject"); found {
 			jsonEvent.InvolvedObject = involvedObj
 		}
-		jsonEvent.Reason, _, _ = unstructured.NestedString(obj.Object, "reason")
-		jsonEvent.Message, _, _ = unstructured.NestedString(obj.Object, "message")
-		jsonEvent.Type, _, _ = unstructured.NestedString(obj.Object, "type")
+		jsonEvent.Reason, _, _ = unstructured.NestedString(processedObj.Object, "reason")
+		jsonEvent.Message, _, _ = unstructured.NestedString(processedObj.Object, "message")
+		jsonEvent.Type, _, _ = unstructured.NestedString(processedObj.Object, "type")
 	}
 
 	jsonData, err := json.Marshal(jsonEvent)
@@ -98,6 +193,74 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 
 	// Log as JSON for the JSONFileHandler to pick up
 	c.logger.Debug("controller", string(jsonData))
+}
+
+// storeResourceInfo stores resource information for future DELETED event UUID tracking
+func (c *Controller) storeResourceInfo(gvr, namespace, name, uid string, annotations map[string]string) {
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+	
+	key := c.makeResourceKey(gvr, namespace, name)
+	c.deletedResources[key] = &DeletedResourceInfo{
+		UID:         uid,
+		Name:        name,
+		Namespace:   namespace,
+		GVR:         gvr,
+		Timestamp:   time.Now(),
+		Annotations: c.copyStringMap(annotations),
+	}
+	
+	// Clean up old entries
+	c.cleanupOldDeletedResources()
+}
+
+// getDeletedResourceInfo retrieves stored information for a deleted resource
+func (c *Controller) getDeletedResourceInfo(gvr, namespace, name string) *DeletedResourceInfo {
+	c.deletedMu.RLock()
+	defer c.deletedMu.RUnlock()
+	
+	key := c.makeResourceKey(gvr, namespace, name)
+	return c.deletedResources[key]
+}
+
+// handleDeletedResource processes a DELETED event and cleans up stored info
+func (c *Controller) handleDeletedResource(gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured) {
+	// Clean up the stored resource info after processing
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+	
+	key := c.makeResourceKey(gvr, namespace, name)
+	delete(c.deletedResources, key)
+}
+
+// makeResourceKey creates a consistent key for resource tracking
+func (c *Controller) makeResourceKey(gvr, namespace, name string) string {
+	if namespace == "" {
+		return gvr + "/" + name // Cluster-scoped resource
+	}
+	return gvr + "/" + namespace + "/" + name
+}
+
+// copyStringMap creates a deep copy of a string map
+func (c *Controller) copyStringMap(original map[string]string) map[string]string {
+	if original == nil {
+		return nil
+	}
+	copy := make(map[string]string, len(original))
+	for k, v := range original {
+		copy[k] = v
+	}
+	return copy
+}
+
+// cleanupOldDeletedResources removes expired entries from deleted resource cache
+func (c *Controller) cleanupOldDeletedResources() {
+	now := time.Now()
+	for key, info := range c.deletedResources {
+		if now.Sub(info.Timestamp) > c.deletedTTL {
+			delete(c.deletedResources, key)
+		}
+	}
 }
 
 // InformerConfig holds configuration for creating a generic informer
@@ -126,7 +289,8 @@ type Controller struct {
 	workers   int // Number of worker goroutines
 
 	// API discovery results
-	discoveredResources map[string]*ResourceInfo // map[GVR] -> ResourceInfo
+	discoveredResources   map[string]*ResourceInfo // map[GVR] -> ResourceInfo
+	discoveredResourcesMu sync.RWMutex             // Protects discoveredResources map
 
 	// Informer lifecycle management - using GVR string as consistent key
 	cancellers      sync.Map // map[string]context.CancelFunc for informer shutdown
@@ -139,6 +303,15 @@ type Controller struct {
 	// Event handlers for library usage
 	eventHandlers []EventHandler
 	handlersMu    sync.RWMutex
+
+	// JSON middleware for processing objects before JSON logging
+	jsonMiddleware []JSONMiddleware
+	middlewareMu   sync.RWMutex
+
+	// Deleted resource tracking for UUID preservation
+	deletedResources map[string]*DeletedResourceInfo // map[namespace/name] -> DeletedResourceInfo
+	deletedMu        sync.RWMutex
+	deletedTTL       time.Duration // How long to keep deleted resource info
 
 	// Readiness callback
 	onReady   func()
@@ -160,6 +333,9 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 		workers:             3, // Start with 3 worker goroutines
 		discoveredResources: make(map[string]*ResourceInfo),
 		eventHandlers:       make([]EventHandler, 0),
+		jsonMiddleware:      make([]JSONMiddleware, 0),
+		deletedResources:    make(map[string]*DeletedResourceInfo),
+		deletedTTL:          time.Hour, // Keep deleted resource info for 1 hour by default
 	}
 	
 	logger.Debug("controller", "Created new controller instance")
@@ -172,6 +348,22 @@ func (c *Controller) AddEventHandler(handler EventHandler) {
 	defer c.handlersMu.Unlock()
 	c.eventHandlers = append(c.eventHandlers, handler)
 	c.logger.Debug("controller", fmt.Sprintf("Added event handler (total: %d)", len(c.eventHandlers)))
+}
+
+// AddJSONMiddleware registers a JSON middleware for processing objects before JSON logging
+func (c *Controller) AddJSONMiddleware(middleware JSONMiddleware) {
+	c.middlewareMu.Lock()
+	defer c.middlewareMu.Unlock()
+	c.jsonMiddleware = append(c.jsonMiddleware, middleware)
+	c.logger.Debug("controller", fmt.Sprintf("Added JSON middleware (total: %d)", len(c.jsonMiddleware)))
+}
+
+// SetDeletedResourceTTL sets how long to keep deleted resource information for UUID tracking
+func (c *Controller) SetDeletedResourceTTL(ttl time.Duration) {
+	c.deletedMu.Lock()
+	defer c.deletedMu.Unlock()
+	c.deletedTTL = ttl
+	c.logger.Debug("controller", fmt.Sprintf("Set deleted resource TTL to %v", ttl))
 }
 
 // SetReadyCallback sets a callback function to be called when Faro is fully initialized and ready
@@ -211,7 +403,7 @@ func (c *Controller) createGenericInformer(config InformerConfig) (cache.SharedI
 	// Handle namespace scope logic
 	var namespace string
 	if config.Scope == apiextensionsv1.NamespaceScoped {
-		namespace = "" // Watch all namespaces, filter in event handler (generic informer doesn't have config patterns)
+		namespace = "" // Watch all namespaces, filter in event handler (generic informer doesn't have config criteria)
 	}
 
 	// Create factory
@@ -287,8 +479,8 @@ func (c *Controller) createLabelSelectorInformer(config InformerConfig, normaliz
 		// Collect all unique namespaces from all configs
 		allNamespaces := make(map[string]bool)
 		for _, nConfig := range normalizedConfigs {
-			for _, ns := range nConfig.NamespacePatterns {
-				if ns != "" { // Skip empty namespace patterns
+	for _, ns := range nConfig.NamespaceNames {
+		if ns != "" { // Skip empty namespace names
 					allNamespaces[ns] = true
 				}
 			}
@@ -312,7 +504,7 @@ func (c *Controller) createLabelSelectorInformer(config InformerConfig, normaliz
 		} else {
 			// No specific namespaces - watch all namespaces
 			namespace = ""
-			c.logger.Info("controller", fmt.Sprintf("No namespace patterns for %s: watching all namespaces", config.GVRString))
+			c.logger.Info("controller", fmt.Sprintf("No namespace names for %s: watching all namespaces", config.GVRString))
 		}
 	}
 
@@ -325,18 +517,18 @@ func (c *Controller) createLabelSelectorInformer(config InformerConfig, normaliz
 		}
 	}
 
-	// Determine the field selector for name pattern (for server-side filtering)
+	// Determine the field selector for name selector (for server-side filtering)
 	var fieldSelector string
 	for _, nConfig := range normalizedConfigs {
-		c.logger.Debug("controller", fmt.Sprintf("Checking normalized config - NamePattern: '%s'", nConfig.NamePattern))
-		if nConfig.NamePattern != "" {
+	c.logger.Debug("controller", fmt.Sprintf("Checking normalized config - NameSelector: '%s'", nConfig.NameSelector))
+	if nConfig.NameSelector != "" {
 			// For exact name matches, use field selector
-			if !strings.ContainsAny(nConfig.NamePattern, ".*+?^${}[]|()\\") {
-				fieldSelector = fmt.Sprintf("metadata.name=%s", nConfig.NamePattern)
+		if !strings.ContainsAny(nConfig.NameSelector, ".*+?^${}[]|()\\") {
+			fieldSelector = fmt.Sprintf("metadata.name=%s", nConfig.NameSelector)
 				c.logger.Info("controller", fmt.Sprintf("Using server-side name filtering for %s: %s", config.GVRString, fieldSelector))
 				break
 			} else {
-				c.logger.Warning("controller", fmt.Sprintf("Regex name patterns not supported for server-side filtering: %s", nConfig.NamePattern))
+				c.logger.Warning("controller", fmt.Sprintf("Regex name selectors not supported for server-side filtering: %s", nConfig.NameSelector))
 			}
 		}
 	}
@@ -443,7 +635,10 @@ func (c *Controller) discoverAPIResources() error {
 		}
 	}
 
-	c.logger.Info("controller", fmt.Sprintf("Discovery completed: %d resources found", len(c.discoveredResources)))
+	c.discoveredResourcesMu.RLock()
+	resourceCount := len(c.discoveredResources)
+	c.discoveredResourcesMu.RUnlock()
+	c.logger.Info("controller", fmt.Sprintf("Discovery completed: %d resources found", resourceCount))
 	return nil
 }
 
@@ -492,11 +687,13 @@ func (c *Controller) processAPIGroup(group, version string) error {
 		}
 
 		// Avoid overwriting if we already have this exact GVR (from previous version processing)
+		c.discoveredResourcesMu.Lock()
 		if _, exists := c.discoveredResources[gvrKey]; !exists {
 			c.discoveredResources[gvrKey] = resourceInfo
 			c.logger.Debug("controller", fmt.Sprintf("Discovered resource: %s (Kind: %s, Namespaced: %t)",
 				gvrKey, resource.Kind, resource.Namespaced))
 		}
+		c.discoveredResourcesMu.Unlock()
 	}
 
 	return nil
@@ -618,14 +815,17 @@ func (c *Controller) handleCRDAdded(crdUnstructured *unstructured.Unstructured) 
 	gvrString := fmt.Sprintf("%s/%s/%s", group, version, resource)
 
 	// Check if this exact CRD (same group/version/resource) was already discovered during initial API discovery
-	if _, alreadyDiscovered := c.discoveredResources[gvrString]; alreadyDiscovered {
+	c.discoveredResourcesMu.RLock()
+	_, alreadyDiscovered := c.discoveredResources[gvrString]
+	c.discoveredResourcesMu.RUnlock()
+	if alreadyDiscovered {
 		c.logger.Debug("controller", fmt.Sprintf("CRD %s (exact GVR: %s) already discovered during startup, skipping", crd.Name, gvrString))
 		return
 	}
 
 	c.logger.Info("controller", fmt.Sprintf("New CRD detected: %s (GVR: %s)", crd.Name, gvrString))
 
-	// Check if this CRD matches any of our configured patterns
+	// Check if this CRD matches any of our configured criteria
 	c.evaluateAndStartCRDInformer(&crd)
 }
 
@@ -747,7 +947,9 @@ func (c *Controller) evaluateAndStartCRDInformer(crd *apiextensionsv1.CustomReso
 		Kind:       crd.Spec.Names.Kind,
 		Namespaced: crd.Spec.Scope == apiextensionsv1.NamespaceScoped,
 	}
+	c.discoveredResourcesMu.Lock()
 	c.discoveredResources[gvrString] = resourceInfo
+	c.discoveredResourcesMu.Unlock()
 
 	// Build GVR and scope
 	gvr := schema.GroupVersionResource{
@@ -766,16 +968,16 @@ func (c *Controller) evaluateAndStartCRDInformer(crd *apiextensionsv1.CustomReso
 	// Convert NamespaceConfig to NormalizedConfig for consistency with regular informers
 	var normalizedConfigs []NormalizedConfig
 	
-	// Check if this GVR matches any configured patterns and collect matching configs
+	// Check if this GVR matches any configured criteria and collect matching configs
 	for _, nsConfig := range c.config.Namespaces {
 		if _, exists := nsConfig.Resources[gvrString]; exists {
-			c.logger.Info("controller", fmt.Sprintf("CRD %s matches configuration in namespace pattern %s", crd.Name, nsConfig.NamePattern))
+			c.logger.Info("controller", fmt.Sprintf("CRD %s matches configuration in namespace %s", crd.Name, nsConfig.NameSelector))
 			
 			// Convert to NormalizedConfig
 			normalizedConfig := NormalizedConfig{
 				GVR:               gvrString,
-				NamespacePatterns: []string{nsConfig.NamePattern},
-				NamePattern:       "", // CRDs don't have name patterns in this context
+			NamespaceNames: []string{nsConfig.NameSelector},
+			NameSelector:   "", // CRDs don't have name selectors in this context
 				LabelSelector:     "", // CRDs don't have label selectors in this context
 			}
 			normalizedConfigs = append(normalizedConfigs, normalizedConfig)
@@ -790,8 +992,8 @@ func (c *Controller) evaluateAndStartCRDInformer(crd *apiextensionsv1.CustomReso
 			// Convert to NormalizedConfig
 			normalizedConfig := NormalizedConfig{
 				GVR:               gvrString,
-				NamespacePatterns: resConfig.NamespacePatterns,
-				NamePattern:       resConfig.NamePattern,
+			NamespaceNames: resConfig.NamespaceNames,
+			NameSelector:   resConfig.NameSelector,
 				LabelSelector:     resConfig.LabelSelector,
 			}
 			normalizedConfigs = append(normalizedConfigs, normalizedConfig)
@@ -799,7 +1001,7 @@ func (c *Controller) evaluateAndStartCRDInformer(crd *apiextensionsv1.CustomReso
 	}
 
 	if len(normalizedConfigs) == 0 {
-		c.logger.Debug("controller", fmt.Sprintf("CRD %s does not match any configuration patterns", crd.Name))
+		c.logger.Debug("controller", fmt.Sprintf("CRD %s does not match any configuration criteria", crd.Name))
 		return
 	}
 
@@ -909,7 +1111,10 @@ func (c *Controller) reconcileStartupCRDs() error {
 		}
 
 		// Check if we already have this in discovered resources
-		if _, exists := c.discoveredResources[gvrString]; exists {
+		c.discoveredResourcesMu.RLock()
+		_, exists := c.discoveredResources[gvrString]
+		c.discoveredResourcesMu.RUnlock()
+		if exists {
 			c.logger.Debug("controller", fmt.Sprintf("CRD %s already in discovered resources, skipping reconciliation", gvrString))
 			skippedCount++
 			continue
@@ -1006,12 +1211,14 @@ func (c *Controller) stopCRDInformer(crd *apiextensionsv1.CustomResourceDefiniti
 	resource = crd.Spec.Names.Plural
 	gvrString = fmt.Sprintf("%s/%s/%s", group, version, resource)
 
+	c.discoveredResourcesMu.Lock()
 	if _, exists := c.discoveredResources[gvrString]; exists {
 		delete(c.discoveredResources, gvrString)
 		c.logger.Debug("controller", fmt.Sprintf("Removed %s from discovered resources", gvrString))
 	} else {
 		c.logger.Debug("controller", fmt.Sprintf("Resource %s not found in discovered resources (already cleaned up)", gvrString))
 	}
+	c.discoveredResourcesMu.Unlock()
 }
 
 // startConfigDrivenInformers starts informers based on config and discovery results
@@ -1034,10 +1241,12 @@ func (c *Controller) startConfigDrivenInformers() error {
 
 	// Start informers per unique GVR, creating separate informers for each namespace when needed
 	for gvrString, normalizedConfigs := range normalizedGVRs {
-		c.logger.Info("controller", fmt.Sprintf("Setting up informer for %s (matches %d configuration patterns)", gvrString, len(normalizedConfigs)))
+		c.logger.Info("controller", fmt.Sprintf("Setting up informer for %s (matches %d configuration entries)", gvrString, len(normalizedConfigs)))
 
 		// Look up resource info from discovery
+		c.discoveredResourcesMu.RLock()
 		resourceInfo, found := c.discoveredResources[gvrString]
+		c.discoveredResourcesMu.RUnlock()
 		if !found {
 			c.logger.Warning("controller", fmt.Sprintf("Resource %s not found in discovery results, skipping", gvrString))
 			continue
@@ -1342,8 +1551,16 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				namespace = ""
 			}
 			
-			// Log JSON event for DELETE - no involvedObject data available
-			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, "", nil, nil)
+			// Log JSON event for DELETE - retrieve UID from cache
+			// Note: We don't use cached labels since they could have changed since creation
+			var uid string
+			if deletedInfo := c.getDeletedResourceInfo(workItem.GVRString, namespace, name); deletedInfo != nil {
+				uid = deletedInfo.UID
+				// Note: annotations are handled inside logJSONEvent through the obj parameter
+			} else {
+				uid = "unknown" // Fallback only if not found in cache
+			}
+			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, nil, nil)
 			
 			// Create a minimal unstructured object for DELETE events
 			// We can't get the full object since it's deleted, but we can extract key info
@@ -1355,13 +1572,14 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 			
 			// Call OnMatched handlers for DELETE events
 			for _, config := range workItem.Configs {
+				// RACE CONDITION FIX: Create a deep copy for event handlers to avoid concurrent access
 				matchedEvent := MatchedEvent{
 					EventType: "DELETED",
-					Object:    deletedObj,
+					Object:    deletedObj.DeepCopy(), // Deep copy to prevent concurrent access by event handlers
 					GVR:       workItem.GVRString,
 					Key:       workItem.Key,
 					Config:    config,
-					Timestamp: time.Now(),
+					Timestamp: time.Now(), // DELETE events don't have the full object, so use current time
 				}
 				
 				// Call event handlers (non-blocking)
@@ -1404,17 +1622,17 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 	for _, config := range configs {
 		// Check if this config matches the resource's namespace
 		namespaceMatches := false
-		if len(config.NamespacePatterns) == 0 {
-			// No namespace patterns means match all namespaces
+		if len(config.NamespaceNames) == 0 {
+			// No namespace names means match all namespaces
 			namespaceMatches = true
 		} else {
-			// Check if resource namespace matches any of the configured patterns
-			for _, pattern := range config.NamespacePatterns {
-				if pattern == "" {
-					// Empty pattern means all namespaces
+			// Check if resource namespace matches any of the configured names
+			for _, namespaceName := range config.NamespaceNames {
+				if namespaceName == "" {
+					// Empty name means all namespaces
 					namespaceMatches = true
 					break
-				} else if pattern == resourceNamespace {
+				} else if namespaceName == resourceNamespace {
 					// Exact namespace match
 					namespaceMatches = true
 					break
@@ -1428,13 +1646,14 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 		}
 		
 		// Create matched event for handlers
+		// RACE CONDITION FIX: Create a deep copy for event handlers to avoid concurrent access
 		matchedEvent := MatchedEvent{
 			EventType: eventType,
-			Object:    obj,
+			Object:    obj.DeepCopy(), // Deep copy to prevent concurrent access by event handlers
 			GVR:       gvrString,
 			Key:       obj.GetNamespace() + "/" + obj.GetName(),
 			Config:    config,
-			Timestamp: time.Now(),
+			Timestamp: obj.GetCreationTimestamp().Time,
 		}
 		
 		// For cluster-scoped resources, key is just the name
@@ -1458,10 +1677,10 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 		
 		// Log the matched event (preserve existing behavior)
 		if resourceNamespace != "" {
-			c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s, pattern: %s)",
+			c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s, namespace: %s)",
 				eventType, gvrString, resourceNamespace, resourceName, resourceUID, config.GVR))
 		} else {
-			c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, pattern: %s)",
+			c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, namespace: %s)",
 				eventType, gvrString, resourceName, resourceUID, config.GVR))
 		}
 		

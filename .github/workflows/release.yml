@@ -42,6 +42,21 @@ jobs:
           go mod tidy
           make test
 
+      # Collect and upload release test logs and events
+      - name: Upload release test logs and events
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-test-logs-${{ github.ref_name }}
+          path: |
+            work/
+            tests/**/*.log
+            tests/**/*.json
+            **/*.log
+            **/*.json
+          retention-days: 90
+        continue-on-error: true
+
       - name: Validate library can be imported
         run: |
           cat > test_import.go << 'EOF'
@@ -52,6 +67,7 @@ jobs:
           go mod tidy
           go build test_import.go
           rm test_import.go
+
 
       - name: Create library release
         uses: goreleaser/goreleaser-action@v5

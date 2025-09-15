@@ -24,7 +24,7 @@ type ResourceDetails struct {
 
 // NamespaceConfig defines namespace and its resources to watch (namespace-centric format)
 type NamespaceConfig struct {
-	NamePattern string                      `yaml:"name_pattern"` // Regex pattern for namespace names
+	NameSelector string                     `yaml:"name_pattern"` // Exact namespace name for server-side filtering
 	Resources   map[string]ResourceDetails `yaml:"resources"`    // Map of GVR to resource config
 }
 
@@ -32,8 +32,8 @@ type NamespaceConfig struct {
 type ResourceConfig struct {
 	GVR               string   `yaml:"gvr"`                         // Group/Version/Resource identifier
 	Scope             Scope    `yaml:"scope,omitempty"`            // Explicitly define scope (Cluster or Namespaced)
-	NamespacePatterns []string `yaml:"namespace_patterns,omitempty"` // Literal namespace names only (for server-side filtering)
-	NamePattern       string   `yaml:"name_pattern,omitempty"`     // Exact name for resource name filtering (server-side)
+	NamespaceNames []string `yaml:"namespace_patterns,omitempty"` // Literal namespace names only (for server-side filtering)
+	NameSelector   string   `yaml:"name_pattern,omitempty"`     // Exact name for resource name filtering (server-side)
 	LabelSelector     string   `yaml:"label_selector,omitempty"`   // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
 }
 
@@ -42,8 +42,8 @@ type ResourceConfig struct {
 type NormalizedConfig struct {
 	GVR               string          // Group/Version/Resource identifier
 	ResourceDetails   ResourceDetails // Resource matching details (SERVER-SIDE only)
-	NamespacePatterns []string        // Literal namespace names only (for server-side filtering)
-	NamePattern       string          // Exact name for resource name filtering (server-side)
+	NamespaceNames []string        // Literal namespace names only (for server-side filtering)
+	NameSelector   string          // Exact name for resource name filtering (server-side)
 	LabelSelector     string          // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
 }
 
@@ -215,7 +215,7 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 				normalizedMap[gvr] = append(normalizedMap[gvr], NormalizedConfig{
 					GVR:               gvr,
 					ResourceDetails:   details,
-					NamespacePatterns: []string{nsConfig.NamePattern}, // Literal namespace names only
+					NamespaceNames: []string{nsConfig.NameSelector}, // Literal namespace names only
 					LabelSelector:     details.LabelSelector, // SERVER-SIDE filtering only
 				})
 			}
@@ -226,26 +226,26 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 		// Process resource-centric config
 		for _, resConfig := range c.Resources {
 			// Handle the case where namespaces are not specified (e.g., cluster-scoped)
-			namespacePatterns := resConfig.NamespacePatterns
-			if len(namespacePatterns) == 0 {
+	namespaceNames := resConfig.NamespaceNames
+	if len(namespaceNames) == 0 {
 				if resConfig.Scope == ClusterScope {
-					// For cluster-scoped resources, use empty pattern to indicate cluster scope
-					namespacePatterns = []string{""}
-				} else {
-					// Default to "all namespaces" for namespace-scoped resources without explicit patterns
-					namespacePatterns = []string{""}
-				}
+		// For cluster-scoped resources, use empty string to indicate cluster scope
+		namespaceNames = []string{""}
+	} else {
+		// Default to "all namespaces" for namespace-scoped resources without explicit names
+		namespaceNames = []string{""}
+	}
 			}
 			
 			// FIX: Create separate NormalizedConfig for each namespace to ensure proper informer creation
-			for _, namespace := range namespacePatterns {
+			for _, namespace := range namespaceNames {
 				normalizedMap[resConfig.GVR] = append(normalizedMap[resConfig.GVR], NormalizedConfig{
 					GVR: resConfig.GVR,
 					ResourceDetails: ResourceDetails{
 						LabelSelector: resConfig.LabelSelector, // SERVER-SIDE filtering only
 					},
-					NamespacePatterns: []string{namespace}, // Single namespace per config
-					NamePattern:       resConfig.NamePattern, // SERVER-SIDE name filtering
+			NamespaceNames: []string{namespace}, // Single namespace per config
+			NameSelector:   resConfig.NameSelector, // SERVER-SIDE name filtering
 					LabelSelector:     resConfig.LabelSelector, // SERVER-SIDE filtering only
 				})
 			}

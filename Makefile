@@ -44,15 +44,15 @@ test-unit:
 
 # Run E2E tests
 test-e2e:
-	@echo "Running E2E tests..."
+	@echo "Running E2E tests in parallel..."
 	@echo "Note: Requires access to a Kubernetes cluster"
-	cd tests/e2e && go test -v
+	cd tests/e2e && go test -v -parallel 9 -timeout 10m
 
 # Run integration tests
 test-integration:
-	@echo "Running integration tests..."
+	@echo "Running integration tests in parallel..."
 	@echo "Note: Requires access to a Kubernetes cluster"
-	cd tests/integration && go test -v
+	cd tests/integration && go test -v -parallel 3 -timeout 5m
 
 # Clean build artifacts and test logs
 clean:

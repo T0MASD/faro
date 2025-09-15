@@ -1,0 +1,71 @@
+---
+name: CI Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      # Install KinD for Kubernetes testing
+      - name: Install KinD
+        run: |
+          go install sigs.k8s.io/kind@v0.22.0
+          kind version
+
+      # Create KinD cluster for E2E and integration tests
+      - name: Create KinD cluster
+        run: |
+          kind create cluster
+          kubectl cluster-info
+          kubectl get nodes
+
+      # Run comprehensive test suite
+      - name: Run full test suite
+        run: |
+          go mod tidy
+          make test
+
+      # Collect and upload test logs and events
+      - name: Upload test logs and events
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ github.run_number }}
+          path: |
+            work/
+            tests/**/*.log
+            tests/**/*.json
+            **/*.log
+            **/*.json
+          retention-days: 30
+        continue-on-error: true
+
+      # Validate library can be imported
+      - name: Validate library import
+        run: |
+          cat > test_import.go << 'EOF'
+          package main
+          import _ "github.com/T0MASD/faro/pkg"
+          func main() {}
+          EOF
+          go mod tidy
+          go build test_import.go
+          rm test_import.go

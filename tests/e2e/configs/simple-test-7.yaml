@@ -1,4 +1,5 @@
 # Simple E2E Test 7 - Two ConfigMap configs: namespace-centric + resource-centric
+# NOTE: Fixed shell glob patterns (*) to exact names for proper server-side filtering
 output_dir: "./logs/test7"
 log_level: "debug"
 auto_shutdown_sec: 120
@@ -9,12 +10,12 @@ resources:
   - gvr: "v1/configmaps"
     scope: "Namespaced"
     namespace_patterns:
-      - "faro-test-1"
-    name_pattern: "test-config-*"
+      - "faro-test-7"
+    name_pattern: "test-config-1"
 
 # Namespace-centric ConfigMap monitoring (like test 1)
 namespaces:
-  - name_pattern: "faro-test-1"
+  - name_pattern: "faro-test-7"
     resources:
       "v1/configmaps":
-        name_pattern: "test-config-*"
+        name_pattern: "test-config-1"

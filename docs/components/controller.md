@@ -45,8 +45,8 @@ The Controller implements comprehensive server-side filtering at the Kubernetes 
 
 ### FieldSelector Implementation
 ```go
-// Applied for name pattern filtering
-fieldSelector = fmt.Sprintf("metadata.name=%s", nConfig.NamePattern)
+// Applied for name selector filtering
+fieldSelector = fmt.Sprintf("metadata.name=%s", nConfig.NameSelector)
 options.FieldSelector = fieldSelector
 ```
 

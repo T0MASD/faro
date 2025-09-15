@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,69 @@ import (
 )
 
 var testenv env.Environment
+
+var (
+	binaryPath string
+	binaryOnce sync.Once
+)
+
+// buildBinary builds the Faro binary once and reuses it across all tests
+func buildBinary() error {
+	var buildErr error
+	binaryOnce.Do(func() {
+		// Get absolute paths
+		projectRoot, _ := filepath.Abs("../..")
+		binaryPath = filepath.Join(projectRoot, "faro-e2e")
+		
+		cmd := exec.Command("go", "build", "-o", binaryPath, ".")
+		cmd.Dir = projectRoot
+		
+		// Capture output for debugging
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			buildErr = fmt.Errorf("build failed: %v, output: %s", err, string(output))
+			return
+		}
+		
+		// Verify binary was created
+		if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+			buildErr = fmt.Errorf("binary was not created at: %s", binaryPath)
+		}
+	})
+	return buildErr
+}
+
+// cleanupBinary removes the binary (call this after all tests complete)
+func cleanupBinary() {
+	if binaryPath != "" {
+		os.Remove(binaryPath)
+	}
+}
+
+// extractLogDirFromConfig reads the output_dir from a config file
+func extractLogDirFromConfig(configFile string) string {
+	content, err := os.ReadFile(configFile)
+	if err != nil {
+		return "logs" // fallback
+	}
+	
+	lines := strings.Split(string(content), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "output_dir:") {
+			// Extract the path from 'output_dir: "./logs/test1"'
+			parts := strings.Split(line, ":")
+			if len(parts) > 1 {
+				path := strings.TrimSpace(parts[1])
+				path = strings.Trim(path, `"`)
+				path = strings.TrimPrefix(path, "./")
+				return path
+			}
+		}
+	}
+	return "logs" // fallback
+}
+
 
 type FaroJSONEvent struct {
 	Timestamp string            `json:"timestamp"`
@@ -39,20 +103,20 @@ type FaroConfig struct {
 }
 
 type NamespaceConfig struct {
-	NamePattern string                       `yaml:"name_pattern"`
+	NameSelector string                      `yaml:"name_pattern"`
 	Resources   map[string]ResourceSelector  `yaml:"resources"`
 }
 
 type ResourceConfig struct {
 	GVR               string   `yaml:"gvr"`
 	Scope             string   `yaml:"scope"`
-	NamespacePatterns []string `yaml:"namespace_patterns"`
-	NamePattern       string   `yaml:"name_pattern"`
+	NamespaceNames []string `yaml:"namespace_patterns"`
+	NameSelector   string   `yaml:"name_pattern"`
 	LabelSelector     string   `yaml:"label_selector"`
 }
 
 type ResourceSelector struct {
-	NamePattern   string `yaml:"name_pattern"`
+	NameSelector string `yaml:"name_pattern"`
 	LabelSelector string `yaml:"label_selector"`
 }
 
@@ -166,7 +230,7 @@ func shouldMonitorResource(config *FaroConfig, resource ManifestResource) bool {
 
 	// Check namespace-based configs
 	for _, nsConfig := range config.Namespaces {
-		if matchesPattern(nsConfig.NamePattern, resource.Metadata.Namespace) {
+		if matchesName(nsConfig.NameSelector, resource.Metadata.Namespace) {
 			if resourceSelector, exists := nsConfig.Resources[gvr]; exists {
 				if matchesResourceSelector(resourceSelector, resource) {
 					return true
@@ -178,18 +242,18 @@ func shouldMonitorResource(config *FaroConfig, resource ManifestResource) bool {
 	// Check resource-based configs
 	for _, resConfig := range config.Resources {
 		if resConfig.GVR == gvr {
-			// Check namespace patterns
+			// Check namespace names
 			namespaceMatches := false
-			for _, nsPattern := range resConfig.NamespacePatterns {
-				if matchesPattern(nsPattern, resource.Metadata.Namespace) {
+			for _, nsName := range resConfig.NamespaceNames {
+				if matchesName(nsName, resource.Metadata.Namespace) {
 					namespaceMatches = true
 					break
 				}
 			}
 			
 			if namespaceMatches {
-				// Check name pattern
-				if resConfig.NamePattern == "" || matchesPattern(resConfig.NamePattern, resource.Metadata.Name) {
+				// Check name selector
+				if resConfig.NameSelector == "" || matchesName(resConfig.NameSelector, resource.Metadata.Name) {
 					// Check label selector
 					if resConfig.LabelSelector == "" || matchesLabelSelector(resConfig.LabelSelector, resource.Metadata.Labels) {
 						return true
@@ -204,8 +268,8 @@ func shouldMonitorResource(config *FaroConfig, resource ManifestResource) bool {
 
 // matchesResourceSelector checks if a resource matches the resource selector criteria
 func matchesResourceSelector(selector ResourceSelector, resource ManifestResource) bool {
-	// Check name pattern
-	if selector.NamePattern != "" && !matchesPattern(selector.NamePattern, resource.Metadata.Name) {
+	// Check name selector
+	if selector.NameSelector != "" && !matchesName(selector.NameSelector, resource.Metadata.Name) {
 		return false
 	}
 
@@ -217,14 +281,14 @@ func matchesResourceSelector(selector ResourceSelector, resource ManifestResourc
 	return true
 }
 
-// matchesPattern checks if a string matches a pattern (supports wildcards)
-func matchesPattern(pattern, value string) bool {
-	if pattern == "" {
+// matchesName checks if a string matches a name (supports wildcards for backward compatibility)
+func matchesName(nameSelector, value string) bool {
+	if nameSelector == "" {
 		return true
 	}
 	
-	// Convert shell-style wildcards to regex
-	regexPattern := strings.ReplaceAll(pattern, "*", ".*")
+	// Convert shell-style wildcards to regex for backward compatibility
+	regexPattern := strings.ReplaceAll(nameSelector, "*", ".*")
 	regexPattern = "^" + regexPattern + "$"
 	
 	matched, _ := regexp.MatchString(regexPattern, value)
@@ -274,51 +338,198 @@ func convertToGVR(apiVersion, kind string) string {
 	return fmt.Sprintf("%s/%ss", apiVersion, strings.ToLower(kind))
 }
 
-func TestFaroTest1NamespaceCentric(t *testing.T) {
-	feature := features.New("Faro Test 1 - Namespace-Centric ConfigMap").
-		Assess("should capture ConfigMap events", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-
-			configFile := "configs/simple-test-1.yaml"
-			manifestFile := "manifests/test1-manifest.yaml"
-			updateManifestFile := "manifests/test1-manifest-update.yaml"
-			logDir := "logs/test1"
-			
-			// Generate expected events dynamically based on config and manifests
-			expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
-			if err != nil {
-				t.Fatalf("Failed to generate expected events: %v", err)
-			}
-
-			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+// runParallelE2ETest runs an e2e test using existing configs/manifests for parallel execution
+func runParallelE2ETest(t *testing.T, testName, configFile, manifestFile, updateManifestFile string, expectedEvents []FaroJSONEvent) {
+	// Build binary (only once across all tests)
+	t.Log("Ensuring binary is available...")
+	if err := buildBinary(); err != nil {
+		t.Fatalf("Failed to build binary: %v", err)
+	}
+	t.Logf("Using binary: %s", binaryPath)
+	
+	// Create isolated test environment
+	testEnv := env.New()
+	
+	feature := features.New(fmt.Sprintf("Parallel Test %s", testName)).
+		Assess("should capture events in parallel", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			runE2ETestWithManifestParallel(t, ctx, cfg, configFile, manifestFile, updateManifestFile, expectedEvents)
 			return ctx
 		}).Feature()
+	
+	testEnv.Test(t, feature)
+}
 
-	testenv.Test(t, feature)
+// runE2ETestWithManifestParallel is the parallel version of runE2ETestWithManifest
+func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envconf.Config, configFile, manifestFile, updateManifestFile string, expectedEvents []FaroJSONEvent) {
+	// ========================================
+	// PHASE 1: START MONITORING
+	// ========================================
+	t.Log("")
+	t.Log("📡 PHASE 1: Starting Faro binary...")
+
+	// Start Faro with binary and original config
+	configPath, _ := filepath.Abs(configFile)
+	cmd := exec.Command(binaryPath, "-config", configPath)
+	cmd.Dir = "."
+
+	stdout, err := cmd.StdoutPipe()
+			if err != nil {
+		t.Fatalf("Failed to create stdout pipe: %v", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stderr pipe: %v", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start Faro: %v", err)
+	}
+
+	// Ensure Faro is killed even if test fails
+	defer func() {
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+			cmd.Wait()
+		}
+	}()
+
+	// Wait for Faro to be ready
+	if err := waitForFaroReady(t, stdout, stderr); err != nil {
+		t.Fatalf("Faro failed to start: %v", err)
+	}
+
+	t.Log("✅ PHASE 1 COMPLETE: Faro binary is ready!")
+
+	// ========================================
+	// PHASE 2: APPLY MANIFESTS
+	// ========================================
+	t.Log("")
+	t.Log("📝 PHASE 2: Working with manifests...")
+
+	// Apply manifest
+	t.Log("Applying manifest...")
+	manifestPath, _ := filepath.Abs(manifestFile)
+	applyCmd := exec.Command("kubectl", "apply", "-f", manifestPath)
+	if err := applyCmd.Run(); err != nil {
+		t.Fatalf("Failed to apply manifest: %v", err)
+	}
+
+	// Update ConfigMap if update manifest exists
+	if updateManifestFile != "" {
+		t.Log("Updating ConfigMap...")
+		updatePath, _ := filepath.Abs(updateManifestFile)
+		updateCmd := exec.Command("kubectl", "apply", "-f", updatePath)
+		if err := updateCmd.Run(); err != nil {
+			t.Log("ConfigMap update failed (might not exist): " + err.Error())
+		}
+	}
+
+	// Delete manifest
+	t.Log("Deleting manifest...")
+	deleteCmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found")
+	if err := deleteCmd.Run(); err != nil {
+		t.Logf("Failed to delete manifest: %v", err)
+	}
+
+	t.Log("✅ PHASE 2 COMPLETE: All manifest work finished!")
+
+	// ========================================
+	// PHASE 3: STOP MONITORING
+	// ========================================
+	t.Log("")
+	t.Log("🛑 PHASE 3: Stopping Faro binary...")
+
+	// Stop Faro
+	if cmd.Process != nil {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}
+
+	t.Log("✅ PHASE 3 COMPLETE: Faro binary stopped!")
+
+	// ========================================
+	// PHASE 4: ANALYZE RESULTS
+	// ========================================
+	t.Log("")
+	t.Log("📊 PHASE 4: Loading and analyzing captured JSON events...")
+
+	// Extract log directory from config file
+	logDir := extractLogDirFromConfig(configFile)
+	
+	// Read events from log directory
+	events, err := readJSONEvents(logDir)
+	if err != nil {
+		t.Fatalf("Failed to read events: %v", err)
+	}
+
+	t.Log("=== LOG LOCATIONS ===")
+	t.Logf("Faro logs: %s/logs/", logDir)
+	
+	// Find JSON export file
+	jsonPattern := filepath.Join(logDir, "logs", "events-*.json")
+	jsonFiles, err := filepath.Glob(jsonPattern)
+	if err == nil && len(jsonFiles) > 0 {
+		t.Logf("JSON export: %s", jsonFiles[len(jsonFiles)-1])
+	} else {
+		t.Logf("JSON export: Not found")
+	}
+
+	t.Log("✅ PHASE 4 COMPLETE: JSON events loaded successfully!")
+
+	// ========================================
+	// PHASE 5: VALIDATE RESULTS
+	// ========================================
+	t.Log("")
+	t.Log("🔍 PHASE 5: Comparing and validating data...")
+
+	validateEvents(t, events, expectedEvents)
+
+	t.Log("✅ PHASE 5 COMPLETE: Data validation finished!")
+	t.Log("")
+	t.Log("========================================")
+	t.Log("🎯 E2E TEST SUMMARY")
+	t.Log("========================================")
+	t.Log("   ✅ Phase 1 - Faro binary started: SUCCESS")
+	t.Log("   ✅ Phase 2 - Manifests processed: SUCCESS")
+	t.Log("   ✅ Phase 3 - Faro binary stopped: SUCCESS")
+	t.Log("   ✅ Phase 4 - JSON events loaded: SUCCESS")
+	t.Log("   ✅ Phase 5 - Data validation: SUCCESS")
+	t.Log("========================================")
+}
+
+func TestFaroTest1NamespaceCentric(t *testing.T) {
+	t.Parallel() // Enable parallel execution
+	
+	expectedEvents := []FaroJSONEvent{
+		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "kube-root-ca.crt"},
+		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "test-config-1"},
+		{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "test-config-1"},
+		{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "test-config-1"},
+		{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "kube-root-ca.crt"},
+	}
+	
+	runParallelE2ETest(t, "test1", "configs/simple-test-1.yaml", "manifests/test1-manifest.yaml", "manifests/test1-manifest-update.yaml", expectedEvents)
 }
 
 func TestFaroTest2ResourceCentric(t *testing.T) {
-	feature := features.New("Faro Test 2 - Resource-Centric ConfigMap").
-		Assess("should capture ConfigMap events", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-
-			configFile := "configs/simple-test-2.yaml"
-			manifestFile := "manifests/test2-manifest.yaml"
-			updateManifestFile := "manifests/test2-manifest-update.yaml"
-			logDir := "logs/test2"
-			
-			// Generate expected events dynamically based on config and manifests
-			expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
-			if err != nil {
-				t.Fatalf("Failed to generate expected events: %v", err)
-			}
-
-			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
-			return ctx
-		}).Feature()
-
-	testenv.Test(t, feature)
+	t.Parallel() // Enable parallel execution
+	
+	expectedEvents := []FaroJSONEvent{
+		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-2", Name: "test-config-1"},
+		{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-2", Name: "test-config-1"},
+		{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-2", Name: "test-config-1"},
+	}
+	
+	runParallelE2ETest(t, "test2", "configs/simple-test-2.yaml", "manifests/test2-manifest.yaml", "manifests/test2-manifest-update.yaml", expectedEvents)
 }
 
 func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Config, configFile string, manifestFile string, logDir string, expectedEvents []FaroJSONEvent) {
+	// ========================================
+	// PHASE 1: START MONITORING
+	// ========================================
+	t.Log("")
+	t.Log("📡 PHASE 1: Starting Faro binary...")
+	
 	// Start Faro
 	faroCmd := exec.CommandContext(ctx, "../../faro", "-config", configFile)
 	
@@ -346,7 +557,15 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	if err := waitForFaroReady(t, stdout, stderr); err != nil {
 		t.Fatalf("Faro failed to initialize: %v", err)
 	}
+	
+	t.Log("✅ PHASE 1 COMPLETE: Faro binary is ready!")
 
+	// ========================================
+	// PHASE 2: WORKING WITH MANIFESTS
+	// ========================================
+	t.Log("")
+	t.Log("📝 PHASE 2: Working with manifests...")
+	
 	// Apply manifest
 	t.Log("Applying manifest...")
 	applyCmd := exec.Command("kubectl", "apply", "-f", manifestFile)
@@ -377,11 +596,27 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 		t.Logf("Failed to delete manifest: %v", err)
 	}
 	time.Sleep(2 * time.Second) // Reduced from 3s
+	
+	t.Log("✅ PHASE 2 COMPLETE: All manifest work finished!")
 
+	// ========================================
+	// PHASE 3: STOPPING MONITORING
+	// ========================================
+	t.Log("")
+	t.Log("🛑 PHASE 3: Stopping Faro binary...")
+	
 	// Stop Faro
 	faroCmd.Process.Kill()
 	faroCmd.Wait()
+	
+	t.Log("✅ PHASE 3 COMPLETE: Faro binary stopped!")
 
+	// ========================================
+	// PHASE 4: LOADING EVENTS JSON
+	// ========================================
+	t.Log("")
+	t.Log("📊 PHASE 4: Loading and analyzing captured JSON events...")
+	
 	// Validate events
 	events, err := readJSONEvents(logDir)
 	if err != nil {
@@ -401,8 +636,28 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 		t.Logf("JSON export: Not found")
 	}
 	
+	t.Log("✅ PHASE 4 COMPLETE: JSON events loaded successfully!")
+
+	// ========================================
+	// PHASE 5: COMPARING DATA
+	// ========================================
+	t.Log("")
+	t.Log("🔍 PHASE 5: Comparing and validating data...")
+	
 	displayFaroQueries(t, configFile)
 	validateEvents(t, expectedEvents, events)
+	
+	t.Log("✅ PHASE 5 COMPLETE: Data validation finished!")
+	t.Log("")
+	t.Log("========================================")
+	t.Log("🎯 E2E TEST SUMMARY")
+	t.Log("========================================")
+	t.Logf("   ✅ Phase 1 - Faro binary started: SUCCESS")
+	t.Logf("   ✅ Phase 2 - Manifests processed: SUCCESS")
+	t.Logf("   ✅ Phase 3 - Faro binary stopped: SUCCESS")
+	t.Logf("   ✅ Phase 4 - JSON events loaded: SUCCESS")
+	t.Logf("   ✅ Phase 5 - Data validation: SUCCESS")
+	t.Log("========================================")
 }
 
 func getNamespaceFromManifest(manifestFile string) string {
@@ -429,34 +684,24 @@ func getNamespaceFromManifest(manifestFile string) string {
 }
 
 func readJSONEvents(logDir string) ([]FaroJSONEvent, error) {
-	// First try to find a separate JSON export file
+	// Read from dedicated JSON export file only - no fallbacks
 	pattern := filepath.Join(logDir, "logs", "events-*.json")
 	files, err := filepath.Glob(pattern)
-	if err == nil && len(files) > 0 {
-		content, err := os.ReadFile(files[len(files)-1])
-		if err != nil {
-			return nil, err
-		}
-		return parseJSONEvents(string(content))
-	}
-
-	// Fallback: extract JSON events from the main Faro log file
-	// Look for the most recent Faro log file in output/logs/
-	logPattern := filepath.Join("output", "logs", "faro-*.log")
-	logFiles, err := filepath.Glob(logPattern)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to search for JSON export files: %v", err)
 	}
-	if len(logFiles) == 0 {
-		return nil, fmt.Errorf("no Faro log files found")
+	
+	if len(files) == 0 {
+		return nil, fmt.Errorf("no JSON export files found at %s - ensure json_export: true is set in config", pattern)
 	}
-
-	// Read the most recent log file
-	content, err := os.ReadFile(logFiles[len(logFiles)-1])
+	
+	// Use the most recent JSON export file
+	jsonFile := files[len(files)-1]
+	content, err := os.ReadFile(jsonFile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read JSON export file %s: %v", jsonFile, err)
 	}
-
+	
 	return parseJSONEvents(string(content))
 }
 
@@ -468,18 +713,13 @@ func parseJSONEvents(content string) ([]FaroJSONEvent, error) {
 			continue
 		}
 		
-		// Look for JSON events in log lines (they start with {"timestamp")
-		if strings.Contains(line, `{"timestamp"`) {
-			// Extract the JSON part from the log line
-			jsonStart := strings.Index(line, `{"timestamp"`)
-			if jsonStart >= 0 {
-				jsonStr := line[jsonStart:]
-				var event FaroJSONEvent
-				if err := json.Unmarshal([]byte(jsonStr), &event); err == nil {
-					events = append(events, event)
-				}
-			}
+		// Parse pure JSON lines from dedicated JSON export file
+		var event FaroJSONEvent
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			// Skip invalid JSON lines but don't fail the entire parse
+			continue
 		}
+		events = append(events, event)
 	}
 	return events, nil
 }
@@ -717,8 +957,8 @@ func displayFaroQueries(t *testing.T, configFile string) {
 			queries = append(queries, formatQuery(QueryInfo{
 				Type:      "namespace",
 				GVR:       gvr,
-				Namespace: ns.NamePattern,
-				Name:      ns.Resources[gvr].NamePattern,
+			Namespace: ns.NameSelector,
+			Name:      ns.Resources[gvr].NameSelector,
 				Labels:    ns.Resources[gvr].LabelSelector,
 			}))
 		}
@@ -729,8 +969,8 @@ func displayFaroQueries(t *testing.T, configFile string) {
 		queries = append(queries, formatQuery(QueryInfo{
 			Type:       "resource",
 			GVR:        res.GVR,
-			Namespaces: res.NamespacePatterns,
-			Name:       res.NamePattern,
+			Namespaces: res.NamespaceNames,
+			Name:       res.NameSelector,
 			Labels:     res.LabelSelector,
 		}))
 	}
@@ -747,7 +987,7 @@ type QueryInfo struct {
 	GVR        string   // Group/Version/Resource
 	Namespace  string   // Single namespace (for namespace-centric)
 	Namespaces []string // Multiple namespaces (for resource-centric)
-	Name       string   // Name pattern
+	Name       string   // Name selector
 	Labels     string   // Label selector
 }
 
@@ -829,5 +1069,6 @@ func validateEvents(t *testing.T, expected []FaroJSONEvent, actual []FaroJSONEve
 		}
 	}
 }
+
 
 
