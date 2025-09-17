@@ -1,288 +1,328 @@
-# Config Component
+# Configuration Component
 
-Configuration parsing, validation, and normalization system supporting dual format inputs.
+The Configuration component provides **simple YAML parsing** without complex business logic interpretation. Complex configuration processing is left to library users.
 
-## Core Types
+## Philosophy
 
-```go
-type Config struct {
-    OutputDir       string            // Log and output directory
-    LogLevel        string            // Logging verbosity level
-    AutoShutdownSec int               // Timeout for automatic shutdown
-    Namespaces      []NamespaceConfig // Namespace-centric format
-    Resources       []ResourceConfig  // Resource-centric format
-}
+**Faro Core Provides**: Basic YAML structure parsing and simple normalization
+**Library Users Implement**: Complex interpretation, pattern matching, and business rules
 
-type NormalizedConfig struct {
-    GVR               string          // Group/Version/Resource
-    ResourceDetails   ResourceDetails // Filtering criteria (SERVER-SIDE only)
-    NamespaceNames []string        // Literal namespace names only (for server-side filtering)
-    NameSelector       string          // Exact name for resource name filtering (server-side)
-    LabelSelector     string          // Kubernetes label selector for SERVER-SIDE filtering only
-}
-```
+## Supported Formats
 
-## Configuration Formats
+Faro supports two simple configuration formats that are normalized to a unified internal structure:
 
-### Namespace-Centric Format
+### 1. Namespace-Centric Format
+Groups resources by namespace:
+
 ```yaml
+output_dir: "./logs"
+log_level: "info"
+json_export: true
+
 namespaces:
-  - name_selector: "faro-test-1"  # Literal namespace name for server-side filtering
+  - name_pattern: "production"
     resources:
       "v1/configmaps":
-        name_selector: "test-config-1"  # Exact name for server-side field selector
-        label_selector: "app=faro-test"  # Server-side label filtering
+        label_selector: "app=nginx"
+      "batch/v1/jobs": {}
+      "v1/events": {}
+  - name_pattern: "staging"  
+    resources:
+      "v1/configmaps":
+        label_selector: "app=web"
 ```
 
-### Resource-Centric Format
+### 2. Resource-Centric Format
+Groups namespaces by resource type:
+
 ```yaml
+output_dir: "./logs"
+log_level: "info"
+json_export: true
+
 resources:
   - gvr: "v1/configmaps"
-    scope: "Namespaced"
-    namespace_names: ["faro-test-2"]  # Literal namespace names only
-    name_selector: "test-config-1"        # Exact name for server-side filtering
-    label_selector: "app=faro-test"      # Server-side label filtering
+    namespace_names: ["production", "staging"]
+    label_selector: "app=nginx"
+  - gvr: "batch/v1/jobs"
+    namespace_names: ["production"]
+  - gvr: "v1/namespaces"
+    namespace_names: [""]  # Cluster-scoped (empty namespace)
+```
+
+## Configuration Fields
+
+### Global Settings
+```yaml
+output_dir: "./logs"           # Directory for logs and JSON export
+log_level: "info"              # Log level: debug, info, warning, error
+json_export: true              # Enable structured JSON event export
+auto_shutdown_sec: 120         # Auto-shutdown timeout (0 = run indefinitely)
+```
+
+### Resource Configuration
+```yaml
+# Simple resource specification
+gvr: "v1/configmaps"                    # Group/Version/Resource
+namespace_names: ["prod", "staging"]    # Target namespaces (exact names only)
+label_selector: "app=nginx,tier=web"    # Kubernetes label selector
+name_selector: "app-config"             # Exact resource name (no patterns)
 ```
 
 ## Normalization Process
 
-```mermaid
-graph TD
-    A[YAML Config] --> B{Format Type}
-    B -->|Namespace-Centric| C[Process Namespaces]
-    B -->|Resource-Centric| D[Process Resources]
-    B -->|Both| E[Process Both Formats]
-    
-    C --> F[Create NormalizedConfig]
-    D --> F
-    E --> F
-    
-    F --> G[Group by GVR]
-    G --> H[Return map[GVR][]NormalizedConfig]
-    
-    subgraph "Namespace Processing"
-        C --> C1[For each namespace]
-        C1 --> C2[For each resource in namespace]
-        C2 --> C3[Create NormalizedConfig entry]
-    end
-    
-    subgraph "Resource Processing"
-        D --> D1[For each resource]
-        D1 --> D2[Determine namespace selectors]
-        D2 --> D3[Create NormalizedConfig entry]
-    end
-```
-
-## Configuration Loading
-
-```mermaid
-sequenceDiagram
-    participant M as Main
-    participant C as Config
-    participant F as File System
-    participant V as Validator
-    
-    M->>C: LoadConfig()
-    C->>C: Parse CLI flags
-    alt Config file specified
-        C->>F: LoadFromYAML(file)
-        F-->>C: YAML content
-        C->>C: yaml.Unmarshal()
-    end
-    C->>V: Validate()
-    V-->>C: Validation result
-    C->>F: MkdirAll(OutputDir)
-    C-->>M: Config instance
-```
-
-## Data Structure Relationships
-
-```mermaid
-classDiagram
-    class Config {
-        +string OutputDir
-        +string LogLevel
-        +int AutoShutdownSec
-        +[]NamespaceConfig Namespaces
-        +[]ResourceConfig Resources
-        +LoadConfig() Config
-        +Normalize() map[string][]NormalizedConfig
-        +Validate() error
-    }
-    
-    class NamespaceConfig {
-        +string NameSelector
-        +map[string]ResourceDetails Resources
-        +GetMatchingResources() []string
-    }
-    
-    class ResourceConfig {
-        +string GVR
-        +Scope Scope
-        +[]string NamespaceNames
-        +string NameSelector
-        +string LabelSelector
-    }
-    
-    class ResourceDetails {
-        +string LabelSelector
-    }
-    
-    class NormalizedConfig {
-        +string GVR
-        +ResourceDetails ResourceDetails
-        +[]string NamespaceNames
-        +string NameSelector
-        +string LabelSelector
-    }
-    
-    Config "1" --> "*" NamespaceConfig
-    Config "1" --> "*" ResourceConfig
-    NamespaceConfig "1" --> "*" ResourceDetails
-    Config --> NormalizedConfig : normalizes to
-```
-
-## Scope Handling
+Both configuration formats are converted to a unified internal structure:
 
 ```go
-type Scope string
-
-const (
-    ClusterScope    Scope = "Cluster"    // Cluster-scoped resources
-    NamespaceScope  Scope = "Namespaced" // Namespace-scoped resources
-)
+type NormalizedConfig struct {
+    GVR            string   // Group/Version/Resource identifier
+    NamespaceNames []string // Target namespace names
+    NameSelector   string   // Exact resource name filter
+    LabelSelector  string   // Kubernetes label selector
+}
 ```
 
-### Cluster-Scoped Resources
-- **Namespace Patterns**: Single empty string `[""]`
-- **Examples**: `v1/nodes`, `v1/namespaces`, `rbac.authorization.k8s.io/v1/clusterroles`
-- **Access Pattern**: No namespace specification in API calls
+### Simple Conversion Logic
+```go
+func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
+    normalizedMap := make(map[string][]NormalizedConfig)
 
-### Namespace-Scoped Resources
-- **Namespace Patterns**: Literal namespace names only for server-side filtering
-- **Examples**: `v1/pods`, `v1/services`, `apps/v1/deployments`
-- **Access Pattern**: Requires namespace specification in API calls
+    // Simple namespace format conversion
+    for _, nsConfig := range c.Namespaces {
+        for gvr, details := range nsConfig.Resources {
+            normalizedMap[gvr] = append(normalizedMap[gvr], NormalizedConfig{
+                GVR:            gvr,
+                NamespaceNames: []string{nsConfig.NameSelector},
+                LabelSelector:  details.LabelSelector,
+            })
+        }
+    }
 
-## Validation Rules
+    // Simple resource format conversion
+    for _, resConfig := range c.Resources {
+        normalizedMap[resConfig.GVR] = append(normalizedMap[resConfig.GVR], NormalizedConfig{
+            GVR:            resConfig.GVR,
+            NamespaceNames: resConfig.NamespaceNames,
+            NameSelector:   resConfig.NameSelector,
+            LabelSelector:  resConfig.LabelSelector,
+        })
+    }
+    
+    if len(normalizedMap) == 0 {
+        return nil, fmt.Errorf("no resources configured")
+    }
 
-### Basic Validation
-- **Output Directory**: Must be valid filesystem path
-- **Log Level**: Must be one of: debug, info, warning, error, fatal
-- **Auto Shutdown**: Non-negative integer (0 = infinite)
-
-### Configuration Format Validation
-- **Mutual Exclusivity**: Not enforced - both formats can coexist
-- **Empty Configuration**: Error if no namespaces or resources specified
-- **Server-Side Filtering**: All filtering done via Kubernetes API server
-
-### GVR Format Validation
-- **Pattern**: `group/version/resource` or `version/resource` for core API
-- **Examples**: `apps/v1/deployments`, `v1/pods`, `apiextensions.k8s.io/v1/customresourcedefinitions`
-
-## Server-Side Filtering
-
-Faro implements **server-side filtering only** using Kubernetes API capabilities:
-
-### Label Selector (Kubernetes Standard)
-
-Uses standard Kubernetes label selector syntax for server-side filtering:
-
-```yaml
-# Namespace-centric format
-namespaces:
-  - name_selector: "faro-test-1"  # Literal namespace name
-    resources:
-      "v1/configmaps":
-        name_selector: "test-config-1"        # Exact name for field selector
-        label_selector: "app=faro-test"      # Server-side label filtering
+    return normalizedMap, nil
+}
 ```
 
-**Kubernetes Label Selector Syntax:**
-- **Equality**: `app=nginx`
-- **Inequality**: `app!=apache`  
-- **Set-based**: `environment in (production,staging)`
-- **Existence**: `app`
-- **Non-existence**: `!app`
-- **Multiple conditions**: `app=nginx,tier=frontend`
+## What Faro Core Does NOT Do
 
-**Server-Side Filtering Benefits:**
-- **API Server Processing**: The Kubernetes API server receives requests and performs filtering based on selectors, only retrieving resources that match criteria
-- **etcd Efficiency**: The etcd database backing the API server is designed for efficient key lookups and watches, handling filtered requests without transmitting entire datasets
-- **Network Optimization**: Only matching resources are transferred from API server to client, reducing bandwidth usage
-- **Memory Efficiency**: Client applications receive only relevant data, minimizing memory footprint
-- **Faro Core Efficiency**: No client-side pattern matching or filtering logic required in Faro core (applications may implement additional filtering)
-- **Scalability**: Performance scales with filtered results, not total cluster resources
-- **Implementation**: Applied via `ListOptions.LabelSelector` and `ListOptions.FieldSelector`
-- **Faro Core Behavior**: All events matching server-side filters are forwarded to application handlers (confirmed by integration tests)
+### No Complex Interpretation
+- **No Regex Processing**: Pattern matching left to library users
+- **No Default Values**: Missing configuration causes errors
+- **No Validation Logic**: Complex validation implemented by users
+- **No Business Rules**: Policy decisions made by library users
 
-### Field Selector (Exact Name Matching)
+### No Fallback Logic
+```go
+// Faro does NOT do this:
+if config.Invalid {
+    // Apply default configuration
+    // Start default monitoring
+    // Hide the error
+}
 
-For exact resource name matches, Faro uses Kubernetes field selectors:
-
-```yaml
-resources:
-  - gvr: "v1/configmaps"
-    scope: "Namespaced"
-    namespace_names: ["faro-test-2"]  # Literal namespace names
-    name_selector: "test-config-1"        # Creates metadata.name=test-config-1 field selector
-    label_selector: "app=faro-test"      # Server-side label filtering
+// Faro DOES do this:
+if len(normalizedMap) == 0 {
+    return nil, fmt.Errorf("no resources configured")
+}
 ```
 
-**Field Selector Implementation:**
-- **Format**: `metadata.name=exact-value`
-- **Server-Side**: Applied at Kubernetes API level
-- **Performance**: Optimal network and processing efficiency
-- **Limitation**: Only exact matches supported (no wildcards or regex)
+## Library User Responsibilities
 
-## Command Line Interface
+### 1. Complex Configuration Processing
+Library users implement advanced configuration logic:
 
-### Flags
-```bash
---config string           # YAML configuration file path
---output-dir string       # Output directory (default "./output")
---log-level string        # Log level (default "info")
---auto-shutdown int       # Auto-shutdown seconds (default 0)
---help, -h               # Show help
+```go
+type AdvancedConfig struct {
+    *faro.Config
+    // Add complex fields
+    NamePatterns    []string `yaml:"name_patterns"`
+    LabelPatterns   []string `yaml:"label_patterns"`
+    BusinessRules   []Rule   `yaml:"business_rules"`
+}
+
+func (a *AdvancedConfig) ProcessAdvanced() error {
+    // Implement regex processing
+    // Apply business rules
+    // Generate dynamic configurations
+    // Convert to simple Faro config
+    return a.convertToFaroConfig()
+}
 ```
 
-### Precedence
-1. **Command line flags**: Highest priority
-2. **YAML file values**: Override defaults
-3. **Default values**: Fallback values
+### 2. Dynamic Configuration Generation
+Library users can generate configurations at runtime:
+
+```go
+type ConfigGenerator struct {
+    baseConfig *faro.Config
+}
+
+func (g *ConfigGenerator) GenerateFromCRDs() (*faro.Config, error) {
+    // Discover CRDs
+    // Generate resource configurations
+    // Apply business logic
+    // Return simple Faro config
+}
+
+func (g *ConfigGenerator) GenerateFromEvents() (*faro.Config, error) {
+    // Process events for GVR discovery
+    // Extract namespace patterns
+    // Generate monitoring configuration
+    // Return simple Faro config
+}
+```
+
+### 3. Configuration Validation
+Library users implement validation logic:
+
+```go
+type ConfigValidator struct{}
+
+func (v *ConfigValidator) Validate(config *faro.Config) error {
+    // Check business rules
+    // Validate resource accessibility
+    // Verify namespace existence
+    // Apply security policies
+    return nil
+}
+```
+
+## Usage Examples
+
+### Basic Usage
+```go
+// Simple configuration loading
+config, err := faro.LoadConfig()
+if err != nil {
+    log.Fatal("Configuration error:", err)
+}
+
+// No fallbacks - errors must be handled
+controller := faro.NewController(client, logger, config)
+```
+
+### Advanced Usage with Custom Processing
+```go
+// Load base configuration
+baseConfig, err := faro.LoadConfig()
+if err != nil {
+    log.Fatal("Base configuration error:", err)
+}
+
+// Apply business logic
+processor := &ConfigProcessor{baseConfig: baseConfig}
+processedConfig, err := processor.ApplyBusinessRules()
+if err != nil {
+    log.Fatal("Configuration processing error:", err)
+}
+
+// Use processed configuration
+controller := faro.NewController(client, logger, processedConfig)
+```
+
+### Dynamic Configuration Updates
+```go
+// Initial configuration
+controller := faro.NewController(client, logger, initialConfig)
+controller.Start()
+
+// Runtime configuration updates (library user implements)
+configWatcher := &ConfigWatcher{controller: controller}
+go configWatcher.WatchForChanges()
+
+// Add new resources dynamically
+newResources := []faro.ResourceConfig{
+    {GVR: "batch/v1/jobs", NamespaceNames: []string{"production"}},
+}
+controller.AddResources(newResources)
+controller.StartInformers()
+```
 
 ## Error Handling
 
-### Configuration Errors
-- **File Not Found**: Clear error with attempted path
-- **YAML Parse Error**: Line and column information
-- **Validation Error**: Specific field and constraint information
+### Strict Error Propagation
+Configuration errors are **never masked** with defaults:
 
-### Server-Side Filtering Errors
-- **Invalid Label Selector**: Kubernetes API validation errors
-- **Invalid Field Selector**: Field selector syntax validation
-- **Graceful Degradation**: Skip invalid selectors, continue with valid ones
-- **Logging**: Warning messages for invalid selector selectors
+```go
+// Configuration loading
+config, err := faro.LoadConfig()
+if err != nil {
+    // Error must be handled - no fallbacks provided
+    return fmt.Errorf("configuration failed: %w", err)
+}
 
-## Performance Characteristics
+// Normalization
+normalized, err := config.Normalize()
+if err != nil {
+    // Invalid configuration causes immediate error
+    return fmt.Errorf("normalization failed: %w", err)
+}
+```
 
-### Server-Side Filtering Architecture
+### No Hidden Behavior
+All configuration processing is explicit:
 
-**Kubernetes API Server Processing:**
-1. **Request Reception**: API server receives LIST/WATCH requests with selector parameters
-2. **etcd Query Construction**: Server builds efficient queries based on label and field selectors
-3. **Filtered Retrieval**: Only resources matching criteria are retrieved from etcd storage
-4. **Selective Transmission**: API server transmits only matching resources to Faro client
-5. **Watch Optimization**: Subsequent watch events are pre-filtered before network transmission
+```go
+// Faro does NOT hide configuration problems
+func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
+    // No default resources
+    // No fallback namespaces  
+    // No hidden business logic
+    
+    if len(normalizedMap) == 0 {
+        return nil, fmt.Errorf("no resources configured")
+    }
+    return normalizedMap, nil
+}
+```
 
-**etcd Database Efficiency:**
-- **Key-Value Design**: etcd's architecture enables efficient key lookups and range queries for resource filtering
-- **Index Utilization**: Label and field selectors leverage etcd's built-in indexing capabilities
-- **Watch Streams**: Native support for filtered watch streams reduces unnecessary data transfer
-- **Memory Conservation**: Server-side filtering prevents loading entire resource sets into API server memory
+## Integration with Examples
 
-**Performance Benefits:**
-- **Network Efficiency**: Only matching resources transferred from API server to client
-- **Faro Core CPU Efficiency**: No client-side pattern matching, regex processing, or filtering logic required in Faro core
-- **Memory Efficiency**: Reduced object storage and processing overhead in client applications
-- **Scalability**: Performance scales with filtered results, not total cluster resource count
-- **Bandwidth Conservation**: Eliminates transmission of irrelevant resources across network
+### Workload Monitor Configuration
+The workload monitor example shows how library users implement complex configuration:
+
+```go
+// Base Faro configuration (simple)
+baseConfig := &faro.Config{
+    Resources: []faro.ResourceConfig{
+        {GVR: "v1/namespaces", NamespaceNames: []string{""}},
+        {GVR: "v1/events", NamespaceNames: workloadNamespaces},
+    },
+}
+
+// Business logic adds complexity
+workloadConfig := &faro.Config{
+    Resources: []faro.ResourceConfig{
+        {GVR: "batch/v1/jobs", NamespaceNames: workloadNamespaces},
+        {GVR: "v1/configmaps", NamespaceNames: workloadNamespaces},
+        {GVR: "v1/events", NamespaceNames: workloadNamespaces},
+    },
+}
+```
+
+## Testing
+
+### Unit Tests
+- **Simple Parsing**: Test YAML loading and basic normalization
+- **Error Cases**: Verify proper error propagation
+- **Format Support**: Test both namespace and resource formats
+
+### Integration Tests  
+- **Real Configurations**: Test with actual YAML files
+- **Complex Scenarios**: Library user implementations with advanced logic
+- **Dynamic Updates**: Runtime configuration changes
+
+The Configuration component provides **simple, reliable YAML parsing** while leaving complex interpretation and business logic to library users, maintaining clean separation of concerns.

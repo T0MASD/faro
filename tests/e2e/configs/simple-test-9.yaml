@@ -9,22 +9,22 @@ resources:
   # Monitor specific namespaces instead of regex pattern
   - gvr: "v1/namespaces"
     scope: "cluster"
-    name_pattern: "faro-multi-main"
+    name_selector: "faro-multi-main"
   - gvr: "v1/namespaces"
     scope: "cluster"
-    name_pattern: "faro-multi-app"
+    name_selector: "faro-multi-app"
   - gvr: "v1/namespaces"
     scope: "cluster"
-    name_pattern: "faro-multi-db"
+    name_selector: "faro-multi-db"
   - gvr: "batch/v1/jobs"
     scope: "namespaced"
-    namespace_patterns:
+    namespace_names:
       - "faro-multi-main"
       - "faro-multi-app"
       - "faro-multi-db"
   - gvr: "v1/configmaps"
     scope: "namespaced"
-    namespace_patterns:
+    namespace_names:
       - "faro-multi-main"
       - "faro-multi-app"
       - "faro-multi-db"

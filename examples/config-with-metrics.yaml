@@ -1,0 +1,37 @@
+# Faro Configuration with Prometheus Metrics Enabled
+# 
+# Faro Core Provides: Informer management, event streaming, JSON export, metrics
+# Library Users Implement: Business logic, complex filtering, workload detection
+output_dir: "./output"
+log_level: "info"
+auto_shutdown_sec: 0  # Run indefinitely
+json_export: true
+
+# Prometheus metrics configuration - GVR-scoped observability
+metrics:
+  enabled: true          # Enable Prometheus metrics collection
+  port: 8080            # HTTP server port for metrics endpoint
+  path: "/metrics"      # Metrics endpoint path (default: /metrics)
+  bind_addr: "0.0.0.0"  # Bind address (default: 0.0.0.0)
+
+# Simple resource configuration - Faro core provides basic filtering mechanisms
+# Complex business logic (CRD discovery, workload detection) implemented by library users
+resources:
+  # Monitor all ConfigMaps in specific namespaces
+  - gvr: "v1/configmaps"
+    scope: "Namespaced"
+    namespace_patterns: ["default", "kube-system"]
+    
+  # Monitor Jobs with specific labels
+  - gvr: "batch/v1/jobs"
+    scope: "Namespaced"
+    label_selector: "app=faro-test"
+    
+  # Monitor all Deployments cluster-wide
+  - gvr: "apps/v1/deployments"
+    scope: "Namespaced"
+    
+  # Monitor Events in specific namespaces
+  - gvr: "v1/events"
+    scope: "Namespaced"
+    namespace_patterns: ["default", "monitoring"]
