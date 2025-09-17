@@ -371,6 +371,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 	configPath, _ := filepath.Abs(configFile)
 	cmd := exec.Command(binaryPath, "-config", configPath)
 	cmd.Dir = "."
+	cmd.Env = os.Environ()
 
 	stdout, err := cmd.StdoutPipe()
 			if err != nil {
@@ -410,6 +411,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 	t.Log("Applying manifest...")
 	manifestPath, _ := filepath.Abs(manifestFile)
 	applyCmd := exec.Command("kubectl", "apply", "-f", manifestPath)
+	applyCmd.Env = os.Environ()
 	if err := applyCmd.Run(); err != nil {
 		t.Fatalf("Failed to apply manifest: %v", err)
 	}
@@ -419,6 +421,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 		t.Log("Updating ConfigMap...")
 		updatePath, _ := filepath.Abs(updateManifestFile)
 		updateCmd := exec.Command("kubectl", "apply", "-f", updatePath)
+		updateCmd.Env = os.Environ()
 		if err := updateCmd.Run(); err != nil {
 			t.Log("ConfigMap update failed (might not exist): " + err.Error())
 		}
@@ -427,6 +430,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 	// Delete manifest
 	t.Log("Deleting manifest...")
 	deleteCmd := exec.Command("kubectl", "delete", "-f", manifestPath, "--ignore-not-found")
+	deleteCmd.Env = os.Environ()
 	if err := deleteCmd.Run(); err != nil {
 		t.Logf("Failed to delete manifest: %v", err)
 	}
@@ -482,7 +486,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 	t.Log("")
 	t.Log("🔍 PHASE 5: Comparing and validating data...")
 
-	validateEvents(t, events, expectedEvents)
+	validateEvents(t, expectedEvents, events)
 
 	t.Log("✅ PHASE 5 COMPLETE: Data validation finished!")
 	t.Log("")
@@ -514,6 +518,7 @@ func TestFaroTest1NamespaceCentric(t *testing.T) {
 func TestFaroTest2ResourceCentric(t *testing.T) {
 	t.Parallel() // Enable parallel execution
 	
+	// Test 2 config specifies name_selector: "test-config-1", so only test-config-1 should be captured
 	expectedEvents := []FaroJSONEvent{
 		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-2", Name: "test-config-1"},
 		{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-2", Name: "test-config-1"},
@@ -532,6 +537,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	
 	// Start Faro
 	faroCmd := exec.CommandContext(ctx, "../../faro", "-config", configFile)
+	faroCmd.Env = os.Environ()
 	
 	// Capture stdout and stderr to monitor initialization
 	stdout, err := faroCmd.StdoutPipe()
@@ -569,6 +575,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	// Apply manifest
 	t.Log("Applying manifest...")
 	applyCmd := exec.Command("kubectl", "apply", "-f", manifestFile)
+	applyCmd.Env = os.Environ()
 	if err := applyCmd.Run(); err != nil {
 		t.Fatalf("Failed to apply manifest: %v", err)
 	}
@@ -576,6 +583,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 		// Clean up resources using update manifest (backward compatible)
 		updateManifestFile := strings.Replace(manifestFile, ".yaml", "-update.yaml", 1)
 		deleteCmd := exec.Command("kubectl", "delete", "-f", updateManifestFile, "--ignore-not-found=true")
+		deleteCmd.Env = os.Environ()
 		deleteCmd.Run()
 	}()
 	time.Sleep(1 * time.Second) // Reduced from 3s
@@ -584,6 +592,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	t.Log("Updating ConfigMap...")
 	updateManifestFile := strings.Replace(manifestFile, ".yaml", "-update.yaml", 1)
 	updateCmd := exec.Command("kubectl", "apply", "-f", updateManifestFile)
+	updateCmd.Env = os.Environ()
 	if err := updateCmd.Run(); err != nil {
 		t.Logf("ConfigMap update failed (might not exist): %v", err)
 	}
@@ -592,6 +601,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	// Delete using update manifest (backward compatible - includes all resources)
 	t.Log("Deleting manifest...")
 	deleteCmd := exec.Command("kubectl", "delete", "-f", updateManifestFile)
+	deleteCmd.Env = os.Environ()
 	if err := deleteCmd.Run(); err != nil {
 		t.Logf("Failed to delete manifest: %v", err)
 	}
@@ -793,13 +803,14 @@ func TestFaroTest6Combined(t *testing.T) {
 		configFile := "configs/simple-test-6.yaml"
 		manifestFile := "manifests/test6-manifest.yaml"
 		logDir := "logs/test6"
-		expectedEvents := []FaroJSONEvent{
-			{EventType: "ADDED", GVR: "v1/namespaces", Name: "faro-test-6"},
-			{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
-			{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
-			{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
-			{EventType: "DELETED", GVR: "v1/namespaces", Name: "faro-test-6"},
-		}
+				// Test 6 monitors both namespaces and configmaps - both should be captured correctly
+				expectedEvents := []FaroJSONEvent{
+					{EventType: "ADDED", GVR: "v1/namespaces", Name: "faro-test-6"},
+					{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
+					{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
+					{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
+					{EventType: "DELETED", GVR: "v1/namespaces", Name: "faro-test-6"},
+				}
 
 		runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
 			return ctx
