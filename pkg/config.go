@@ -24,17 +24,17 @@ type ResourceDetails struct {
 
 // NamespaceConfig defines namespace and its resources to watch (namespace-centric format)
 type NamespaceConfig struct {
-	NameSelector string                     `yaml:"name_pattern"` // Exact namespace name for server-side filtering
-	Resources   map[string]ResourceDetails `yaml:"resources"`    // Map of GVR to resource config
+	NameSelector string                     `yaml:"name_selector"` // Exact namespace name for server-side filtering
+	Resources   map[string]ResourceDetails `yaml:"resources"`     // Map of GVR to resource config
 }
 
 // ResourceConfig defines a resource-centric configuration
 type ResourceConfig struct {
-	GVR               string   `yaml:"gvr"`                         // Group/Version/Resource identifier
-	Scope             Scope    `yaml:"scope,omitempty"`            // Explicitly define scope (Cluster or Namespaced)
-	NamespaceNames []string `yaml:"namespace_patterns,omitempty"` // Literal namespace names only (for server-side filtering)
-	NameSelector   string   `yaml:"name_pattern,omitempty"`     // Exact name for resource name filtering (server-side)
-	LabelSelector     string   `yaml:"label_selector,omitempty"`   // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
+	GVR            string   `yaml:"gvr"`                        // Group/Version/Resource identifier
+	Scope          Scope    `yaml:"scope,omitempty"`           // Explicitly define scope (Cluster or Namespaced)
+	NamespaceNames []string `yaml:"namespace_names,omitempty"` // Exact namespace names only (for server-side filtering)
+	NameSelector   string   `yaml:"name_selector,omitempty"`   // Exact name for resource name filtering (server-side)
+	LabelSelector  string   `yaml:"label_selector,omitempty"`  // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
 }
 
 // NormalizedConfig is the unified data structure used internally by the controller.
@@ -47,16 +47,25 @@ type NormalizedConfig struct {
 	LabelSelector     string          // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
 }
 
+// MetricsConfig defines Prometheus metrics configuration
+type MetricsConfig struct {
+	Enabled    bool   `yaml:"enabled"`              // Enable Prometheus metrics
+	Port       int    `yaml:"port"`                 // Port for metrics HTTP server (default: 8080)
+	Path       string `yaml:"path"`                 // Metrics endpoint path (default: /metrics)
+	BindAddr   string `yaml:"bind_addr"`            // Bind address (default: 0.0.0.0)
+}
+
 // Config represents the minimalist Faro configuration supporting both formats
 type Config struct {
 	OutputDir       string            `yaml:"output_dir"`       // Directory for output files and logs
 	LogLevel        string            `yaml:"log_level"`        // Log level: debug, info, warning, error, fatal
 	AutoShutdownSec int               `yaml:"auto_shutdown_sec"` // Auto-shutdown timeout in seconds (0 = run indefinitely)
 	JsonExport      bool              `yaml:"json_export,omitempty"` // Enable JSON event export to separate file
+	Metrics         MetricsConfig     `yaml:"metrics,omitempty"`     // Prometheus metrics configuration
 	
-	// Configuration formats - only one should be populated
-	Namespaces      []NamespaceConfig `yaml:"namespaces,omitempty"`  // Namespace-centric format (legacy)
-	Resources       []ResourceConfig  `yaml:"resources,omitempty"`   // Resource-centric format (new)
+	// Simple configuration formats
+	Namespaces      []NamespaceConfig `yaml:"namespaces,omitempty"`  // Simple namespace format
+	Resources       []ResourceConfig  `yaml:"resources,omitempty"`   // Simple resource format
 }
 
 // LoadConfig loads configuration from YAML file or command line arguments
@@ -160,7 +169,7 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid output directory path: %w", err)
 	}
 	c.OutputDir = absPath
-	
+
 	return nil
 }
 
@@ -201,59 +210,33 @@ func (nsConfig *NamespaceConfig) GetMatchingResources() []string {
 	return gvrs
 }
 
-// Normalize takes either config format and converts it to a single internal structure.
-// Returns a map[string][]NormalizedConfig where the key is the GVR string and the value
-// is a slice of all NormalizedConfig objects that should monitor that GVR.
+// Normalize provides simple config structure conversion - supports both formats
 func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 	normalizedMap := make(map[string][]NormalizedConfig)
 
-	if len(c.Namespaces) > 0 {
-		// Process namespace-centric config
-		for _, nsConfig := range c.Namespaces {
-			for gvr, details := range nsConfig.Resources {
-				// Normalize into a single structure (SERVER-SIDE filtering only)
-				normalizedMap[gvr] = append(normalizedMap[gvr], NormalizedConfig{
-					GVR:               gvr,
-					ResourceDetails:   details,
-					NamespaceNames: []string{nsConfig.NameSelector}, // Literal namespace names only
-					LabelSelector:     details.LabelSelector, // SERVER-SIDE filtering only
-				})
-			}
+	// Simple namespace format conversion
+	for _, nsConfig := range c.Namespaces {
+		for gvr, details := range nsConfig.Resources {
+			normalizedMap[gvr] = append(normalizedMap[gvr], NormalizedConfig{
+				GVR:            gvr,
+				NamespaceNames: []string{nsConfig.NameSelector},
+				LabelSelector:  details.LabelSelector,
+			})
 		}
 	}
-	
-	if len(c.Resources) > 0 {
-		// Process resource-centric config
-		for _, resConfig := range c.Resources {
-			// Handle the case where namespaces are not specified (e.g., cluster-scoped)
-	namespaceNames := resConfig.NamespaceNames
-	if len(namespaceNames) == 0 {
-				if resConfig.Scope == ClusterScope {
-		// For cluster-scoped resources, use empty string to indicate cluster scope
-		namespaceNames = []string{""}
-	} else {
-		// Default to "all namespaces" for namespace-scoped resources without explicit names
-		namespaceNames = []string{""}
-	}
-			}
-			
-			// FIX: Create separate NormalizedConfig for each namespace to ensure proper informer creation
-			for _, namespace := range namespaceNames {
-				normalizedMap[resConfig.GVR] = append(normalizedMap[resConfig.GVR], NormalizedConfig{
-					GVR: resConfig.GVR,
-					ResourceDetails: ResourceDetails{
-						LabelSelector: resConfig.LabelSelector, // SERVER-SIDE filtering only
-					},
-			NamespaceNames: []string{namespace}, // Single namespace per config
-			NameSelector:   resConfig.NameSelector, // SERVER-SIDE name filtering
-					LabelSelector:     resConfig.LabelSelector, // SERVER-SIDE filtering only
-				})
-			}
-		}
+
+	// Simple resource format conversion
+	for _, resConfig := range c.Resources {
+		normalizedMap[resConfig.GVR] = append(normalizedMap[resConfig.GVR], NormalizedConfig{
+			GVR:            resConfig.GVR,
+			NamespaceNames: resConfig.NamespaceNames,
+			NameSelector:   resConfig.NameSelector,
+			LabelSelector:  resConfig.LabelSelector,
+		})
 	}
 	
 	if len(normalizedMap) == 0 {
-		return nil, fmt.Errorf("no valid configuration found - must have either 'namespaces' or 'resources' section")
+		return nil, fmt.Errorf("no resources configured")
 	}
 
 	return normalizedMap, nil

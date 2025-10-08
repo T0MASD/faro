@@ -24,7 +24,10 @@ func NewKubernetesClient() (*KubernetesClient, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		// Fallback to kubeconfig file
-		kubeconfigPath := filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		kubeconfigPath := os.Getenv("KUBECONFIG")
+		if kubeconfigPath == "" {
+			kubeconfigPath = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		}
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to build kubeconfig: %w", err)

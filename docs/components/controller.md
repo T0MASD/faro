@@ -1,214 +1,302 @@
 # Controller Component
 
-The Controller is the core component of Faro that manages Kubernetes resource monitoring through informers and event processing.
+The Controller is the core component of Faro that manages Kubernetes informers with a clean, unified architecture focused on **mechanisms, not policies**.
 
-## Overview
+## Purpose
 
-The Controller implements a multi-layered informer architecture that:
-- Discovers available Kubernetes API resources dynamically
-- Creates informers for configured resources with server-side filtering
-- Processes resource events through a unified pipeline
-- Provides readiness callbacks for initialization synchronization
-- Handles graceful shutdown with timeout protection
+Provide reliable informer management and event streaming without business logic:
+
+- **Informer Lifecycle**: Create, start, stop, and manage Kubernetes informers
+- **Event Streaming**: Reliable event delivery via work queues
+- **Server-side Filtering**: Efficient API-level resource filtering
+- **JSON Export**: Structured event output for integration
 
 ## Architecture
 
-### Core Structure
+### Clean Separation of Concerns
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    LIBRARY USERS                            │
+│ • Event Handlers (Business Logic)                          │
+│ • CRD Discovery                                             │
+│ • Dynamic GVR Discovery                                     │
+│ • Workload Processing                                       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ (Event Callbacks)
+┌─────────────────────────────────────────────────────────────┐
+│                    CONTROLLER                               │
+│ • Informer Management                                       │
+│ • Work Queue Processing                                     │
+│ • Event Streaming                                           │
+│ • JSON Export                                               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼ (Kubernetes API)
+┌─────────────────────────────────────────────────────────────┐
+│                    KUBERNETES API                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Key Features
+
+### 1. Single Informer Creation Path
+All informers are created through a unified path:
 
 ```go
-type Controller struct {
-    client     *KubernetesClient
-    config     *Config
-    logger     Logger
-    ctx        context.Context
-    cancel     context.CancelFunc
-    wg         sync.WaitGroup
-    workQueue  workqueue.RateLimitingInterface
-    cancellers sync.Map
-    onReady    func()
-    readyMu    sync.RWMutex
-    isReady    bool
+// Single entry point for all informer creation
+func (c *Controller) startUnifiedInformer(params InformerStartParams) {
+    // Always use createNamespaceSpecificInformer for consistency
+    informer, err := c.createNamespaceSpecificInformer(config, params.Namespace, params.NormalizedConfigs)
+    // ... handle informer lifecycle
 }
 ```
 
-### Key Components
+**Benefits**:
+- **Consistent Behavior**: All informers follow the same patterns
+- **Unified Lister Keys**: `GVRString@namespace` format for all resources
+- **Simplified Debugging**: Single code path to understand and maintain
 
-1. **Dynamic Client Integration**: Uses Kubernetes dynamic client for multi-resource support
-2. **Discovery Client**: Automatically discovers available API resources (395+ resources across 34+ API groups)
-3. **Work Queue**: Rate-limited work queue for asynchronous event processing
-4. **Informer Management**: Unified informer creation and lifecycle management
-5. **Readiness System**: Callback-based readiness notification mechanism
+### 2. Pure Event-Driven Design
+No timeouts or blocking operations:
 
-## Server-Side Filtering
-
-The Controller implements comprehensive server-side filtering at the Kubernetes API level:
-
-### FieldSelector Implementation
 ```go
-// Applied for name selector filtering
-fieldSelector = fmt.Sprintf("metadata.name=%s", nConfig.NameSelector)
-options.FieldSelector = fieldSelector
-```
-
-### LabelSelector Implementation
-```go
-// Applied for label-based filtering
-options.LabelSelector = labelSelector
-```
-
-### Benefits
-- **API Server Efficiency**: Reduces network traffic by filtering at source
-- **etcd Performance**: Minimizes database queries through server-side selection
-- **Resource Usage**: Lower memory and CPU consumption in client applications
-
-## Event Processing Pipeline
-
-### Event Types
-- **ADDED**: Resource creation events
-- **UPDATED**: Resource modification events  
-- **DELETED**: Resource deletion events (with tombstone handling)
-
-### Processing Flow
-1. **Event Reception**: Informers receive events from Kubernetes API
-2. **Unified Handling**: Events processed through `handleUnifiedNormalizedEvent`
-3. **Work Queue**: Events queued for asynchronous processing
-4. **JSON Export**: Optional structured JSON output with timestamps
-
-### Event Structure
-```json
-{
-    "timestamp": "2025-09-10T11:15:27.945088151Z",
-    "eventType": "ADDED",
-    "gvr": "v1/configmaps",
-    "namespace": "faro-test-2", 
-    "name": "test-config-1",
-    "uid": "9471c23c-0fea-4e17-902d-3e7588f6c205",
-    "labels": {"app": "faro-test"}
-}
-```
-
-## Initialization Sequence
-
-1. **Client Setup**: Initialize Kubernetes dynamic and discovery clients
-2. **Configuration Normalization**: Convert config to unified internal structure
-3. **API Discovery**: Discover available resources (34 API groups, 395 resources)
-4. **Informer Creation**: Create informers for each configured GVR with server-side filtering
-5. **Cache Sync**: Wait for informer caches to sync
-6. **Readiness Callback**: Trigger callback when fully initialized
-
-## Readiness Management
-
-### SetReadyCallback
-```go
-func (c *Controller) SetReadyCallback(callback func()) {
-    c.readyMu.Lock()
-    defer c.readyMu.Unlock()
-    c.onReady = callback
-    
-    // Trigger callback if ready
-    if c.isReady && callback != nil {
-        callback()
-    }
-}
-```
-
-### IsReady
-```go
-func (c *Controller) IsReady() bool {
-    c.readyMu.RLock()
-    defer c.readyMu.RUnlock()
-    return c.isReady
-}
-```
-
-## Graceful Shutdown
-
-The Controller implements comprehensive shutdown with timeout protection:
-
-### Shutdown Sequence
-1. **Context Cancellation**: Cancel main context to stop all informers
-2. **Work Queue Shutdown**: Stop work queue to prevent new events
-3. **Dynamic Informer Cleanup**: Cancel all dynamic informers explicitly
-4. **Goroutine Synchronization**: Wait for all goroutines with timeout (25s)
-5. **Resource Cleanup**: Ensure no resource leaks
-
-### Implementation
-```go
-func (c *Controller) Stop() {
-    c.logger.Info("controller", "Stopping multi-layered informer controller")
-    
-    // Cancel main context
-    c.cancel()
-    
-    // Shutdown work queue
-    c.workQueue.ShutDown()
-    
-    // Stop dynamic informers
-    c.cancellers.Range(func(key, value interface{}) bool {
-        if cancel, ok := value.(context.CancelFunc); ok {
-            cancel()
-        }
-        return true
+// Callback-based sync detection instead of blocking waits
+func (c *Controller) setupSyncCallback(informer cache.SharedIndexInformer, description string) {
+    var once sync.Once
+    informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+        AddFunc: func(obj interface{}) {
+            once.Do(func() {
+                c.logger.Info("controller", description+" synced and ready")
+            })
+        },
     })
+}
+```
+
+**Benefits**:
+- **No Race Conditions**: Eliminates timing dependencies
+- **Reliable Startup**: Informers signal when they're ready
+- **Clean Shutdown**: Context-based cancellation without timeouts
+
+### 3. Consistent Lister Key Strategy
+All listers use the same key format:
+
+```go
+// Consistent key format for all resources
+listerKey := config.GVRString + "@" + namespace
+
+// Works for both namespace-scoped and cluster-scoped resources
+// Namespace-scoped: "v1/configmaps@production"
+// Cluster-scoped:   "v1/namespaces@"
+```
+
+**Benefits**:
+- **Predictable Retrieval**: Always know how to find a lister
+- **No Key Conflicts**: Unique keys for all informer combinations
+- **Simplified Logic**: Single pattern for all resource types
+
+## Core Methods
+
+### Configuration-Driven Informers
+```go
+func (c *Controller) Start() error {
+    // 1. Normalize configuration
+    normalizedGVRs, err := c.config.Normalize()
     
-    // Wait with timeout protection
-    select {
-    case <-done:
-        c.logger.Info("controller", "All informers and workers stopped gracefully")
-    case <-time.After(25 * time.Second):
-        c.logger.Warning("controller", "Timeout waiting for informers to stop")
+    // 2. Start informers for configured resources
+    return c.startConfigDrivenInformers()
+}
+```
+
+### Dynamic Informer Management
+```go
+// Library users can add resources dynamically
+func (c *Controller) AddResources(resources []ResourceConfig) error {
+    // Add new resources to configuration
+    // Start informers for new resources
+}
+
+func (c *Controller) StartInformers() error {
+    // Start informers for newly added resources
+}
+```
+
+### Event Handler Registration
+```go
+// Library users register business logic
+func (c *Controller) AddEventHandler(handler EventHandler) {
+    c.eventHandlers = append(c.eventHandlers, handler)
+}
+
+// Events are delivered to all registered handlers
+func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstructured.Unstructured, gvrString string, configs []NormalizedConfig) {
+    for _, handler := range c.eventHandlers {
+        handler.OnMatched(MatchedEvent{
+            EventType: eventType,
+            GVR:       gvrString,
+            Object:    obj,
+            Configs:   configs,
+        })
     }
 }
 ```
 
-## Configuration Integration
+## Removed Business Logic
 
-### Normalized Configuration Support
-- Handles both namespace-centric and resource-centric configurations
-- Converts all configurations to unified `NormalizedConfig` structure
-- Supports multiple configurations per GVR with consolidated informers
+The Controller **no longer implements** the following business logic (moved to library users):
 
-### Resource Scope Handling
-- **Namespace-scoped**: Resources like ConfigMaps, Secrets, Pods
-- **Cluster-scoped**: Resources like Nodes, ClusterRoles, CustomResourceDefinitions
-- Automatic scope detection through API discovery
+### 1. CRD Discovery
+**Previously**: Automatic CRD watching and informer creation
+```go
+// REMOVED: Automatic CRD discovery
+func (c *Controller) startCRDWatcher() error {
+    // This functionality removed from core library
+}
+```
 
-## Error Handling
+**Now**: Library users implement CRD discovery if needed:
+```go
+type CRDWatcher struct {
+    controller *faro.Controller
+}
 
-### Robust Error Management
-- **Client Connection**: Graceful fallback from in-cluster to kubeconfig authentication
-- **API Discovery**: Continues operation if some resources are unavailable
-- **Informer Sync**: Timeout protection for cache synchronization
-- **Event Processing**: Tombstone handling for deleted resources
+func (c *CRDWatcher) OnMatched(event faro.MatchedEvent) error {
+    if event.GVR == "apiextensions.k8s.io/v1/customresourcedefinitions" {
+        // User implements CRD processing logic
+        return c.processCRD(event.Object)
+    }
+    return nil
+}
+```
 
-### Logging Integration
-- Structured logging with component identification
-- Debug-level filtering configuration details
-- Info-level operational status updates
-- Warning-level timeout and error conditions
+### 2. Special Event Processing
+**Previously**: Hardcoded `v1/events` field extraction
+```go
+// REMOVED: Hardcoded involvedObject processing
+if gvr == "v1/events" && processedObj != nil {
+    if involvedObj, found, _ := unstructured.NestedMap(processedObj.Object, "involvedObject"); found {
+        jsonEvent.InvolvedObject = involvedObj
+    }
+}
+```
+
+**Now**: Library users implement event processing via middleware:
+```go
+type EventProcessor struct{}
+
+func (e *EventProcessor) OnMatched(event faro.MatchedEvent) error {
+    if event.GVR == "v1/events" {
+        // User extracts involvedObject and processes as needed
+        return e.processEventForDiscovery(event.Object)
+    }
+    return nil
+}
+```
+
+### 3. Workload Annotation Processing
+**Previously**: Automatic workload annotation extraction
+**Now**: Library users implement via event handlers:
+```go
+type WorkloadMiddleware struct{}
+
+func (w *WorkloadMiddleware) OnMatched(event faro.MatchedEvent) error {
+    // User implements workload detection and annotation
+    workloadID := w.extractWorkloadID(event.Object.GetNamespace())
+    
+    // Add annotations as needed
+    annotations := event.Object.GetAnnotations()
+    if annotations == nil {
+        annotations = make(map[string]string)
+    }
+    annotations["faro.workload.id"] = workloadID
+    event.Object.SetAnnotations(annotations)
+    
+    return nil
+}
+```
+
+## Error Handling Philosophy
+
+### Strict Error Propagation
+- **No Fallbacks**: Invalid configurations cause errors, not default behaviors
+- **No Hidden Logic**: All functionality is explicit and visible
+- **Fail Fast**: Problems surface immediately during startup
+
+```go
+// Example: Configuration errors are not masked
+func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
+    if len(normalizedMap) == 0 {
+        return nil, fmt.Errorf("no resources configured")
+    }
+    return normalizedMap, nil
+}
+```
+
+### No Deduplication Logic
+- **Architectural Flaws Surface**: Duplicate informers indicate configuration problems
+- **Clear Error Messages**: Users see exactly what's wrong
+- **No Masking**: Problems aren't hidden by deduplication logic
 
 ## Performance Characteristics
 
-### Validated Performance
-- **API Groups**: Successfully handles 34+ API groups
-- **Resource Discovery**: Processes 395+ available resources
-- **Event Processing**: No dropped or duplicate events across all test scenarios
-- **Memory Efficiency**: Server-side filtering reduces client-side resource usage
-- **Startup Time**: Consistent initialization across integration and E2E tests
+### Efficiency
+- **Server-side Filtering**: Kubernetes API handles filtering, not client-side
+- **Namespace-scoped Informers**: Efficient per-namespace filtering
+- **Single Informer per GVR+Namespace**: No duplicate informers
 
-### Scalability Features
-- **Work Queue**: Rate-limited processing prevents API server overload
-- **Informer Consolidation**: Single informer per GVR handles multiple configurations
-- **Server-Side Filtering**: Reduces network traffic and client processing
-- **Asynchronous Processing**: Non-blocking event handling through goroutines
+### Scalability  
+- **Resource Usage**: Scales with configured resources, not cluster size
+- **Memory Efficiency**: Minimal caching, efficient data structures
+- **Event Processing**: Asynchronous work queue pattern
 
-## Testing Evidence
+### Reliability
+- **Context-based Shutdown**: Clean cancellation without timeouts
+- **Thread Safety**: Proper synchronization with `sync.Map` and mutexes
+- **Error Recovery**: Rate limiting and exponential backoff for failed events
 
-The Controller has been validated through comprehensive testing:
+## Integration Patterns
 
-- **Unit Tests**: Configuration normalization and core functionality
-- **Integration Tests**: Real Kubernetes cluster integration with callback synchronization
-- **E2E Tests**: Full workflow validation across 8 different scenarios
-- **Performance Tests**: Event processing pipeline validation with timing analysis
+### Basic Usage
+```go
+// Simple informer management
+controller := faro.NewController(client, logger, config)
+controller.Start()
+```
 
-All tests demonstrate reliable initialization, accurate event processing, and clean shutdown behavior.
+### Advanced Usage with Business Logic
+```go
+// Register multiple event handlers for different concerns
+controller.AddEventHandler(&CRDWatcher{controller: controller})
+controller.AddEventHandler(&WorkloadMonitor{controller: controller})
+controller.AddEventHandler(&EventProcessor{controller: controller})
+
+// Start with all business logic registered
+controller.Start()
+```
+
+### Dynamic Resource Management
+```go
+// Add resources at runtime (library user implements discovery logic)
+newResources := []faro.ResourceConfig{
+    {GVR: "batch/v1/jobs", NamespaceNames: []string{"production"}},
+}
+
+controller.AddResources(newResources)
+controller.StartInformers()
+```
+
+## Testing
+
+### Unit Tests
+- **Core Logic Only**: Test informer management without business logic
+- **Mock Dependencies**: No Kubernetes cluster required
+- **Fast Execution**: Focused on controller mechanisms
+
+### Integration Tests
+- **Real Kubernetes**: Validate against actual cluster
+- **Business Logic**: Test library user implementations
+- **Dynamic Scenarios**: Runtime informer creation and management
+
+The Controller provides a **clean, reliable foundation** for Kubernetes resource monitoring while maintaining strict separation between mechanisms (provided by Faro) and policies (implemented by library users).
