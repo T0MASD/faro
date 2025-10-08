@@ -130,6 +130,30 @@ func (c *Controller) AddEventHandler(handler EventHandler) {
     c.eventHandlers = append(c.eventHandlers, handler)
 }
 
+// Register middleware to modify objects before JSON logging
+func (c *Controller) AddJSONMiddleware(middleware JSONMiddleware) {
+    c.jsonMiddleware = append(c.jsonMiddleware, middleware)
+}
+
+// Set callback for when Faro is fully initialized
+func (c *Controller) SetReadyCallback(callback func()) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.readyCallback = callback
+}
+
+// Check if Faro is ready (all informers synced)
+func (c *Controller) IsReady() bool {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    return c.ready
+}
+
+// Get count of active informers
+func (c *Controller) GetActiveInformers() (config int, dynamic int) {
+    // Returns (config-driven count, dynamically-added count)
+}
+
 // Events are delivered to all registered handlers
 func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstructured.Unstructured, gvrString string, configs []NormalizedConfig) {
     for _, handler := range c.eventHandlers {

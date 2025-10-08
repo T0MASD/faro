@@ -32,6 +32,7 @@ Faro follows a **clean architecture principle**: the library provides **mechanis
 │ • JSON Export (Structured Output)                          │
 │ • Lifecycle Management (Startup, Readiness, Shutdown)      │
 │ • Simple Configuration (Basic YAML Parsing)                │
+│ • Metrics Collection (Prometheus, Optional)                │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -95,7 +96,21 @@ Kubernetes Informer → Work Queue → Worker Goroutines → Event Handlers
 - **Error Handling**: Proper error propagation without fallbacks
 - **Thread Safety**: Concurrent processing with proper synchronization
 
-### 4. JSON Export (Structured Output)
+### 4. Metrics (Optional Observability)
+**Purpose**: Prometheus metrics for monitoring library mechanisms
+
+**Capabilities**:
+- Informer lifecycle metrics (creation, sync, failures)
+- Event processing metrics (throughput, types)
+- Resource tracking (cache size, sync duration)
+- HTTP endpoints (/metrics, /health, /ready)
+
+**Design**:
+- Optional feature (disabled by default)
+- Zero performance impact when disabled
+- Mechanism metrics only (no business logic)
+
+### 5. JSON Export (Structured Output)
 **Purpose**: Provide structured event data for integration
 
 **Output Format**:

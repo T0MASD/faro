@@ -38,9 +38,24 @@ graph TD
 - **Usage**: Pod deployment scenarios
 
 ### External Configuration
-- **Path**: `$HOME/.kube/config`
+- **Environment Variable**: `KUBECONFIG` (highest priority)
+- **Default Path**: `$HOME/.kube/config` (fallback)
 - **Format**: Standard kubeconfig YAML
-- **Usage**: Development, external tool execution
+- **Usage**: Development, external tool execution, local clusters (kind, k3s, etc.)
+
+**Priority Order**:
+1. `KUBECONFIG` environment variable (if set)
+2. `$HOME/.kube/config` (default)
+
+**Example Usage**:
+```bash
+# Use custom kubeconfig
+export KUBECONFIG=/path/to/custom/kubeconfig
+./faro -config config.yaml
+
+# Multiple kubeconfig contexts
+export KUBECONFIG=~/.kube/config-prod:~/.kube/config-staging
+```
 
 ## Client Interfaces
 

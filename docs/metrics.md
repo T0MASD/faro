@@ -21,6 +21,28 @@ metrics:
   bind_addr: "0.0.0.0"  # Bind address (default: 0.0.0.0)
 ```
 
+## Programmatic Usage
+
+```go
+// Create metrics collector
+metricsConfig := faro.MetricsConfig{
+    Enabled:  true,
+    Port:     8080,
+    Path:     "/metrics",
+    BindAddr: "0.0.0.0",
+}
+
+metricsCollector := faro.NewMetricsCollector(metricsConfig, logger)
+
+// Metrics collector automatically integrates with controller
+// No manual registration required - controller calls metrics hooks internally
+
+// Shutdown gracefully
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+metricsCollector.Shutdown(ctx)
+```
+
 ## Metrics Endpoints
 
 - **Metrics**: `http://localhost:8080/metrics`

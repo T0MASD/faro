@@ -899,11 +899,6 @@ func (c *Controller) handleCRDDeleted(crdUnstructured *unstructured.Unstructured
 	c.stopCRDInformer(&crd)
 }
 
-// CRD evaluation removed from Faro core - library users should implement CRD discovery if needed
-func (c *Controller) evaluateAndStartCRDInformer_REMOVED(crd *apiextensionsv1.CustomResourceDefinition) {
-	// CRD evaluation removed - library users should implement CRD discovery if needed
-	return
-}
 
 // selectCRDVersion selects the most appropriate version for monitoring a CRD
 // Priority: 1) Storage version 2) Served version 3) First version
@@ -1522,44 +1517,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 }
 
 // REMOVED: All client-side filtering functions have been eliminated from Faro core
-
-// handleConfigDrivenEvent processes events with NO client-side filtering
-func (c *Controller) handleConfigDrivenEvent(eventType string, obj *unstructured.Unstructured, gvrString string, nsConfig NamespaceConfig) {
-	resourceName := obj.GetName()
-	resourceNamespace := obj.GetNamespace()
-	resourceUID := obj.GetUID()
-
-	// NO CLIENT-SIDE FILTERING - Process all events that reach here
-	// Server-side filtering and application logic handle all filtering
-	
-	// Log all events without filtering
-	if resourceNamespace != "" {
-		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s)",
-			eventType, gvrString, resourceNamespace, resourceName, resourceUID))
-	} else {
-		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s)",
-			eventType, gvrString, resourceName, resourceUID))
-	}
-}
-
-// handleUnifiedConfigDrivenEvent processes events with multiple config-based filtering
-func (c *Controller) handleUnifiedConfigDrivenEvent(eventType string, obj *unstructured.Unstructured, gvrString string, nsConfigs []NamespaceConfig) {
-	resourceName := obj.GetName()
-	resourceNamespace := obj.GetNamespace()
-	resourceUID := obj.GetUID()
-
-	// NO CLIENT-SIDE FILTERING - Process all events that reach here
-	// Server-side filtering and application logic handle all filtering
-
-	// Log all events without filtering
-		if resourceNamespace != "" {
-		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s)",
-			eventType, gvrString, resourceNamespace, resourceName, resourceUID))
-	} else {
-		c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s)",
-			eventType, gvrString, resourceName, resourceUID))
-	}
-}
+// Old event handler functions removed - replaced by handleUnifiedNormalizedEvent()
 
 
 // handleNamespaceSpecificEvent processes events from namespace-specific informers
