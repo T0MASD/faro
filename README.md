@@ -232,12 +232,77 @@ make test             # Runs all test suites
 go get github.com/T0MASD/faro
 ```
 
+## API Reference
+
+### Core Controller Methods
+
+```go
+// Create controller
+controller := faro.NewController(client, logger, config)
+
+// Register event handlers (business logic)
+controller.AddEventHandler(handler EventHandler)
+
+// Register JSON middleware (object modification before logging)
+controller.AddJSONMiddleware(middleware JSONMiddleware)
+
+// Set readiness callback (initialization complete)
+controller.SetReadyCallback(func() {
+    fmt.Println("Faro is ready!")
+})
+
+// Check readiness status
+if controller.IsReady() {
+    // All informers synced
+}
+
+// Add resources dynamically at runtime
+controller.AddResources([]faro.ResourceConfig{...})
+controller.StartInformers()
+
+// Get active informer counts
+configCount, dynamicCount := controller.GetActiveInformers()
+
+// Start controller
+controller.Start()
+
+// Graceful shutdown
+controller.Stop()
+```
+
+### Client Methods
+
+```go
+// Create Kubernetes client (respects KUBECONFIG env var)
+client, err := faro.NewKubernetesClient()
+
+// Set custom kubeconfig path
+export KUBECONFIG=/path/to/kubeconfig
+```
+
+### Metrics (Optional)
+
+```go
+// Enable Prometheus metrics in config.yaml
+metrics:
+  enabled: true
+  port: 8080
+
+// Access metrics
+curl http://localhost:8080/metrics
+curl http://localhost:8080/health
+curl http://localhost:8080/ready
+```
+
 ## Documentation
 
 - [Architecture Overview](docs/architecture.md) - Clean library design principles
 - [Component Reference](docs/components/) - Core component documentation
   - [Controller](docs/components/controller.md) - Informer management
+  - [Client](docs/components/client.md) - Kubernetes client (KUBECONFIG support)
   - [Config](docs/components/config.md) - Simple configuration formats
+  - [Logger](docs/components/logger.md) - Structured logging
+  - [Metrics](docs/metrics.md) - Prometheus metrics (optional)
 - [Examples](examples/) - Real implementations of business logic
 
 ## Examples
