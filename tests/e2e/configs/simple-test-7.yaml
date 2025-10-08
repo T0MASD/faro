@@ -9,13 +9,13 @@ json_export: true
 resources:
   - gvr: "v1/configmaps"
     scope: "Namespaced"
-    namespace_patterns:
+    namespace_names:
       - "faro-test-7"
-    name_pattern: "test-config-1"
+    name_selector: "test-config-1"
 
 # Namespace-centric ConfigMap monitoring (like test 1)
 namespaces:
-  - name_pattern: "faro-test-7"
+  - name_selector: "faro-test-7"
     resources:
       "v1/configmaps":
-        name_pattern: "test-config-1"
+        name_selector: "test-config-1"

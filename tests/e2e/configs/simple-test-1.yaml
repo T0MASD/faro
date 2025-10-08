@@ -5,7 +5,7 @@ auto_shutdown_sec: 120
 json_export: true
 
 namespaces:
-  - name_pattern: "faro-test-1"
+  - name_selector: "faro-test-1"
     resources:
       "v1/configmaps":
-        name_pattern: "test-config-1"
+        name_selector: "test-config-1"

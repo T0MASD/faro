@@ -7,6 +7,6 @@ json_export: true
 resources:
   - gvr: "v1/configmaps"
     scope: "Namespaced"
-    namespace_patterns:
+    namespace_names:
       - "faro-test-2"
-    name_pattern: "test-config-1"
+    name_selector: "test-config-1"

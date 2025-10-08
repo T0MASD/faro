@@ -9,4 +9,4 @@ json_export: true
 resources:
   - gvr: "v1/namespaces"
     scope: "Cluster"
-    name_pattern: "faro-test-5"
+    name_selector: "faro-test-5"

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,15 +28,27 @@ type RealWorkloadMonitor struct {
 	workloadIDToWorkloadName map[string]string   // map[workloadID] -> workloadName
 	mu                       sync.RWMutex
 	
+	// Dynamic GVR discovery
+	discoveredGVRs           map[string]bool
+	
 	// Test context
 	t                        *testing.T
 }
 
 // OnMatched handles namespace detection for workload discovery
 func (w *RealWorkloadMonitor) OnMatched(event faro.MatchedEvent) error {
+	w.t.Logf("🔍 [WorkloadMonitor] OnMatched called: %s %s", event.EventType, event.GVR)
+	
 	if event.GVR == "v1/namespaces" && event.EventType == "ADDED" {
 		return w.handleNamespaceDetection(event)
 	}
+	
+	// Handle dynamic GVR discovery from v1/events
+	if event.GVR == "v1/events" && (event.EventType == "ADDED" || event.EventType == "UPDATED") {
+		w.t.Logf("🔍 [WorkloadMonitor] Processing v1/events for dynamic GVR discovery")
+		return w.handleDynamicGVRDiscovery(event)
+	}
+	
 	return nil
 }
 
@@ -94,6 +107,98 @@ func (w *RealWorkloadMonitor) getWorkloadName(workloadID string) string {
 		return name
 	}
 	return workloadID
+}
+
+func (w *RealWorkloadMonitor) handleDynamicGVRDiscovery(event faro.MatchedEvent) error {
+	w.t.Logf("🔍 [WorkloadMonitor] handleDynamicGVRDiscovery called for event %s/%s", event.Object.GetNamespace(), event.Object.GetName())
+	
+	// Extract involvedObject from the event
+	involvedObj, found, err := unstructured.NestedMap(event.Object.Object, "involvedObject")
+	if err != nil || !found || involvedObj == nil {
+		w.t.Logf("🔍 [WorkloadMonitor] No involvedObject found in event %s/%s (found=%v, err=%v)", event.Object.GetNamespace(), event.Object.GetName(), found, err)
+		return nil
+	}
+	
+	// Extract GVR from involvedObject
+	discoveredGVR := w.extractGVRFromInvolvedObject(involvedObj)
+	if discoveredGVR == "" {
+		w.t.Logf("🔍 [WorkloadMonitor] Could not extract GVR from involvedObject in event %s/%s", event.Object.GetNamespace(), event.Object.GetName())
+		return nil
+	}
+	
+	w.t.Logf("🔍 [WorkloadMonitor] Discovered GVR '%s' from v1/events in namespace %s", discoveredGVR, event.Object.GetNamespace())
+	
+	// Check if this GVR is already being monitored
+	w.mu.Lock()
+	if w.discoveredGVRs == nil {
+		w.discoveredGVRs = make(map[string]bool)
+	}
+	
+	if w.discoveredGVRs[discoveredGVR] {
+		w.mu.Unlock()
+		w.t.Logf("🔍 [WorkloadMonitor] GVR '%s' already being monitored, skipping", discoveredGVR)
+		return nil
+	}
+	
+	// Mark as discovered
+	w.discoveredGVRs[discoveredGVR] = true
+	w.mu.Unlock()
+	
+	// Actually add the GVR to the unified controller for monitoring
+	w.addGVRToController(discoveredGVR, event.Object.GetNamespace())
+	
+	return nil
+}
+
+func (w *RealWorkloadMonitor) extractGVRFromInvolvedObject(involvedObj map[string]interface{}) string {
+	apiVersion, ok := involvedObj["apiVersion"].(string)
+	if !ok || apiVersion == "" {
+		return ""
+	}
+	
+	kind, ok := involvedObj["kind"].(string)
+	if !ok || kind == "" {
+		return ""
+	}
+	
+	// Convert kind to plural resource name (simplified)
+	resource := strings.ToLower(kind) + "s"
+	
+	// Handle special cases
+	switch kind {
+	case "Endpoints":
+		resource = "endpoints"
+	case "NetworkPolicy":
+		resource = "networkpolicies"
+	}
+	
+	// Build GVR string
+	if apiVersion == "v1" {
+		return "v1/" + resource
+	}
+	return apiVersion + "/" + resource
+}
+
+func (w *RealWorkloadMonitor) addGVRToController(discoveredGVR, namespace string) {
+	w.t.Logf("🔍 [WorkloadMonitor] Adding GVR '%s' to unified controller for namespace '%s'", discoveredGVR, namespace)
+	
+	// Create a new resource configuration for the discovered GVR
+	newResourceConfig := faro.ResourceConfig{
+		GVR:            discoveredGVR,
+		Scope:          faro.NamespaceScope, // Assume namespaced for simplicity
+		NamespaceNames: []string{namespace},
+	}
+	
+	// Add the resource to the unified controller
+	w.unifiedController.AddResources([]faro.ResourceConfig{newResourceConfig})
+	
+	// Start the informer for the newly added resource
+	if err := w.unifiedController.StartInformers(); err != nil {
+		w.t.Logf("❌ [WorkloadMonitor] Failed to start new informers for GVR '%s': %v", discoveredGVR, err)
+		return
+	}
+	
+	w.t.Logf("✅ [WorkloadMonitor] Successfully added and started informer for GVR '%s'", discoveredGVR)
 }
 
 // WorkloadJSONMiddleware implements JSONMiddleware to add workload annotations before JSON logging
@@ -185,46 +290,50 @@ func TestWorkloadControllerRegex(t *testing.T) {
 	t.Log("")
 	t.Log("▶️  PHASE 1: START MONITORING")
 	
-	// Create discovery config for namespace detection
+	// Create discovery config for namespace detection - using simplified resources format
 	discoveryConfig := &faro.Config{
 		OutputDir:  logDir,
 		LogLevel:   "debug",
 		JsonExport: true,
-		Namespaces: []faro.NamespaceConfig{
+		Resources: []faro.ResourceConfig{
 			{
-				NameSelector: "",
-				Resources: map[string]faro.ResourceDetails{
-					"v1/namespaces": {},
-				},
+				GVR:            "v1/namespaces",
+				NamespaceNames: []string{""}, // Cluster-scoped
 			},
 		},
 	}
 	
-	// Create workload config for resource monitoring
+	// Create workload config for resource monitoring - using simplified resources format
 	workloadConfig := &faro.Config{
 		OutputDir:  logDir,
 		LogLevel:   "debug",
 		JsonExport: true,
-		Namespaces: []faro.NamespaceConfig{
+		Resources: []faro.ResourceConfig{
+			// Monitor jobs in all workload namespaces
 			{
-				NameSelector: fmt.Sprintf("faro-%s", workloadID),
-				Resources: map[string]faro.ResourceDetails{
-					"batch/v1/jobs":   {},
-					"v1/configmaps":   {},
+				GVR:            "batch/v1/jobs",
+				NamespaceNames: []string{
+					fmt.Sprintf("faro-%s", workloadID),
+					fmt.Sprintf("faro-%s-app", workloadID),
+					fmt.Sprintf("faro-%s-db", workloadID),
 				},
 			},
+			// Monitor configmaps in all workload namespaces
 			{
-				NameSelector: fmt.Sprintf("faro-%s-app", workloadID),
-				Resources: map[string]faro.ResourceDetails{
-					"batch/v1/jobs":   {},
-					"v1/configmaps":   {},
+				GVR:            "v1/configmaps",
+				NamespaceNames: []string{
+					fmt.Sprintf("faro-%s", workloadID),
+					fmt.Sprintf("faro-%s-app", workloadID),
+					fmt.Sprintf("faro-%s-db", workloadID),
 				},
 			},
+			// Monitor events in all workload namespaces
 			{
-				NameSelector: fmt.Sprintf("faro-%s-db", workloadID),
-				Resources: map[string]faro.ResourceDetails{
-					"batch/v1/jobs":   {},
-					"v1/configmaps":   {},
+				GVR:            "v1/events",
+				NamespaceNames: []string{
+					fmt.Sprintf("faro-%s", workloadID),
+					fmt.Sprintf("faro-%s-app", workloadID),
+					fmt.Sprintf("faro-%s-db", workloadID),
 				},
 			},
 		},
@@ -236,6 +345,7 @@ func TestWorkloadControllerRegex(t *testing.T) {
 		workloadIDRegex:          regexp.MustCompile(`^faro-([^-]+)$`),
 		detectedWorkloads:        make(map[string][]string),
 		workloadIDToWorkloadName: make(map[string]string),
+		discoveredGVRs:           make(map[string]bool),
 		t:                        t,
 	}
 	
@@ -248,7 +358,10 @@ func TestWorkloadControllerRegex(t *testing.T) {
 	unifiedController := faro.NewController(faroClient, logger, workloadConfig)
 	monitor.unifiedController = unifiedController
 	
-	// Add JSON middleware instead of event handler for workload annotation injection
+	// Add workload monitor as event handler for dynamic GVR discovery from v1/events
+	unifiedController.AddEventHandler(monitor)
+	
+	// Add JSON middleware for workload annotation injection
 	workloadMiddleware := &WorkloadJSONMiddleware{Monitor: monitor}
 	unifiedController.AddJSONMiddleware(workloadMiddleware)
 	
