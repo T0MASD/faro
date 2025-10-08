@@ -107,4 +107,4 @@ release:
     - [Configuration Examples](https://github.com/T0MASD/faro/tree/{{.Tag}}/examples/configs/)
     - [Test Configurations](https://github.com/T0MASD/faro/tree/{{.Tag}}/tests/e2e/configs/)
     
-    **Full Changelog**: https://github.com/T0MASD/faro/compare/{{.PreviousTag}}...{{.Tag}}
+    **Full Changelog**: https://github.com/T0MASD/faro/compare/v1.2.1...{{.Tag}}
