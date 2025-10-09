@@ -23,16 +23,26 @@ jobs:
         with:
           go-version: '1.24'
 
-      # Install KinD for Kubernetes testing
-      - name: Install KinD
+      # Deploy kinc cluster for Kubernetes testing
+      - name: Deploy kinc cluster
         run: |
-          go install sigs.k8s.io/kind@v0.22.0
-          kind version
-
-      # Create KinD cluster for E2E and integration tests
-      - name: Create KinD cluster
-        run: |
-          kind create cluster
+          # Enable IP forwarding
+          echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+          
+          # Start kinc cluster (unprivileged - no --privileged needed)
+          podman run -d --name kinc-cluster \
+            --publish 6443:6443 \
+            ghcr.io/t0masd/kinc:v0-1
+          
+          # Wait for cluster ready
+          timeout 300 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null; do sleep 2; done'
+          
+          # Extract kubeconfig
+          mkdir -p ~/.kube
+          podman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config
+          sed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config
+          
+          # Verify cluster is working
           kubectl cluster-info
           kubectl get nodes
 
@@ -68,6 +78,10 @@ jobs:
           go build test_import.go
           rm test_import.go
 
+      # Cleanup kinc cluster
+      - name: Cleanup kinc cluster
+        if: always()
+        run: podman rm -f kinc-cluster || true
 
       - name: Create library release
         uses: goreleaser/goreleaser-action@v5
