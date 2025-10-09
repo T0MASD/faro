@@ -10,3 +10,4 @@ faro-e2e
 dist/
 # Test artifacts
 test_import
+kinc
