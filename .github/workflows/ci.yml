@@ -24,18 +24,220 @@ jobs:
         with:
           go-version: '1.24'
 
-      # Install KinD for Kubernetes testing
-      - name: Install KinD
+      # Deploy kinc cluster for Kubernetes testing
+      - name: Deploy kinc cluster
         run: |
-          go install sigs.k8s.io/kind@v0.22.0
-          kind version
-
-      # Create KinD cluster for E2E and integration tests
-      - name: Create KinD cluster
-        run: |
-          kind create cluster
+          # Enable IP forwarding (required for kinc networking)
+          echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+          
+          # Prepare kubeadm config for kinc
+          # kinc-init.service reads /etc/kinc/config/kubeadm.conf
+          mkdir -p /tmp/kinc-config
+          cat > /tmp/kinc-config/kubeadm.conf << 'EOF'
+          apiServer:
+            certSANs:
+            - localhost
+            - 127.0.0.1
+            extraArgs:
+              runtime-config: ""
+          apiVersion: kubeadm.k8s.io/v1beta3
+          clusterName: kinc
+          controlPlaneEndpoint: kinc-control-plane:6443
+          controllerManager:
+            extraArgs:
+              enable-hostpath-provisioner: "true"
+          kind: ClusterConfiguration
+          kubernetesVersion: v1.33.5
+          networking:
+            podSubnet: 10.244.0.0/16
+            serviceSubnet: 10.96.0.0/16
+          patches:
+            directory: /etc/kinc/patches
+          scheduler:
+            extraArgs: null
+          ---
+          apiVersion: kubeadm.k8s.io/v1beta3
+          bootstrapTokens:
+          - token: abcdef.0123456789abcdef
+          kind: InitConfiguration
+          localAPIEndpoint:
+            advertiseAddress: CONTAINER_IP_PLACEHOLDER
+            bindPort: 6443
+          nodeRegistration:
+            criSocket: unix:///var/run/crio/crio.sock
+            kubeletExtraArgs:
+              node-ip: CONTAINER_IP_PLACEHOLDER
+              node-labels: ""
+              provider-id: kind://podman/kinc/kinc-control-plane
+          ---
+          apiVersion: kubeadm.k8s.io/v1beta3
+          controlPlane:
+            localAPIEndpoint:
+              advertiseAddress: CONTAINER_IP_PLACEHOLDER
+              bindPort: 6443
+          discovery:
+            bootstrapToken:
+              apiServerEndpoint: kinc-control-plane:6443
+              token: abcdef.0123456789abcdef
+              unsafeSkipCAVerification: true
+          kind: JoinConfiguration
+          nodeRegistration:
+            criSocket: unix:///var/run/crio/crio.sock
+            kubeletExtraArgs:
+              node-ip: CONTAINER_IP_PLACEHOLDER
+              node-labels: ""
+              provider-id: kind://podman/kinc/kinc-control-plane
+          ---
+          apiVersion: kubelet.config.k8s.io/v1beta1
+          cgroupDriver: cgroupfs
+          cgroupRoot: /
+          evictionHard:
+            imagefs.available: 0%
+            nodefs.available: 0%
+            nodefs.inodesFree: 0%
+          failSwapOn: false
+          featureGates:
+            KubeletInUserNamespace: true
+          imageGCHighThresholdPercent: 100
+          kind: KubeletConfiguration
+          ---
+          apiVersion: kubeproxy.config.k8s.io/v1alpha1
+          conntrack:
+            maxPerCore: 0
+            tcpCloseWaitTimeout: 0s
+            tcpEstablishedTimeout: 0s
+          nftables:
+            masqueradeAll: false
+            masqueradeBit: 14
+            minSyncPeriod: 1s
+            syncPeriod: 30s
+          kind: KubeProxyConfiguration
+          mode: nftables
+          EOF
+          
+          echo "✅ kubeadm.conf prepared"
+          
+          # Start kinc cluster (systemd-based Kubernetes container)
+          # Based on kinc/runtime/quadlet/kinc-control-plane.container
+          podman run -d \
+            --name kinc-cluster \
+            --hostname kinc-control-plane \
+            --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \
+            --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \
+            --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \
+            --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \
+            --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \
+            --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \
+            --device /dev/fuse \
+            --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+            --sysctl net.ipv6.conf.default.keep_addr_on_down=1 \
+            --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \
+            --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --volume /tmp/kinc-config:/etc/kinc/config:ro \
+            --publish 127.0.0.1:6443:6443/tcp \
+            -e container=podman \
+            -e KUBECONFIG=/etc/kubernetes/admin.conf \
+            ghcr.io/t0masd/kinc:v0-1
+          
+          echo "⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)..."
+          echo "   This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,"
+          echo "   API server, CNI, storage provisioner, and CoreDNS"
+          
+          # Wait for container to respond
+          timeout 30 bash -c 'until podman exec kinc-cluster echo ok >/dev/null 2>&1; do sleep 2; done'
+          echo "✅ Container responding"
+          
+          # Mask kernel debug mounts that fail in GitHub Actions (not available)
+          podman exec kinc-cluster systemctl mask sys-kernel-config.mount sys-kernel-debug.mount sys-kernel-tracing.mount
+          
+          # Reset failed state after masking
+          podman exec kinc-cluster systemctl reset-failed
+          
+          # Wait for systemd inside container
+          echo "⏳ Waiting for systemd..."
+          if ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running 2>&1 | grep -q "running"; do echo -n "."; sleep 2; done'; then
+            echo ""
+            SYSTEMD_STATE=$(podman exec kinc-cluster systemctl is-system-running 2>&1 || true)
+            echo "❌ Systemd not running (state: $SYSTEMD_STATE)"
+            echo ""
+            echo "=== Failed Services ==="
+            podman exec kinc-cluster systemctl --failed --no-pager || true
+            echo ""
+            echo "=== kinc/crio/kubelet Status ==="
+            podman exec kinc-cluster systemctl status kinc-init.service crio.service kubelet.service --no-pager || true
+            echo ""
+            echo "=== Checking Pod Status ==="
+            podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -A -o wide || true
+            echo ""
+            echo "=== Pod Logs (kube-proxy) ==="
+            podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf logs -n kube-system -l k8s-app=kube-proxy --tail=50 || true
+            echo ""
+            echo "=== Pod Logs (local-path-provisioner) ==="
+            podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf logs -n local-path-storage -l app=local-path-provisioner --tail=50 || true
+            exit 1
+          fi
+          echo "✅ Systemd operational"
+          
+          # Wait for CRI-O
+          timeout 60 bash -c 'until podman exec kinc-cluster systemctl is-active crio.service >/dev/null 2>&1; do sleep 2; done'
+          echo "✅ CRI-O active"
+          
+          # Wait for cluster initialization (kinc-init.service runs kubeadm init)
+          # This can take 3-5 minutes, so use longer timeout
+          echo "⏳ Waiting for kinc-init.service (this runs kubeadm init, takes 3-5 min)..."
+          if ! timeout 600 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do echo -n "."; sleep 10; done'; then
+            echo ""
+            echo "❌ kinc-init.service timeout after 10 minutes"
+            echo ""
+            echo "=== Debugging Information ==="
+            echo "--- systemctl status kinc-init.service ---"
+            podman exec kinc-cluster systemctl status kinc-init.service --no-pager || true
+            echo ""
+            echo "--- journalctl for kinc-init ---"
+            podman exec kinc-cluster journalctl -xeu kinc-init.service --no-pager -n 100 || true
+            echo ""
+            echo "--- Check if kubeadm.conf exists ---"
+            podman exec kinc-cluster ls -la /etc/kinc/config/ || true
+            podman exec kinc-cluster cat /etc/kinc/config/kubeadm.conf || true
+            echo ""
+            echo "--- kubelet status ---"
+            podman exec kinc-cluster systemctl status kubelet.service --no-pager || true
+            echo ""
+            echo "--- Container logs (last 50 lines) ---"
+            podman logs kinc-cluster --tail 50 || true
+            exit 1
+          fi
+          echo ""
+          echo "✅ Cluster initialization started"
+          
+          # Show init service status
+          podman exec kinc-cluster systemctl status kinc-init.service --no-pager || true
+          
+          # Wait for API server (from host)
+          timeout 120 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null 2>&1; do sleep 2; done'
+          echo "✅ API server responding"
+          
+          # Wait for node ready
+          timeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=10s >/dev/null 2>&1; do sleep 5; done'
+          echo "✅ Node ready"
+          
+          # Wait for CoreDNS (critical for Faro tests)
+          timeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pod -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running >/dev/null 2>&1; do sleep 5; done'
+          echo "✅ CoreDNS running"
+          
+          # Extract kubeconfig
+          mkdir -p ~/.kube
+          podman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config
+          sed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config
+          
+          # Verify cluster
+          echo ""
+          echo "📊 Cluster Status:"
+          kubectl get nodes -o wide
+          kubectl get pods -A
           kubectl cluster-info
-          kubectl get nodes
 
       # Run comprehensive test suite
       - name: Run full test suite
@@ -69,3 +271,8 @@ jobs:
           go mod tidy
           go build test_import.go
           rm test_import.go
+
+      # Cleanup kinc cluster
+      - name: Cleanup kinc cluster
+        if: always()
+        run: podman rm -f kinc-cluster || true
