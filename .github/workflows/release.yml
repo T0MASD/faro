@@ -143,15 +143,26 @@ jobs:
           echo "✅ Container responding"
           
           # Wait for systemd inside container
-          echo "⏳ Waiting for systemd (checking if it reaches running state)..."
-          if ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running >/dev/null 2>&1; do echo -n "."; sleep 2; done'; then
+          echo "⏳ Waiting for systemd..."
+          if ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running 2>&1 | grep -q "running"; do echo -n "."; sleep 2; done'; then
             echo ""
-            echo "❌ Systemd timeout - checking status..."
-            podman exec kinc-cluster systemctl is-system-running || true
+            SYSTEMD_STATE=$(podman exec kinc-cluster systemctl is-system-running 2>&1 || true)
+            echo "❌ Systemd not running (state: $SYSTEMD_STATE)"
+            echo ""
+            echo "=== Failed Services ==="
             podman exec kinc-cluster systemctl --failed --no-pager || true
-            podman exec kinc-cluster journalctl -xb --no-pager -n 50 || true
-            echo "--- Checking if critical services exist ---"
-            podman exec kinc-cluster systemctl list-units --all --no-pager | grep -E "(kinc|crio|kubelet)" || true
+            echo ""
+            echo "=== kinc/crio/kubelet Status ==="
+            podman exec kinc-cluster systemctl status kinc-init.service crio.service kubelet.service --no-pager || true
+            echo ""
+            echo "=== Checking Pod Status ==="
+            podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -A -o wide || true
+            echo ""
+            echo "=== Pod Logs (kube-proxy) ==="
+            podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf logs -n kube-system -l k8s-app=kube-proxy --tail=50 || true
+            echo ""
+            echo "=== Pod Logs (local-path-provisioner) ==="
+            podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf logs -n local-path-storage -l app=local-path-provisioner --tail=50 || true
             exit 1
           fi
           echo "✅ Systemd operational"
