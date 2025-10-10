@@ -147,7 +147,17 @@ jobs:
           echo "✅ Container responding"
           
           # Wait for systemd inside container
-          timeout 60 bash -c 'until podman exec kinc-cluster systemctl is-system-running --wait >/dev/null 2>&1; do sleep 2; done'
+          echo "⏳ Waiting for systemd (checking if it reaches running state)..."
+          if ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running >/dev/null 2>&1; do echo -n "."; sleep 2; done'; then
+            echo ""
+            echo "❌ Systemd timeout - checking status..."
+            podman exec kinc-cluster systemctl is-system-running || true
+            podman exec kinc-cluster systemctl --failed --no-pager || true
+            podman exec kinc-cluster journalctl -xb --no-pager -n 50 || true
+            echo "--- Checking if critical services exist ---"
+            podman exec kinc-cluster systemctl list-units --all --no-pager | grep -E "(kinc|crio|kubelet)" || true
+            exit 1
+          fi
           echo "✅ Systemd operational"
           
           # Wait for CRI-O
