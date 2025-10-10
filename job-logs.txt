@@ -1,455 +1,575 @@
-﻿2025-10-10T07:36:56.5408250Z Current runner version: '2.328.0'
-2025-10-10T07:36:56.5455376Z ##[group]Runner Image Provisioner
-2025-10-10T07:36:56.5456428Z Hosted Compute Agent
-2025-10-10T07:36:56.5456996Z Version: 20250912.392
-2025-10-10T07:36:56.5457600Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
-2025-10-10T07:36:56.5458253Z Build Date: 2025-09-12T15:23:14Z
-2025-10-10T07:36:56.5458867Z ##[endgroup]
-2025-10-10T07:36:56.5459407Z ##[group]Operating System
-2025-10-10T07:36:56.5459967Z Ubuntu
-2025-10-10T07:36:56.5460396Z 24.04.3
-2025-10-10T07:36:56.5460938Z LTS
-2025-10-10T07:36:56.5461360Z ##[endgroup]
-2025-10-10T07:36:56.5461832Z ##[group]Runner Image
-2025-10-10T07:36:56.5462468Z Image: ubuntu-24.04
-2025-10-10T07:36:56.5462940Z Version: 20250929.60.1
-2025-10-10T07:36:56.5463918Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20250929.60/images/ubuntu/Ubuntu2404-Readme.md
-2025-10-10T07:36:56.5465460Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20250929.60
-2025-10-10T07:36:56.5466688Z ##[endgroup]
-2025-10-10T07:36:56.5467787Z ##[group]GITHUB_TOKEN Permissions
-2025-10-10T07:36:56.5469821Z Contents: read
-2025-10-10T07:36:56.5470442Z Metadata: read
-2025-10-10T07:36:56.5470900Z ##[endgroup]
-2025-10-10T07:36:56.5473302Z Secret source: Actions
-2025-10-10T07:36:56.5474027Z Prepare workflow directory
-2025-10-10T07:36:56.5791922Z Prepare all required actions
-2025-10-10T07:36:56.5832467Z Getting action download info
-2025-10-10T07:36:57.0650481Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
-2025-10-10T07:36:57.4642792Z Download action repository 'actions/setup-go@v5' (SHA:d35c59abb061a4a6fb18e82ac0862c26744d6ab5)
-2025-10-10T07:36:58.0762813Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
-2025-10-10T07:36:58.2821381Z Complete job name: test
-2025-10-10T07:36:58.3620710Z ##[group]Run actions/checkout@v4
-2025-10-10T07:36:58.3621942Z with:
-2025-10-10T07:36:58.3622563Z   fetch-depth: 0
-2025-10-10T07:36:58.3623310Z   repository: T0MASD/faro
-2025-10-10T07:36:58.3624385Z   token: ***
-2025-10-10T07:36:58.3625074Z   ssh-strict: true
-2025-10-10T07:36:58.3625986Z   ssh-user: git
-2025-10-10T07:36:58.3626717Z   persist-credentials: true
-2025-10-10T07:36:58.3627538Z   clean: true
-2025-10-10T07:36:58.3628274Z   sparse-checkout-cone-mode: true
-2025-10-10T07:36:58.3629195Z   fetch-tags: false
-2025-10-10T07:36:58.3629931Z   show-progress: true
-2025-10-10T07:36:58.3630674Z   lfs: false
-2025-10-10T07:36:58.3631336Z   submodules: false
-2025-10-10T07:36:58.3632082Z   set-safe-directory: true
-2025-10-10T07:36:58.3633138Z ##[endgroup]
-2025-10-10T07:36:58.4697028Z Syncing repository: T0MASD/faro
-2025-10-10T07:36:58.4699661Z ##[group]Getting Git version info
-2025-10-10T07:36:58.4700797Z Working directory is '/home/runner/work/faro/faro'
-2025-10-10T07:36:58.4702515Z [command]/usr/bin/git version
-2025-10-10T07:36:58.4760291Z git version 2.51.0
-2025-10-10T07:36:58.4786116Z ##[endgroup]
-2025-10-10T07:36:58.4801555Z Temporarily overriding HOME='/home/runner/work/_temp/0543f94f-c6ae-43c6-bc95-3844a0fc8e60' before making global git config changes
-2025-10-10T07:36:58.4804277Z Adding repository directory to the temporary git global config as a safe directory
-2025-10-10T07:36:58.4807174Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
-2025-10-10T07:36:58.4840515Z Deleting the contents of '/home/runner/work/faro/faro'
-2025-10-10T07:36:58.4843823Z ##[group]Initializing the repository
-2025-10-10T07:36:58.4847994Z [command]/usr/bin/git init /home/runner/work/faro/faro
-2025-10-10T07:36:58.4940160Z hint: Using 'master' as the name for the initial branch. This default branch name
-2025-10-10T07:36:58.4943152Z hint: is subject to change. To configure the initial branch name to use in all
-2025-10-10T07:36:58.4946133Z hint: of your new repositories, which will suppress this warning, call:
-2025-10-10T07:36:58.4947428Z hint:
-2025-10-10T07:36:58.4948270Z hint: 	git config --global init.defaultBranch <name>
-2025-10-10T07:36:58.4949579Z hint:
-2025-10-10T07:36:58.4951080Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
-2025-10-10T07:36:58.4952793Z hint: 'development'. The just-created branch can be renamed via this command:
-2025-10-10T07:36:58.4954114Z hint:
-2025-10-10T07:36:58.4954766Z hint: 	git branch -m <name>
-2025-10-10T07:36:58.4955865Z hint:
-2025-10-10T07:36:58.4957236Z hint: Disable this message with "git config set advice.defaultBranchName false"
-2025-10-10T07:36:58.4959048Z Initialized empty Git repository in /home/runner/work/faro/faro/.git/
-2025-10-10T07:36:58.4961820Z [command]/usr/bin/git remote add origin https://github.com/T0MASD/faro
-2025-10-10T07:36:58.4995102Z ##[endgroup]
-2025-10-10T07:36:58.4996906Z ##[group]Disabling automatic garbage collection
-2025-10-10T07:36:58.4998596Z [command]/usr/bin/git config --local gc.auto 0
-2025-10-10T07:36:58.5026911Z ##[endgroup]
-2025-10-10T07:36:58.5028317Z ##[group]Setting up auth
-2025-10-10T07:36:58.5032634Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2025-10-10T07:36:58.5062583Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2025-10-10T07:36:58.5408004Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-2025-10-10T07:36:58.5438240Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-2025-10-10T07:36:58.5655782Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
-2025-10-10T07:36:58.5698920Z ##[endgroup]
-2025-10-10T07:36:58.5700506Z ##[group]Fetching the repository
-2025-10-10T07:36:58.5710425Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +ab631c2875f82f8d52780c6e46e0f728ebef5d61:refs/remotes/pull/6/merge
-2025-10-10T07:36:59.1583175Z From https://github.com/T0MASD/faro
-2025-10-10T07:36:59.1585170Z  * [new branch]      ci                                       -> origin/ci
-2025-10-10T07:36:59.1587249Z  * [new branch]      main                                     -> origin/main
-2025-10-10T07:36:59.1588815Z  * [new branch]      middleware                               -> origin/middleware
-2025-10-10T07:36:59.1590211Z  * [new tag]         v1.0.0                                   -> v1.0.0
-2025-10-10T07:36:59.1591437Z  * [new tag]         v1.1.0                                   -> v1.1.0
-2025-10-10T07:36:59.1592641Z  * [new tag]         v1.2.0                                   -> v1.2.0
-2025-10-10T07:36:59.1593939Z  * [new tag]         v1.2.1                                   -> v1.2.1
-2025-10-10T07:36:59.1595143Z  * [new tag]         v1.3.0                                   -> v1.3.0
-2025-10-10T07:36:59.1596815Z  * [new ref]         ab631c2875f82f8d52780c6e46e0f728ebef5d61 -> pull/6/merge
-2025-10-10T07:36:59.1624395Z ##[endgroup]
-2025-10-10T07:36:59.1626307Z ##[group]Determining the checkout info
-2025-10-10T07:36:59.1627811Z ##[endgroup]
-2025-10-10T07:36:59.1631055Z [command]/usr/bin/git sparse-checkout disable
-2025-10-10T07:36:59.1670266Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
-2025-10-10T07:36:59.1699028Z ##[group]Checking out the ref
-2025-10-10T07:36:59.1702357Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/6/merge
-2025-10-10T07:36:59.1789675Z Note: switching to 'refs/remotes/pull/6/merge'.
-2025-10-10T07:36:59.1790587Z 
-2025-10-10T07:36:59.1791227Z You are in 'detached HEAD' state. You can look around, make experimental
-2025-10-10T07:36:59.1792878Z changes and commit them, and you can discard any commits you make in this
-2025-10-10T07:36:59.1795841Z state without impacting any branches by switching back to a branch.
-2025-10-10T07:36:59.1797537Z 
-2025-10-10T07:36:59.1798889Z If you want to create a new branch to retain commits you create, you may
-2025-10-10T07:36:59.1801483Z do so (now or later) by using -c with the switch command. Example:
-2025-10-10T07:36:59.1803019Z 
-2025-10-10T07:36:59.1803591Z   git switch -c <new-branch-name>
-2025-10-10T07:36:59.1804568Z 
-2025-10-10T07:36:59.1805082Z Or undo this operation with:
-2025-10-10T07:36:59.1806202Z 
-2025-10-10T07:36:59.1806650Z   git switch -
-2025-10-10T07:36:59.1807278Z 
-2025-10-10T07:36:59.1808432Z Turn off this advice by setting config variable advice.detachedHead to false
-2025-10-10T07:36:59.1809631Z 
-2025-10-10T07:36:59.1810761Z HEAD is now at ab631c2 Merge 7828d47e9566948677f8874459c1b2d675a200df into c656f2d0e66497e6470f15704d8124941629b0bc
-2025-10-10T07:36:59.1814532Z ##[endgroup]
-2025-10-10T07:36:59.1834831Z [command]/usr/bin/git log -1 --format=%H
-2025-10-10T07:36:59.1856605Z ab631c2875f82f8d52780c6e46e0f728ebef5d61
-2025-10-10T07:36:59.2116697Z ##[group]Run actions/setup-go@v5
-2025-10-10T07:36:59.2117571Z with:
-2025-10-10T07:36:59.2118175Z   go-version: 1.24
-2025-10-10T07:36:59.2118858Z   check-latest: false
-2025-10-10T07:36:59.2119795Z   token: ***
-2025-10-10T07:36:59.2120416Z   cache: true
-2025-10-10T07:36:59.2121049Z ##[endgroup]
-2025-10-10T07:36:59.3701229Z Setup go version spec 1.24
-2025-10-10T07:36:59.4091992Z Found in cache @ /opt/hostedtoolcache/go/1.24.7/x64
-2025-10-10T07:36:59.4096933Z Added go to the path
-2025-10-10T07:36:59.4101014Z Successfully set up Go version 1.24
-2025-10-10T07:37:00.1888779Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOMODCACHE
-2025-10-10T07:37:00.1919814Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOCACHE
-2025-10-10T07:37:00.1942653Z /home/runner/go/pkg/mod
-2025-10-10T07:37:00.1969037Z /home/runner/.cache/go-build
-2025-10-10T07:37:00.5324539Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
-2025-10-10T07:37:01.8311162Z Received 0 of 549431188 (0.0%), 0.0 MBs/sec
-2025-10-10T07:37:02.9161806Z Received 134217728 of 549431188 (24.4%), 61.3 MBs/sec
-2025-10-10T07:37:03.9165255Z Received 268435456 of 549431188 (48.9%), 82.9 MBs/sec
-2025-10-10T07:37:04.9181564Z Received 402653184 of 549431188 (73.3%), 93.9 MBs/sec
-2025-10-10T07:37:05.9081968Z Received 549431188 of 549431188 (100.0%), 103.2 MBs/sec
-2025-10-10T07:37:05.9082985Z Cache Size: ~524 MB (549431188 B)
-2025-10-10T07:37:05.9198309Z [command]/usr/bin/tar -xf /home/runner/work/_temp/da4752aa-78e1-47f1-8441-955284f5e91a/cache.tzst -P -C /home/runner/work/faro/faro --use-compress-program unzstd
-2025-10-10T07:37:09.7355420Z Cache restored successfully
-2025-10-10T07:37:09.8382285Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
-2025-10-10T07:37:09.8407740Z go version go1.24.7 linux/amd64
-2025-10-10T07:37:09.8407955Z 
-2025-10-10T07:37:09.8408258Z ##[group]go env
-2025-10-10T07:37:10.0586711Z AR='ar'
-2025-10-10T07:37:10.0587138Z CC='gcc'
-2025-10-10T07:37:10.0587523Z CGO_CFLAGS='-O2 -g'
-2025-10-10T07:37:10.0587884Z CGO_CPPFLAGS=''
-2025-10-10T07:37:10.0588211Z CGO_CXXFLAGS='-O2 -g'
-2025-10-10T07:37:10.0588562Z CGO_ENABLED='1'
-2025-10-10T07:37:10.0588877Z CGO_FFLAGS='-O2 -g'
-2025-10-10T07:37:10.0589198Z CGO_LDFLAGS='-O2 -g'
-2025-10-10T07:37:10.0589526Z CXX='g++'
-2025-10-10T07:37:10.0589829Z GCCGO='gccgo'
-2025-10-10T07:37:10.0590150Z GO111MODULE=''
-2025-10-10T07:37:10.0590518Z GOAMD64='v1'
-2025-10-10T07:37:10.0590837Z GOARCH='amd64'
-2025-10-10T07:37:10.0591147Z GOAUTH='netrc'
-2025-10-10T07:37:10.0591461Z GOBIN=''
-2025-10-10T07:37:10.0591866Z GOCACHE='/home/runner/.cache/go-build'
-2025-10-10T07:37:10.0592312Z GOCACHEPROG=''
-2025-10-10T07:37:10.0592636Z GODEBUG=''
-2025-10-10T07:37:10.0592973Z GOENV='/home/runner/.config/go/env'
-2025-10-10T07:37:10.0593359Z GOEXE=''
-2025-10-10T07:37:10.0593660Z GOEXPERIMENT=''
-2025-10-10T07:37:10.0593969Z GOFIPS140='off'
-2025-10-10T07:37:10.0594285Z GOFLAGS=''
-2025-10-10T07:37:10.0595237Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build290624483=/tmp/go-build -gno-record-gcc-switches'
-2025-10-10T07:37:10.0596884Z GOHOSTARCH='amd64'
-2025-10-10T07:37:10.0597273Z GOHOSTOS='linux'
-2025-10-10T07:37:10.0597603Z GOINSECURE=''
-2025-10-10T07:37:10.0598013Z GOMOD='/home/runner/work/faro/faro/go.mod'
-2025-10-10T07:37:10.0598474Z GOMODCACHE='/home/runner/go/pkg/mod'
-2025-10-10T07:37:10.0598878Z GONOPROXY=''
-2025-10-10T07:37:10.0599170Z GONOSUMDB=''
-2025-10-10T07:37:10.0599455Z GOOS='linux'
-2025-10-10T07:37:10.0599773Z GOPATH='/home/runner/go'
-2025-10-10T07:37:10.0600107Z GOPRIVATE=''
-2025-10-10T07:37:10.0600481Z GOPROXY='https://proxy.golang.org,direct'
-2025-10-10T07:37:10.0600986Z GOROOT='/opt/hostedtoolcache/go/1.24.7/x64'
-2025-10-10T07:37:10.0601427Z GOSUMDB='sum.golang.org'
-2025-10-10T07:37:10.0601762Z GOTELEMETRY='local'
-2025-10-10T07:37:10.0602181Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
-2025-10-10T07:37:10.0602931Z GOTMPDIR=''
-2025-10-10T07:37:10.0603258Z GOTOOLCHAIN='auto'
-2025-10-10T07:37:10.0603729Z GOTOOLDIR='/opt/hostedtoolcache/go/1.24.7/x64/pkg/tool/linux_amd64'
-2025-10-10T07:37:10.0604218Z GOVCS=''
-2025-10-10T07:37:10.0604511Z GOVERSION='go1.24.7'
-2025-10-10T07:37:10.0604835Z GOWORK=''
-2025-10-10T07:37:10.0605151Z PKG_CONFIG='pkg-config'
-2025-10-10T07:37:10.0605375Z 
-2025-10-10T07:37:10.0606090Z ##[endgroup]
-2025-10-10T07:37:10.0752209Z ##[group]Run # Enable IP forwarding (required for kinc networking)
-2025-10-10T07:37:10.0753207Z [36;1m# Enable IP forwarding (required for kinc networking)[0m
-2025-10-10T07:37:10.0753591Z [36;1mecho 1 | sudo tee /proc/sys/net/ipv4/ip_forward[0m
-2025-10-10T07:37:10.0753883Z [36;1m[0m
-2025-10-10T07:37:10.0754087Z [36;1m# Prepare kubeadm config for kinc[0m
-2025-10-10T07:37:10.0754414Z [36;1m# kinc-init.service reads /etc/kinc/config/kubeadm.conf[0m
-2025-10-10T07:37:10.0754744Z [36;1mmkdir -p /tmp/kinc-config[0m
-2025-10-10T07:37:10.0755043Z [36;1mcat > /tmp/kinc-config/kubeadm.conf << 'EOF'[0m
-2025-10-10T07:37:10.0755318Z [36;1mapiServer:[0m
-2025-10-10T07:37:10.0755944Z [36;1m  certSANs:[0m
-2025-10-10T07:37:10.0756169Z [36;1m  - localhost[0m
-2025-10-10T07:37:10.0756373Z [36;1m  - 127.0.0.1[0m
-2025-10-10T07:37:10.0756585Z [36;1m  extraArgs:[0m
-2025-10-10T07:37:10.0756805Z [36;1m    runtime-config: ""[0m
-2025-10-10T07:37:10.0757101Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
-2025-10-10T07:37:10.0757377Z [36;1mclusterName: kinc[0m
-2025-10-10T07:37:10.0757658Z [36;1mcontrolPlaneEndpoint: kinc-control-plane:6443[0m
-2025-10-10T07:37:10.0757971Z [36;1mcontrollerManager:[0m
-2025-10-10T07:37:10.0758215Z [36;1m  extraArgs:[0m
-2025-10-10T07:37:10.0758489Z [36;1m    enable-hostpath-provisioner: "true"[0m
-2025-10-10T07:37:10.0758779Z [36;1mkind: ClusterConfiguration[0m
-2025-10-10T07:37:10.0759039Z [36;1mkubernetesVersion: v1.33.5[0m
-2025-10-10T07:37:10.0759283Z [36;1mnetworking:[0m
-2025-10-10T07:37:10.0759486Z [36;1m  podSubnet: 10.244.0.0/16[0m
-2025-10-10T07:37:10.0759731Z [36;1m  serviceSubnet: 10.96.0.0/16[0m
-2025-10-10T07:37:10.0759977Z [36;1mpatches:[0m
-2025-10-10T07:37:10.0760192Z [36;1m  directory: /etc/kinc/patches[0m
-2025-10-10T07:37:10.0760441Z [36;1mscheduler:[0m
-2025-10-10T07:37:10.0760650Z [36;1m  extraArgs: null[0m
-2025-10-10T07:37:10.0760865Z [36;1m---[0m
-2025-10-10T07:37:10.0761077Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
-2025-10-10T07:37:10.0761346Z [36;1mbootstrapTokens:[0m
-2025-10-10T07:37:10.0761583Z [36;1m- token: abcdef.0123456789abcdef[0m
-2025-10-10T07:37:10.0761847Z [36;1mkind: InitConfiguration[0m
-2025-10-10T07:37:10.0762094Z [36;1mlocalAPIEndpoint:[0m
-2025-10-10T07:37:10.0762361Z [36;1m  advertiseAddress: CONTAINER_IP_PLACEHOLDER[0m
-2025-10-10T07:37:10.0762639Z [36;1m  bindPort: 6443[0m
-2025-10-10T07:37:10.0762856Z [36;1mnodeRegistration:[0m
-2025-10-10T07:37:10.0763111Z [36;1m  criSocket: unix:///var/run/crio/crio.sock[0m
-2025-10-10T07:37:10.0763391Z [36;1m  kubeletExtraArgs:[0m
-2025-10-10T07:37:10.0763634Z [36;1m    node-ip: CONTAINER_IP_PLACEHOLDER[0m
-2025-10-10T07:37:10.0764104Z [36;1m    node-labels: ""[0m
-2025-10-10T07:37:10.0764417Z [36;1m    provider-id: kind://podman/kinc/kinc-control-plane[0m
-2025-10-10T07:37:10.0764719Z [36;1m---[0m
-2025-10-10T07:37:10.0764927Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
-2025-10-10T07:37:10.0765191Z [36;1mcontrolPlane:[0m
-2025-10-10T07:37:10.0765406Z [36;1m  localAPIEndpoint:[0m
-2025-10-10T07:37:10.0765904Z [36;1m    advertiseAddress: CONTAINER_IP_PLACEHOLDER[0m
-2025-10-10T07:37:10.0766200Z [36;1m    bindPort: 6443[0m
-2025-10-10T07:37:10.0766418Z [36;1mdiscovery:[0m
-2025-10-10T07:37:10.0766616Z [36;1m  bootstrapToken:[0m
-2025-10-10T07:37:10.0766879Z [36;1m    apiServerEndpoint: kinc-control-plane:6443[0m
-2025-10-10T07:37:10.0767176Z [36;1m    token: abcdef.0123456789abcdef[0m
-2025-10-10T07:37:10.0767450Z [36;1m    unsafeSkipCAVerification: true[0m
-2025-10-10T07:37:10.0767715Z [36;1mkind: JoinConfiguration[0m
-2025-10-10T07:37:10.0767956Z [36;1mnodeRegistration:[0m
-2025-10-10T07:37:10.0768209Z [36;1m  criSocket: unix:///var/run/crio/crio.sock[0m
-2025-10-10T07:37:10.0768491Z [36;1m  kubeletExtraArgs:[0m
-2025-10-10T07:37:10.0768737Z [36;1m    node-ip: CONTAINER_IP_PLACEHOLDER[0m
-2025-10-10T07:37:10.0768998Z [36;1m    node-labels: ""[0m
-2025-10-10T07:37:10.0769450Z [36;1m    provider-id: kind://podman/kinc/kinc-control-plane[0m
-2025-10-10T07:37:10.0769757Z [36;1m---[0m
-2025-10-10T07:37:10.0769985Z [36;1mapiVersion: kubelet.config.k8s.io/v1beta1[0m
-2025-10-10T07:37:10.0770268Z [36;1mcgroupDriver: cgroupfs[0m
-2025-10-10T07:37:10.0770506Z [36;1mcgroupRoot: /[0m
-2025-10-10T07:37:10.0770720Z [36;1mevictionHard:[0m
-2025-10-10T07:37:10.0770925Z [36;1m  imagefs.available: 0%[0m
-2025-10-10T07:37:10.0771163Z [36;1m  nodefs.available: 0%[0m
-2025-10-10T07:37:10.0771397Z [36;1m  nodefs.inodesFree: 0%[0m
-2025-10-10T07:37:10.0771631Z [36;1mfailSwapOn: false[0m
-2025-10-10T07:37:10.0771847Z [36;1mfeatureGates:[0m
-2025-10-10T07:37:10.0772073Z [36;1m  KubeletInUserNamespace: true[0m
-2025-10-10T07:37:10.0772362Z [36;1mimageGCHighThresholdPercent: 100[0m
-2025-10-10T07:37:10.0772633Z [36;1mkind: KubeletConfiguration[0m
-2025-10-10T07:37:10.0772871Z [36;1m---[0m
-2025-10-10T07:37:10.0773106Z [36;1mapiVersion: kubeproxy.config.k8s.io/v1alpha1[0m
-2025-10-10T07:37:10.0773385Z [36;1mconntrack:[0m
-2025-10-10T07:37:10.0773594Z [36;1m  maxPerCore: 0[0m
-2025-10-10T07:37:10.0773802Z [36;1mnftables:[0m
-2025-10-10T07:37:10.0774006Z [36;1m  masqueradeAll: false[0m
-2025-10-10T07:37:10.0774233Z [36;1m  masqueradeBit: 14[0m
-2025-10-10T07:37:10.0774460Z [36;1m  minSyncPeriod: 1s[0m
-2025-10-10T07:37:10.0774680Z [36;1m  syncPeriod: 30s[0m
-2025-10-10T07:37:10.0774908Z [36;1mkind: KubeProxyConfiguration[0m
-2025-10-10T07:37:10.0775160Z [36;1mmode: nftables[0m
-2025-10-10T07:37:10.0775364Z [36;1mEOF[0m
-2025-10-10T07:37:10.0775768Z [36;1m[0m
-2025-10-10T07:37:10.0775986Z [36;1mecho "✅ kubeadm.conf prepared"[0m
-2025-10-10T07:37:10.0776242Z [36;1m[0m
-2025-10-10T07:37:10.0776489Z [36;1m# Start kinc cluster (systemd-based Kubernetes container)[0m
-2025-10-10T07:37:10.0776904Z [36;1m# Based on kinc/runtime/quadlet/kinc-control-plane.container[0m
-2025-10-10T07:37:10.0777244Z [36;1mpodman run -d \[0m
-2025-10-10T07:37:10.0777471Z [36;1m  --name kinc-cluster \[0m
-2025-10-10T07:37:10.0777738Z [36;1m  --hostname kinc-control-plane \[0m
-2025-10-10T07:37:10.0778102Z [36;1m  --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \[0m
-2025-10-10T07:37:10.0778517Z [36;1m  --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \[0m
-2025-10-10T07:37:10.0778915Z [36;1m  --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \[0m
-2025-10-10T07:37:10.0779332Z [36;1m  --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \[0m
-2025-10-10T07:37:10.0779770Z [36;1m  --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \[0m
-2025-10-10T07:37:10.0780156Z [36;1m  --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \[0m
-2025-10-10T07:37:10.0780452Z [36;1m  --device /dev/fuse \[0m
-2025-10-10T07:37:10.0780877Z [36;1m  --sysctl net.ipv6.conf.all.disable_ipv6=0 \[0m
-2025-10-10T07:37:10.0781214Z [36;1m  --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \[0m
-2025-10-10T07:37:10.0781569Z [36;1m  --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
-2025-10-10T07:37:10.0781941Z [36;1m  --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
-2025-10-10T07:37:10.0782316Z [36;1m  --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
-2025-10-10T07:37:10.0782673Z [36;1m  --volume /tmp/kinc-config:/etc/kinc/config:ro \[0m
-2025-10-10T07:37:10.0782974Z [36;1m  --publish 127.0.0.1:6443:6443/tcp \[0m
-2025-10-10T07:37:10.0783240Z [36;1m  -e container=podman \[0m
-2025-10-10T07:37:10.0783514Z [36;1m  -e KUBECONFIG=/etc/kubernetes/admin.conf \[0m
-2025-10-10T07:37:10.0783797Z [36;1m  ghcr.io/t0masd/kinc:v0-1[0m
-2025-10-10T07:37:10.0784027Z [36;1m[0m
-2025-10-10T07:37:10.0784340Z [36;1mecho "⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)..."[0m
-2025-10-10T07:37:10.0784847Z [36;1mecho "   This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,"[0m
-2025-10-10T07:37:10.0785282Z [36;1mecho "   API server, CNI, storage provisioner, and CoreDNS"[0m
-2025-10-10T07:37:10.0785777Z [36;1m[0m
-2025-10-10T07:37:10.0785975Z [36;1m# Wait for container to respond[0m
-2025-10-10T07:37:10.0786534Z [36;1mtimeout 30 bash -c 'until podman exec kinc-cluster echo ok >/dev/null 2>&1; do sleep 2; done'[0m
-2025-10-10T07:37:10.0786974Z [36;1mecho "✅ Container responding"[0m
-2025-10-10T07:37:10.0787215Z [36;1m[0m
-2025-10-10T07:37:10.0787414Z [36;1m# Wait for systemd inside container[0m
-2025-10-10T07:37:10.0787926Z [36;1mtimeout 60 bash -c 'until podman exec kinc-cluster systemctl is-system-running --wait >/dev/null 2>&1; do sleep 2; done'[0m
-2025-10-10T07:37:10.0788428Z [36;1mecho "✅ Systemd operational"[0m
-2025-10-10T07:37:10.0788662Z [36;1m[0m
-2025-10-10T07:37:10.0788837Z [36;1m# Wait for CRI-O[0m
-2025-10-10T07:37:10.0789286Z [36;1mtimeout 60 bash -c 'until podman exec kinc-cluster systemctl is-active crio.service >/dev/null 2>&1; do sleep 2; done'[0m
-2025-10-10T07:37:10.0789781Z [36;1mecho "✅ CRI-O active"[0m
-2025-10-10T07:37:10.0790002Z [36;1m[0m
-2025-10-10T07:37:10.0790278Z [36;1m# Wait for cluster initialization (kinc-init.service runs kubeadm init)[0m
-2025-10-10T07:37:10.0790689Z [36;1m# This can take 3-5 minutes, so use longer timeout[0m
-2025-10-10T07:37:10.0791119Z [36;1mecho "⏳ Waiting for kinc-init.service (this runs kubeadm init, takes 3-5 min)..."[0m
-2025-10-10T07:37:10.0791817Z [36;1mif ! timeout 600 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do echo -n "."; sleep 10; done'; then[0m
-2025-10-10T07:37:10.0792369Z [36;1m  echo ""[0m
-2025-10-10T07:37:10.0792628Z [36;1m  echo "❌ kinc-init.service timeout after 10 minutes"[0m
-2025-10-10T07:37:10.0792922Z [36;1m  echo ""[0m
-2025-10-10T07:37:10.0793147Z [36;1m  echo "=== Debugging Information ==="[0m
-2025-10-10T07:37:10.0793456Z [36;1m  echo "--- systemctl status kinc-init.service ---"[0m
-2025-10-10T07:37:10.0793895Z [36;1m  podman exec kinc-cluster systemctl status kinc-init.service --no-pager || true[0m
-2025-10-10T07:37:10.0794273Z [36;1m  echo ""[0m
-2025-10-10T07:37:10.0794485Z [36;1m  echo "--- journalctl for kinc-init ---"[0m
-2025-10-10T07:37:10.0794919Z [36;1m  podman exec kinc-cluster journalctl -xeu kinc-init.service --no-pager -n 100 || true[0m
-2025-10-10T07:37:10.0795347Z [36;1m  echo ""[0m
-2025-10-10T07:37:10.0795745Z [36;1m  echo "--- Check if kubeadm.conf exists ---"[0m
-2025-10-10T07:37:10.0796101Z [36;1m  podman exec kinc-cluster ls -la /etc/kinc/config/ || true[0m
-2025-10-10T07:37:10.0796508Z [36;1m  podman exec kinc-cluster cat /etc/kinc/config/kubeadm.conf || true[0m
-2025-10-10T07:37:10.0796840Z [36;1m  echo ""[0m
-2025-10-10T07:37:10.0797054Z [36;1m  echo "--- kubelet status ---"[0m
-2025-10-10T07:37:10.0797442Z [36;1m  podman exec kinc-cluster systemctl status kubelet.service --no-pager || true[0m
-2025-10-10T07:37:10.0797953Z [36;1m  echo ""[0m
-2025-10-10T07:37:10.0798177Z [36;1m  echo "--- Container logs (last 50 lines) ---"[0m
-2025-10-10T07:37:10.0798492Z [36;1m  podman logs kinc-cluster --tail 50 || true[0m
-2025-10-10T07:37:10.0798761Z [36;1m  exit 1[0m
-2025-10-10T07:37:10.0798935Z [36;1mfi[0m
-2025-10-10T07:37:10.0799112Z [36;1mecho ""[0m
-2025-10-10T07:37:10.0799373Z [36;1mecho "✅ Cluster initialization started"[0m
-2025-10-10T07:37:10.0799630Z [36;1m[0m
-2025-10-10T07:37:10.0799817Z [36;1m# Show init service status[0m
-2025-10-10T07:37:10.0800199Z [36;1mpodman exec kinc-cluster systemctl status kinc-init.service --no-pager || true[0m
-2025-10-10T07:37:10.0800573Z [36;1m[0m
-2025-10-10T07:37:10.0800758Z [36;1m# Wait for API server (from host)[0m
-2025-10-10T07:37:10.0801241Z [36;1mtimeout 120 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null 2>&1; do sleep 2; done'[0m
-2025-10-10T07:37:10.0801677Z [36;1mecho "✅ API server responding"[0m
-2025-10-10T07:37:10.0801920Z [36;1m[0m
-2025-10-10T07:37:10.0802098Z [36;1m# Wait for node ready[0m
-2025-10-10T07:37:10.0802779Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=10s >/dev/null 2>&1; do sleep 5; done'[0m
-2025-10-10T07:37:10.0803577Z [36;1mecho "✅ Node ready"[0m
-2025-10-10T07:37:10.0803790Z [36;1m[0m
-2025-10-10T07:37:10.0804004Z [36;1m# Wait for CoreDNS (critical for Faro tests)[0m
-2025-10-10T07:37:10.0804812Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pod -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running >/dev/null 2>&1; do sleep 5; done'[0m
-2025-10-10T07:37:10.0805807Z [36;1mecho "✅ CoreDNS running"[0m
-2025-10-10T07:37:10.0806036Z [36;1m[0m
-2025-10-10T07:37:10.0806216Z [36;1m# Extract kubeconfig[0m
-2025-10-10T07:37:10.0806445Z [36;1mmkdir -p ~/.kube[0m
-2025-10-10T07:37:10.0806757Z [36;1mpodman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config[0m
-2025-10-10T07:37:10.0807249Z [36;1msed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config[0m
-2025-10-10T07:37:10.0807612Z [36;1m[0m
-2025-10-10T07:37:10.0807792Z [36;1m# Verify cluster[0m
-2025-10-10T07:37:10.0807999Z [36;1mecho ""[0m
-2025-10-10T07:37:10.0808208Z [36;1mecho "📊 Cluster Status:"[0m
-2025-10-10T07:37:10.0808456Z [36;1mkubectl get nodes -o wide[0m
-2025-10-10T07:37:10.0808696Z [36;1mkubectl get pods -A[0m
-2025-10-10T07:37:10.0808932Z [36;1mkubectl cluster-info[0m
-2025-10-10T07:37:10.0848594Z shell: /usr/bin/bash -e {0}
-2025-10-10T07:37:10.0848876Z ##[endgroup]
-2025-10-10T07:37:10.0993586Z 1
-2025-10-10T07:37:10.1027566Z ✅ kubeadm.conf prepared
-2025-10-10T07:37:13.4751624Z Trying to pull ghcr.io/t0masd/kinc:v0-1...
-2025-10-10T07:37:14.8770661Z Getting image source signatures
-2025-10-10T07:37:14.8782061Z Copying blob sha256:1c3165eadf68bc96ed33f2878fbea0730fd3210acb1787a1be2cabc1205e508f
-2025-10-10T07:37:14.8783301Z Copying blob sha256:f4ebc8a2ad80e5c68607f77352fa9cd013853438ebb46fba1fcd8d32cd2ed294
-2025-10-10T07:37:14.8784309Z Copying blob sha256:bfa0c27a39a64631c3172367295c01c6767ddd14f09589b80eb8ef1d297b794c
-2025-10-10T07:37:14.8785164Z Copying blob sha256:79fbaf31284b97b3d3859ef109d5ee5097b2ecf41ef7a98d486f6e72b77f5e13
-2025-10-10T07:37:14.8786060Z Copying blob sha256:a36872a969c8ec4cc257c3d32629bb9ab0a5391564e8e589ebcdfdf345c0a2c8
-2025-10-10T07:37:14.8786797Z Copying blob sha256:926690fefe603d28f0c526549e910212a929b903937a9470a40078bc6e4143b9
-2025-10-10T07:37:15.0979600Z Copying blob sha256:ec151b0a58e825b197e33a8f26b6e250df1db60c61e46d46accbf5851042727e
-2025-10-10T07:37:15.1253096Z Copying blob sha256:3fdc23ae00c4c88b0648d79ab063f55f36f6a1b865dc2e0066722d59e746f326
-2025-10-10T07:37:15.1285107Z Copying blob sha256:fa20e998b13a4939ef513c13aad60100b9dddc37bbf22f93e6f938dba86c04c2
-2025-10-10T07:37:15.2688034Z Copying blob sha256:576943d1883f80ec0e6bbe3d414f2dc57c6b96a446af173d4a59f761bd7f24fe
-2025-10-10T07:37:15.2723618Z Copying blob sha256:63b040a831cd876cf9ee413b2347abbd1222f3e63c80fccd0f69992962e9d7e3
-2025-10-10T07:37:15.3652836Z Copying blob sha256:4170f55c66b53d10494a06b56259a3aa8b9915aa32e48e76d804fa3d8858b14a
-2025-10-10T07:37:15.3823904Z Copying blob sha256:c88c43a15383088c1dd388082857c094ad3334ae84a0c6d546d4f06eee6a721b
-2025-10-10T07:37:15.4590986Z Copying blob sha256:254235fa8067245719789a898197f59816a43b841a30f1414dfc8fa4ffdfb0a5
-2025-10-10T07:37:15.5331683Z Copying blob sha256:e91edddee38fd04236c59a7aed0f04ee408de8c7d076e91ade416118a318387b
-2025-10-10T07:37:15.5421832Z Copying blob sha256:409e36ae34c13b90b2aba1797b40eb54a3d914764e272b9c2ae065480b05e3ca
-2025-10-10T07:37:15.5672208Z Copying blob sha256:d753a5d66fb17f1b74a5c4312ece3584dcf697c1c35961f0c995c159e634b34f
-2025-10-10T07:37:15.6357546Z Copying blob sha256:157ded773e7a92a3763dbec098ff0581bda48aedd72b49d31a8b5d65a076a129
-2025-10-10T07:37:15.7283464Z Copying blob sha256:5b856357623aecf5fd02d603bb11298d6329d05db7e420f830dcbe0ba40307db
-2025-10-10T07:37:15.7336990Z Copying blob sha256:63d1b9582fbfdee5701cfc52173c8d4f54325311f5bfe28fe6eae1e6de38f8b1
-2025-10-10T07:37:15.7932013Z Copying blob sha256:d5fd4473dae776355a9cd12ee9227d79dd9fe987d99a7eaef3284152c86c1db6
-2025-10-10T07:37:15.8878856Z Copying blob sha256:01fbea8862c218217b1275df2045bcec65dfc5cc9a04a5f93f2963630cd4aee8
-2025-10-10T07:37:15.9344670Z Copying blob sha256:8f14a422129bc16f7850793a8c055a90dcc9810a4008c27345d464e842cbe769
-2025-10-10T07:37:25.0581847Z Copying config sha256:39da5bbd7c3eab0f00cea6560b1f5211d1dae7b89da7e75f8aa1a29e414eead3
-2025-10-10T07:37:25.0666764Z Writing manifest to image destination
-2025-10-10T07:37:25.4830431Z 51b85f71d9e9308034289f5dc6fa6a7d4796b0848e8c8a8a1b02e0b54cf547e7
-2025-10-10T07:37:25.5002364Z ⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)...
-2025-10-10T07:37:25.5003300Z    This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,
-2025-10-10T07:37:25.5004006Z    API server, CNI, storage provisioner, and CoreDNS
-2025-10-10T07:37:25.6342248Z ✅ Container responding
-2025-10-10T07:38:25.6382070Z ##[error]Process completed with exit code 124.
-2025-10-10T07:38:25.6479199Z ##[group]Run actions/upload-artifact@v4
-2025-10-10T07:38:25.6479493Z with:
-2025-10-10T07:38:25.6479671Z   name: test-logs-17
-2025-10-10T07:38:25.6479940Z   path: work/
+﻿2025-10-10T07:48:54.4237900Z Current runner version: '2.328.0'
+2025-10-10T07:48:54.4293159Z ##[group]Runner Image Provisioner
+2025-10-10T07:48:54.4294343Z Hosted Compute Agent
+2025-10-10T07:48:54.4295140Z Version: 20250912.392
+2025-10-10T07:48:54.4296122Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
+2025-10-10T07:48:54.4297288Z Build Date: 2025-09-12T15:23:14Z
+2025-10-10T07:48:54.4298245Z ##[endgroup]
+2025-10-10T07:48:54.4298980Z ##[group]Operating System
+2025-10-10T07:48:54.4300238Z Ubuntu
+2025-10-10T07:48:54.4301133Z 24.04.3
+2025-10-10T07:48:54.4301969Z LTS
+2025-10-10T07:48:54.4302963Z ##[endgroup]
+2025-10-10T07:48:54.4303761Z ##[group]Runner Image
+2025-10-10T07:48:54.4304691Z Image: ubuntu-24.04
+2025-10-10T07:48:54.4305646Z Version: 20250929.60.1
+2025-10-10T07:48:54.4307468Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20250929.60/images/ubuntu/Ubuntu2404-Readme.md
+2025-10-10T07:48:54.4310489Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20250929.60
+2025-10-10T07:48:54.4312085Z ##[endgroup]
+2025-10-10T07:48:54.4313765Z ##[group]GITHUB_TOKEN Permissions
+2025-10-10T07:48:54.4316534Z Contents: read
+2025-10-10T07:48:54.4317428Z Metadata: read
+2025-10-10T07:48:54.4318286Z ##[endgroup]
+2025-10-10T07:48:54.4321763Z Secret source: Actions
+2025-10-10T07:48:54.4323206Z Prepare workflow directory
+2025-10-10T07:48:54.4772127Z Prepare all required actions
+2025-10-10T07:48:54.4826507Z Getting action download info
+2025-10-10T07:48:54.8098073Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-10-10T07:48:54.9660484Z Download action repository 'actions/setup-go@v5' (SHA:d35c59abb061a4a6fb18e82ac0862c26744d6ab5)
+2025-10-10T07:48:55.3896506Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-10-10T07:48:55.5816250Z Complete job name: test
+2025-10-10T07:48:55.6539844Z ##[group]Run actions/checkout@v4
+2025-10-10T07:48:55.6540796Z with:
+2025-10-10T07:48:55.6541238Z   fetch-depth: 0
+2025-10-10T07:48:55.6541711Z   repository: T0MASD/faro
+2025-10-10T07:48:55.6542407Z   token: ***
+2025-10-10T07:48:55.6542813Z   ssh-strict: true
+2025-10-10T07:48:55.6543242Z   ssh-user: git
+2025-10-10T07:48:55.6543672Z   persist-credentials: true
+2025-10-10T07:48:55.6544155Z   clean: true
+2025-10-10T07:48:55.6544584Z   sparse-checkout-cone-mode: true
+2025-10-10T07:48:55.6545095Z   fetch-tags: false
+2025-10-10T07:48:55.6545542Z   show-progress: true
+2025-10-10T07:48:55.6545960Z   lfs: false
+2025-10-10T07:48:55.6546352Z   submodules: false
+2025-10-10T07:48:55.6546789Z   set-safe-directory: true
+2025-10-10T07:48:55.6547494Z ##[endgroup]
+2025-10-10T07:48:55.7613677Z Syncing repository: T0MASD/faro
+2025-10-10T07:48:55.7615675Z ##[group]Getting Git version info
+2025-10-10T07:48:55.7616384Z Working directory is '/home/runner/work/faro/faro'
+2025-10-10T07:48:55.7617438Z [command]/usr/bin/git version
+2025-10-10T07:48:55.7732801Z git version 2.51.0
+2025-10-10T07:48:55.7758449Z ##[endgroup]
+2025-10-10T07:48:55.7772255Z Temporarily overriding HOME='/home/runner/work/_temp/e41d0db8-f78f-404d-be0a-18ebd78204be' before making global git config changes
+2025-10-10T07:48:55.7773782Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-10T07:48:55.7777039Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
+2025-10-10T07:48:55.7813038Z Deleting the contents of '/home/runner/work/faro/faro'
+2025-10-10T07:48:55.7816677Z ##[group]Initializing the repository
+2025-10-10T07:48:55.7820448Z [command]/usr/bin/git init /home/runner/work/faro/faro
+2025-10-10T07:48:55.7898529Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-10-10T07:48:55.7900023Z hint: is subject to change. To configure the initial branch name to use in all
+2025-10-10T07:48:55.7901035Z hint: of your new repositories, which will suppress this warning, call:
+2025-10-10T07:48:55.7901745Z hint:
+2025-10-10T07:48:55.7902460Z hint: 	git config --global init.defaultBranch <name>
+2025-10-10T07:48:55.7904119Z hint:
+2025-10-10T07:48:55.7905249Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-10-10T07:48:55.7907083Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-10-10T07:48:55.7908565Z hint:
+2025-10-10T07:48:55.7909351Z hint: 	git branch -m <name>
+2025-10-10T07:48:55.7910487Z hint:
+2025-10-10T07:48:55.7911693Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-10-10T07:48:55.7913511Z Initialized empty Git repository in /home/runner/work/faro/faro/.git/
+2025-10-10T07:48:55.7917551Z [command]/usr/bin/git remote add origin https://github.com/T0MASD/faro
+2025-10-10T07:48:55.7953757Z ##[endgroup]
+2025-10-10T07:48:55.7955083Z ##[group]Disabling automatic garbage collection
+2025-10-10T07:48:55.7958430Z [command]/usr/bin/git config --local gc.auto 0
+2025-10-10T07:48:55.7987386Z ##[endgroup]
+2025-10-10T07:48:55.7988806Z ##[group]Setting up auth
+2025-10-10T07:48:55.7995223Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-10T07:48:55.8026146Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-10T07:48:55.8334666Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-10T07:48:55.8364772Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-10T07:48:55.8579398Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-10-10T07:48:55.8620859Z ##[endgroup]
+2025-10-10T07:48:55.8622021Z ##[group]Fetching the repository
+2025-10-10T07:48:55.8630184Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +f5836fce4b824620280d907652028ad33c0bf49d:refs/remotes/pull/6/merge
+2025-10-10T07:48:56.2568021Z From https://github.com/T0MASD/faro
+2025-10-10T07:48:56.2570053Z  * [new branch]      ci                                       -> origin/ci
+2025-10-10T07:48:56.2571409Z  * [new branch]      main                                     -> origin/main
+2025-10-10T07:48:56.2572551Z  * [new branch]      middleware                               -> origin/middleware
+2025-10-10T07:48:56.2573669Z  * [new tag]         v1.0.0                                   -> v1.0.0
+2025-10-10T07:48:56.2574668Z  * [new tag]         v1.1.0                                   -> v1.1.0
+2025-10-10T07:48:56.2575657Z  * [new tag]         v1.2.0                                   -> v1.2.0
+2025-10-10T07:48:56.2576676Z  * [new tag]         v1.2.1                                   -> v1.2.1
+2025-10-10T07:48:56.2577643Z  * [new tag]         v1.3.0                                   -> v1.3.0
+2025-10-10T07:48:56.2578745Z  * [new ref]         f5836fce4b824620280d907652028ad33c0bf49d -> pull/6/merge
+2025-10-10T07:48:56.2608489Z ##[endgroup]
+2025-10-10T07:48:56.2610543Z ##[group]Determining the checkout info
+2025-10-10T07:48:56.2612906Z ##[endgroup]
+2025-10-10T07:48:56.2616348Z [command]/usr/bin/git sparse-checkout disable
+2025-10-10T07:48:56.2656697Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-10-10T07:48:56.2684821Z ##[group]Checking out the ref
+2025-10-10T07:48:56.2687957Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/6/merge
+2025-10-10T07:48:56.2776667Z Note: switching to 'refs/remotes/pull/6/merge'.
+2025-10-10T07:48:56.2778025Z 
+2025-10-10T07:48:56.2779385Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-10-10T07:48:56.2782153Z changes and commit them, and you can discard any commits you make in this
+2025-10-10T07:48:56.2783859Z state without impacting any branches by switching back to a branch.
+2025-10-10T07:48:56.2785192Z 
+2025-10-10T07:48:56.2786293Z If you want to create a new branch to retain commits you create, you may
+2025-10-10T07:48:56.2788279Z do so (now or later) by using -c with the switch command. Example:
+2025-10-10T07:48:56.2789365Z 
+2025-10-10T07:48:56.2790034Z   git switch -c <new-branch-name>
+2025-10-10T07:48:56.2790768Z 
+2025-10-10T07:48:56.2791225Z Or undo this operation with:
+2025-10-10T07:48:56.2791957Z 
+2025-10-10T07:48:56.2792378Z   git switch -
+2025-10-10T07:48:56.2792921Z 
+2025-10-10T07:48:56.2793812Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-10-10T07:48:56.2795168Z 
+2025-10-10T07:48:56.2796621Z HEAD is now at f5836fc Merge bb3abc8778d09db60cf014733150ac6d39b00e56 into c656f2d0e66497e6470f15704d8124941629b0bc
+2025-10-10T07:48:56.2801230Z ##[endgroup]
+2025-10-10T07:48:56.2820554Z [command]/usr/bin/git log -1 --format=%H
+2025-10-10T07:48:56.2841525Z f5836fce4b824620280d907652028ad33c0bf49d
+2025-10-10T07:48:56.3114376Z ##[group]Run actions/setup-go@v5
+2025-10-10T07:48:56.3115499Z with:
+2025-10-10T07:48:56.3116290Z   go-version: 1.24
+2025-10-10T07:48:56.3117177Z   check-latest: false
+2025-10-10T07:48:56.3118379Z   token: ***
+2025-10-10T07:48:56.3119201Z   cache: true
+2025-10-10T07:48:56.3120174Z ##[endgroup]
+2025-10-10T07:48:56.4720528Z Setup go version spec 1.24
+2025-10-10T07:48:56.5130407Z Found in cache @ /opt/hostedtoolcache/go/1.24.7/x64
+2025-10-10T07:48:56.5134784Z Added go to the path
+2025-10-10T07:48:56.5138258Z Successfully set up Go version 1.24
+2025-10-10T07:48:57.7014460Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOMODCACHE
+2025-10-10T07:48:57.7049058Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOCACHE
+2025-10-10T07:48:57.7071904Z /home/runner/go/pkg/mod
+2025-10-10T07:48:57.7103027Z /home/runner/.cache/go-build
+2025-10-10T07:48:57.8802790Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
+2025-10-10T07:48:58.9895055Z Received 130023424 of 549431188 (23.7%), 123.8 MBs/sec
+2025-10-10T07:48:59.9935622Z Received 272629760 of 549431188 (49.6%), 129.6 MBs/sec
+2025-10-10T07:49:00.9940819Z Received 465567744 of 549431188 (84.7%), 147.7 MBs/sec
+2025-10-10T07:49:01.7444730Z Received 549431188 of 549431188 (100.0%), 139.5 MBs/sec
+2025-10-10T07:49:01.7446533Z Cache Size: ~524 MB (549431188 B)
+2025-10-10T07:49:01.7575893Z [command]/usr/bin/tar -xf /home/runner/work/_temp/6ddc4027-d4e9-4d99-bb44-c025598b06ae/cache.tzst -P -C /home/runner/work/faro/faro --use-compress-program unzstd
+2025-10-10T07:49:05.9781046Z Cache restored successfully
+2025-10-10T07:49:06.0973821Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
+2025-10-10T07:49:06.0997595Z go version go1.24.7 linux/amd64
+2025-10-10T07:49:06.0997943Z 
+2025-10-10T07:49:06.0998424Z ##[group]go env
+2025-10-10T07:49:06.3962481Z AR='ar'
+2025-10-10T07:49:06.3962919Z CC='gcc'
+2025-10-10T07:49:06.3963550Z CGO_CFLAGS='-O2 -g'
+2025-10-10T07:49:06.3963918Z CGO_CPPFLAGS=''
+2025-10-10T07:49:06.3964288Z CGO_CXXFLAGS='-O2 -g'
+2025-10-10T07:49:06.3964651Z CGO_ENABLED='1'
+2025-10-10T07:49:06.3964970Z CGO_FFLAGS='-O2 -g'
+2025-10-10T07:49:06.3965323Z CGO_LDFLAGS='-O2 -g'
+2025-10-10T07:49:06.3965681Z CXX='g++'
+2025-10-10T07:49:06.3966084Z GCCGO='gccgo'
+2025-10-10T07:49:06.3966370Z GO111MODULE=''
+2025-10-10T07:49:06.3966664Z GOAMD64='v1'
+2025-10-10T07:49:06.3967051Z GOARCH='amd64'
+2025-10-10T07:49:06.3967356Z GOAUTH='netrc'
+2025-10-10T07:49:06.3967682Z GOBIN=''
+2025-10-10T07:49:06.3968037Z GOCACHE='/home/runner/.cache/go-build'
+2025-10-10T07:49:06.3968444Z GOCACHEPROG=''
+2025-10-10T07:49:06.3968745Z GODEBUG=''
+2025-10-10T07:49:06.3969063Z GOENV='/home/runner/.config/go/env'
+2025-10-10T07:49:06.3969444Z GOEXE=''
+2025-10-10T07:49:06.4050217Z GOEXPERIMENT=''
+2025-10-10T07:49:06.4050656Z GOFIPS140='off'
+2025-10-10T07:49:06.4051019Z GOFLAGS=''
+2025-10-10T07:49:06.4052125Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build9587720=/tmp/go-build -gno-record-gcc-switches'
+2025-10-10T07:49:06.4053734Z GOHOSTARCH='amd64'
+2025-10-10T07:49:06.4054048Z GOHOSTOS='linux'
+2025-10-10T07:49:06.4054414Z GOINSECURE=''
+2025-10-10T07:49:06.4054802Z GOMOD='/home/runner/work/faro/faro/go.mod'
+2025-10-10T07:49:06.4055093Z GOMODCACHE='/home/runner/go/pkg/mod'
+2025-10-10T07:49:06.4055353Z GONOPROXY=''
+2025-10-10T07:49:06.4055541Z GONOSUMDB=''
+2025-10-10T07:49:06.4055711Z GOOS='linux'
+2025-10-10T07:49:06.4055900Z GOPATH='/home/runner/go'
+2025-10-10T07:49:06.4056130Z GOPRIVATE=''
+2025-10-10T07:49:06.4056508Z GOPROXY='https://proxy.golang.org,direct'
+2025-10-10T07:49:06.4056832Z GOROOT='/opt/hostedtoolcache/go/1.24.7/x64'
+2025-10-10T07:49:06.4057119Z GOSUMDB='sum.golang.org'
+2025-10-10T07:49:06.4057341Z GOTELEMETRY='local'
+2025-10-10T07:49:06.4057586Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2025-10-10T07:49:06.4057867Z GOTMPDIR=''
+2025-10-10T07:49:06.4058322Z GOTOOLCHAIN='auto'
+2025-10-10T07:49:06.4058643Z GOTOOLDIR='/opt/hostedtoolcache/go/1.24.7/x64/pkg/tool/linux_amd64'
+2025-10-10T07:49:06.4058981Z GOVCS=''
+2025-10-10T07:49:06.4059163Z GOVERSION='go1.24.7'
+2025-10-10T07:49:06.4059352Z GOWORK=''
+2025-10-10T07:49:06.4059752Z PKG_CONFIG='pkg-config'
+2025-10-10T07:49:06.4060005Z 
+2025-10-10T07:49:06.4060330Z ##[endgroup]
+2025-10-10T07:49:06.4145302Z ##[group]Run # Enable IP forwarding (required for kinc networking)
+2025-10-10T07:49:06.4146203Z [36;1m# Enable IP forwarding (required for kinc networking)[0m
+2025-10-10T07:49:06.4146580Z [36;1mecho 1 | sudo tee /proc/sys/net/ipv4/ip_forward[0m
+2025-10-10T07:49:06.4146868Z [36;1m[0m
+2025-10-10T07:49:06.4147075Z [36;1m# Prepare kubeadm config for kinc[0m
+2025-10-10T07:49:06.4147411Z [36;1m# kinc-init.service reads /etc/kinc/config/kubeadm.conf[0m
+2025-10-10T07:49:06.4147751Z [36;1mmkdir -p /tmp/kinc-config[0m
+2025-10-10T07:49:06.4148037Z [36;1mcat > /tmp/kinc-config/kubeadm.conf << 'EOF'[0m
+2025-10-10T07:49:06.4148315Z [36;1mapiServer:[0m
+2025-10-10T07:49:06.4148509Z [36;1m  certSANs:[0m
+2025-10-10T07:49:06.4148727Z [36;1m  - localhost[0m
+2025-10-10T07:49:06.4148935Z [36;1m  - 127.0.0.1[0m
+2025-10-10T07:49:06.4149140Z [36;1m  extraArgs:[0m
+2025-10-10T07:49:06.4149354Z [36;1m    runtime-config: ""[0m
+2025-10-10T07:49:06.4150111Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
+2025-10-10T07:49:06.4150526Z [36;1mclusterName: kinc[0m
+2025-10-10T07:49:06.4150812Z [36;1mcontrolPlaneEndpoint: kinc-control-plane:6443[0m
+2025-10-10T07:49:06.4151123Z [36;1mcontrollerManager:[0m
+2025-10-10T07:49:06.4151362Z [36;1m  extraArgs:[0m
+2025-10-10T07:49:06.4151622Z [36;1m    enable-hostpath-provisioner: "true"[0m
+2025-10-10T07:49:06.4151928Z [36;1mkind: ClusterConfiguration[0m
+2025-10-10T07:49:06.4152190Z [36;1mkubernetesVersion: v1.33.5[0m
+2025-10-10T07:49:06.4152437Z [36;1mnetworking:[0m
+2025-10-10T07:49:06.4152650Z [36;1m  podSubnet: 10.244.0.0/16[0m
+2025-10-10T07:49:06.4152897Z [36;1m  serviceSubnet: 10.96.0.0/16[0m
+2025-10-10T07:49:06.4153134Z [36;1mpatches:[0m
+2025-10-10T07:49:06.4153347Z [36;1m  directory: /etc/kinc/patches[0m
+2025-10-10T07:49:06.4153612Z [36;1mscheduler:[0m
+2025-10-10T07:49:06.4153814Z [36;1m  extraArgs: null[0m
+2025-10-10T07:49:06.4154018Z [36;1m---[0m
+2025-10-10T07:49:06.4154240Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
+2025-10-10T07:49:06.4154510Z [36;1mbootstrapTokens:[0m
+2025-10-10T07:49:06.4154737Z [36;1m- token: abcdef.0123456789abcdef[0m
+2025-10-10T07:49:06.4155010Z [36;1mkind: InitConfiguration[0m
+2025-10-10T07:49:06.4155253Z [36;1mlocalAPIEndpoint:[0m
+2025-10-10T07:49:06.4155506Z [36;1m  advertiseAddress: CONTAINER_IP_PLACEHOLDER[0m
+2025-10-10T07:49:06.4155789Z [36;1m  bindPort: 6443[0m
+2025-10-10T07:49:06.4156002Z [36;1mnodeRegistration:[0m
+2025-10-10T07:49:06.4156245Z [36;1m  criSocket: unix:///var/run/crio/crio.sock[0m
+2025-10-10T07:49:06.4156524Z [36;1m  kubeletExtraArgs:[0m
+2025-10-10T07:49:06.4156769Z [36;1m    node-ip: CONTAINER_IP_PLACEHOLDER[0m
+2025-10-10T07:49:06.4157030Z [36;1m    node-labels: ""[0m
+2025-10-10T07:49:06.4157517Z [36;1m    provider-id: kind://podman/kinc/kinc-control-plane[0m
+2025-10-10T07:49:06.4157828Z [36;1m---[0m
+2025-10-10T07:49:06.4158032Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
+2025-10-10T07:49:06.4158283Z [36;1mcontrolPlane:[0m
+2025-10-10T07:49:06.4158501Z [36;1m  localAPIEndpoint:[0m
+2025-10-10T07:49:06.4158762Z [36;1m    advertiseAddress: CONTAINER_IP_PLACEHOLDER[0m
+2025-10-10T07:49:06.4159125Z [36;1m    bindPort: 6443[0m
+2025-10-10T07:49:06.4159447Z [36;1mdiscovery:[0m
+2025-10-10T07:49:06.4159905Z [36;1m  bootstrapToken:[0m
+2025-10-10T07:49:06.4160274Z [36;1m    apiServerEndpoint: kinc-control-plane:6443[0m
+2025-10-10T07:49:06.4160569Z [36;1m    token: abcdef.0123456789abcdef[0m
+2025-10-10T07:49:06.4160843Z [36;1m    unsafeSkipCAVerification: true[0m
+2025-10-10T07:49:06.4161108Z [36;1mkind: JoinConfiguration[0m
+2025-10-10T07:49:06.4161338Z [36;1mnodeRegistration:[0m
+2025-10-10T07:49:06.4161592Z [36;1m  criSocket: unix:///var/run/crio/crio.sock[0m
+2025-10-10T07:49:06.4161881Z [36;1m  kubeletExtraArgs:[0m
+2025-10-10T07:49:06.4162119Z [36;1m    node-ip: CONTAINER_IP_PLACEHOLDER[0m
+2025-10-10T07:49:06.4162389Z [36;1m    node-labels: ""[0m
+2025-10-10T07:49:06.4163147Z [36;1m    provider-id: kind://podman/kinc/kinc-control-plane[0m
+2025-10-10T07:49:06.4163645Z [36;1m---[0m
+2025-10-10T07:49:06.4164020Z [36;1mapiVersion: kubelet.config.k8s.io/v1beta1[0m
+2025-10-10T07:49:06.4164426Z [36;1mcgroupDriver: cgroupfs[0m
+2025-10-10T07:49:06.4164817Z [36;1mcgroupRoot: /[0m
+2025-10-10T07:49:06.4165028Z [36;1mevictionHard:[0m
+2025-10-10T07:49:06.4165243Z [36;1m  imagefs.available: 0%[0m
+2025-10-10T07:49:06.4165485Z [36;1m  nodefs.available: 0%[0m
+2025-10-10T07:49:06.4165713Z [36;1m  nodefs.inodesFree: 0%[0m
+2025-10-10T07:49:06.4165946Z [36;1mfailSwapOn: false[0m
+2025-10-10T07:49:06.4166164Z [36;1mfeatureGates:[0m
+2025-10-10T07:49:06.4166390Z [36;1m  KubeletInUserNamespace: true[0m
+2025-10-10T07:49:06.4166666Z [36;1mimageGCHighThresholdPercent: 100[0m
+2025-10-10T07:49:06.4166954Z [36;1mkind: KubeletConfiguration[0m
+2025-10-10T07:49:06.4167190Z [36;1m---[0m
+2025-10-10T07:49:06.4167417Z [36;1mapiVersion: kubeproxy.config.k8s.io/v1alpha1[0m
+2025-10-10T07:49:06.4167705Z [36;1mconntrack:[0m
+2025-10-10T07:49:06.4167908Z [36;1m  maxPerCore: 0[0m
+2025-10-10T07:49:06.4168109Z [36;1mnftables:[0m
+2025-10-10T07:49:06.4168309Z [36;1m  masqueradeAll: false[0m
+2025-10-10T07:49:06.4168538Z [36;1m  masqueradeBit: 14[0m
+2025-10-10T07:49:06.4168754Z [36;1m  minSyncPeriod: 1s[0m
+2025-10-10T07:49:06.4168974Z [36;1m  syncPeriod: 30s[0m
+2025-10-10T07:49:06.4169204Z [36;1mkind: KubeProxyConfiguration[0m
+2025-10-10T07:49:06.4169451Z [36;1mmode: nftables[0m
+2025-10-10T07:49:06.4169829Z [36;1mEOF[0m
+2025-10-10T07:49:06.4170000Z [36;1m[0m
+2025-10-10T07:49:06.4170192Z [36;1mecho "✅ kubeadm.conf prepared"[0m
+2025-10-10T07:49:06.4170426Z [36;1m[0m
+2025-10-10T07:49:06.4170673Z [36;1m# Start kinc cluster (systemd-based Kubernetes container)[0m
+2025-10-10T07:49:06.4171084Z [36;1m# Based on kinc/runtime/quadlet/kinc-control-plane.container[0m
+2025-10-10T07:49:06.4171411Z [36;1mpodman run -d \[0m
+2025-10-10T07:49:06.4171634Z [36;1m  --name kinc-cluster \[0m
+2025-10-10T07:49:06.4171898Z [36;1m  --hostname kinc-control-plane \[0m
+2025-10-10T07:49:06.4172256Z [36;1m  --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \[0m
+2025-10-10T07:49:06.4172663Z [36;1m  --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \[0m
+2025-10-10T07:49:06.4173046Z [36;1m  --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \[0m
+2025-10-10T07:49:06.4173447Z [36;1m  --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \[0m
+2025-10-10T07:49:06.4173877Z [36;1m  --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \[0m
+2025-10-10T07:49:06.4174432Z [36;1m  --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \[0m
+2025-10-10T07:49:06.4174930Z [36;1m  --device /dev/fuse \[0m
+2025-10-10T07:49:06.4175377Z [36;1m  --sysctl net.ipv6.conf.all.disable_ipv6=0 \[0m
+2025-10-10T07:49:06.4176161Z [36;1m  --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \[0m
+2025-10-10T07:49:06.4176693Z [36;1m  --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T07:49:06.4177291Z [36;1m  --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T07:49:06.4177978Z [36;1m  --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T07:49:06.4178616Z [36;1m  --volume /tmp/kinc-config:/etc/kinc/config:ro \[0m
+2025-10-10T07:49:06.4179152Z [36;1m  --publish 127.0.0.1:6443:6443/tcp \[0m
+2025-10-10T07:49:06.4179813Z [36;1m  -e container=podman \[0m
+2025-10-10T07:49:06.4180302Z [36;1m  -e KUBECONFIG=/etc/kubernetes/admin.conf \[0m
+2025-10-10T07:49:06.4180795Z [36;1m  ghcr.io/t0masd/kinc:v0-1[0m
+2025-10-10T07:49:06.4181186Z [36;1m[0m
+2025-10-10T07:49:06.4181715Z [36;1mecho "⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)..."[0m
+2025-10-10T07:49:06.4182582Z [36;1mecho "   This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,"[0m
+2025-10-10T07:49:06.4183399Z [36;1mecho "   API server, CNI, storage provisioner, and CoreDNS"[0m
+2025-10-10T07:49:06.4183967Z [36;1m[0m
+2025-10-10T07:49:06.4184321Z [36;1m# Wait for container to respond[0m
+2025-10-10T07:49:06.4185253Z [36;1mtimeout 30 bash -c 'until podman exec kinc-cluster echo ok >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T07:49:06.4185956Z [36;1mecho "✅ Container responding"[0m
+2025-10-10T07:49:06.4186206Z [36;1m[0m
+2025-10-10T07:49:06.4186410Z [36;1m# Wait for systemd inside container[0m
+2025-10-10T07:49:06.4186791Z [36;1mecho "⏳ Waiting for systemd (checking if it reaches running state)..."[0m
+2025-10-10T07:49:06.4187466Z [36;1mif ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running >/dev/null 2>&1; do echo -n "."; sleep 2; done'; then[0m
+2025-10-10T07:49:06.4188011Z [36;1m  echo ""[0m
+2025-10-10T07:49:06.4188260Z [36;1m  echo "❌ Systemd timeout - checking status..."[0m
+2025-10-10T07:49:06.4188648Z [36;1m  podman exec kinc-cluster systemctl is-system-running || true[0m
+2025-10-10T07:49:06.4189092Z [36;1m  podman exec kinc-cluster systemctl --failed --no-pager || true[0m
+2025-10-10T07:49:06.4189748Z [36;1m  podman exec kinc-cluster journalctl -xb --no-pager -n 50 || true[0m
+2025-10-10T07:49:06.4190201Z [36;1m  echo "--- Checking if critical services exist ---"[0m
+2025-10-10T07:49:06.4190712Z [36;1m  podman exec kinc-cluster systemctl list-units --all --no-pager | grep -E "(kinc|crio|kubelet)" || true[0m
+2025-10-10T07:49:06.4191161Z [36;1m  exit 1[0m
+2025-10-10T07:49:06.4191350Z [36;1mfi[0m
+2025-10-10T07:49:06.4191541Z [36;1mecho "✅ Systemd operational"[0m
+2025-10-10T07:49:06.4191781Z [36;1m[0m
+2025-10-10T07:49:06.4191956Z [36;1m# Wait for CRI-O[0m
+2025-10-10T07:49:06.4192491Z [36;1mtimeout 60 bash -c 'until podman exec kinc-cluster systemctl is-active crio.service >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T07:49:06.4193242Z [36;1mecho "✅ CRI-O active"[0m
+2025-10-10T07:49:06.4193615Z [36;1m[0m
+2025-10-10T07:49:06.4194047Z [36;1m# Wait for cluster initialization (kinc-init.service runs kubeadm init)[0m
+2025-10-10T07:49:06.4194674Z [36;1m# This can take 3-5 minutes, so use longer timeout[0m
+2025-10-10T07:49:06.4195372Z [36;1mecho "⏳ Waiting for kinc-init.service (this runs kubeadm init, takes 3-5 min)..."[0m
+2025-10-10T07:49:06.4196543Z [36;1mif ! timeout 600 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do echo -n "."; sleep 10; done'; then[0m
+2025-10-10T07:49:06.4197203Z [36;1m  echo ""[0m
+2025-10-10T07:49:06.4197465Z [36;1m  echo "❌ kinc-init.service timeout after 10 minutes"[0m
+2025-10-10T07:49:06.4197766Z [36;1m  echo ""[0m
+2025-10-10T07:49:06.4197988Z [36;1m  echo "=== Debugging Information ==="[0m
+2025-10-10T07:49:06.4198418Z [36;1m  echo "--- systemctl status kinc-init.service ---"[0m
+2025-10-10T07:49:06.4198865Z [36;1m  podman exec kinc-cluster systemctl status kinc-init.service --no-pager || true[0m
+2025-10-10T07:49:06.4200201Z [36;1m  echo ""[0m
+2025-10-10T07:49:06.4200668Z [36;1m  echo "--- journalctl for kinc-init ---"[0m
+2025-10-10T07:49:06.4201121Z [36;1m  podman exec kinc-cluster journalctl -xeu kinc-init.service --no-pager -n 100 || true[0m
+2025-10-10T07:49:06.4201533Z [36;1m  echo ""[0m
+2025-10-10T07:49:06.4201771Z [36;1m  echo "--- Check if kubeadm.conf exists ---"[0m
+2025-10-10T07:49:06.4202123Z [36;1m  podman exec kinc-cluster ls -la /etc/kinc/config/ || true[0m
+2025-10-10T07:49:06.4202549Z [36;1m  podman exec kinc-cluster cat /etc/kinc/config/kubeadm.conf || true[0m
+2025-10-10T07:49:06.4202889Z [36;1m  echo ""[0m
+2025-10-10T07:49:06.4203100Z [36;1m  echo "--- kubelet status ---"[0m
+2025-10-10T07:49:06.4203477Z [36;1m  podman exec kinc-cluster systemctl status kubelet.service --no-pager || true[0m
+2025-10-10T07:49:06.4203853Z [36;1m  echo ""[0m
+2025-10-10T07:49:06.4204086Z [36;1m  echo "--- Container logs (last 50 lines) ---"[0m
+2025-10-10T07:49:06.4204401Z [36;1m  podman logs kinc-cluster --tail 50 || true[0m
+2025-10-10T07:49:06.4204681Z [36;1m  exit 1[0m
+2025-10-10T07:49:06.4204868Z [36;1mfi[0m
+2025-10-10T07:49:06.4205036Z [36;1mecho ""[0m
+2025-10-10T07:49:06.4205259Z [36;1mecho "✅ Cluster initialization started"[0m
+2025-10-10T07:49:06.4205699Z [36;1m[0m
+2025-10-10T07:49:06.4205899Z [36;1m# Show init service status[0m
+2025-10-10T07:49:06.4206287Z [36;1mpodman exec kinc-cluster systemctl status kinc-init.service --no-pager || true[0m
+2025-10-10T07:49:06.4206670Z [36;1m[0m
+2025-10-10T07:49:06.4206864Z [36;1m# Wait for API server (from host)[0m
+2025-10-10T07:49:06.4207353Z [36;1mtimeout 120 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T07:49:06.4207808Z [36;1mecho "✅ API server responding"[0m
+2025-10-10T07:49:06.4208056Z [36;1m[0m
+2025-10-10T07:49:06.4208237Z [36;1m# Wait for node ready[0m
+2025-10-10T07:49:06.4208916Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=10s >/dev/null 2>&1; do sleep 5; done'[0m
+2025-10-10T07:49:06.4209862Z [36;1mecho "✅ Node ready"[0m
+2025-10-10T07:49:06.4210084Z [36;1m[0m
+2025-10-10T07:49:06.4210299Z [36;1m# Wait for CoreDNS (critical for Faro tests)[0m
+2025-10-10T07:49:06.4211125Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pod -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running >/dev/null 2>&1; do sleep 5; done'[0m
+2025-10-10T07:49:06.4211924Z [36;1mecho "✅ CoreDNS running"[0m
+2025-10-10T07:49:06.4212155Z [36;1m[0m
+2025-10-10T07:49:06.4212332Z [36;1m# Extract kubeconfig[0m
+2025-10-10T07:49:06.4212554Z [36;1mmkdir -p ~/.kube[0m
+2025-10-10T07:49:06.4212870Z [36;1mpodman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config[0m
+2025-10-10T07:49:06.4213349Z [36;1msed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config[0m
+2025-10-10T07:49:06.4213719Z [36;1m[0m
+2025-10-10T07:49:06.4213892Z [36;1m# Verify cluster[0m
+2025-10-10T07:49:06.4214100Z [36;1mecho ""[0m
+2025-10-10T07:49:06.4214729Z [36;1mecho "📊 Cluster Status:"[0m
+2025-10-10T07:49:06.4215165Z [36;1mkubectl get nodes -o wide[0m
+2025-10-10T07:49:06.4215595Z [36;1mkubectl get pods -A[0m
+2025-10-10T07:49:06.4216010Z [36;1mkubectl cluster-info[0m
+2025-10-10T07:49:06.4258895Z shell: /usr/bin/bash -e {0}
+2025-10-10T07:49:06.4259166Z ##[endgroup]
+2025-10-10T07:49:06.4405282Z 1
+2025-10-10T07:49:06.4439173Z ✅ kubeadm.conf prepared
+2025-10-10T07:49:09.3394894Z Trying to pull ghcr.io/t0masd/kinc:v0-1...
+2025-10-10T07:49:09.6967140Z Getting image source signatures
+2025-10-10T07:49:09.6971053Z Copying blob sha256:1c3165eadf68bc96ed33f2878fbea0730fd3210acb1787a1be2cabc1205e508f
+2025-10-10T07:49:09.6972139Z Copying blob sha256:926690fefe603d28f0c526549e910212a929b903937a9470a40078bc6e4143b9
+2025-10-10T07:49:09.6973095Z Copying blob sha256:bfa0c27a39a64631c3172367295c01c6767ddd14f09589b80eb8ef1d297b794c
+2025-10-10T07:49:09.6974167Z Copying blob sha256:f4ebc8a2ad80e5c68607f77352fa9cd013853438ebb46fba1fcd8d32cd2ed294
+2025-10-10T07:49:09.6974894Z Copying blob sha256:a36872a969c8ec4cc257c3d32629bb9ab0a5391564e8e589ebcdfdf345c0a2c8
+2025-10-10T07:49:09.6975601Z Copying blob sha256:79fbaf31284b97b3d3859ef109d5ee5097b2ecf41ef7a98d486f6e72b77f5e13
+2025-10-10T07:49:09.7711578Z Copying blob sha256:ec151b0a58e825b197e33a8f26b6e250df1db60c61e46d46accbf5851042727e
+2025-10-10T07:49:09.8155319Z Copying blob sha256:3fdc23ae00c4c88b0648d79ab063f55f36f6a1b865dc2e0066722d59e746f326
+2025-10-10T07:49:09.8441617Z Copying blob sha256:fa20e998b13a4939ef513c13aad60100b9dddc37bbf22f93e6f938dba86c04c2
+2025-10-10T07:49:09.8540759Z Copying blob sha256:576943d1883f80ec0e6bbe3d414f2dc57c6b96a446af173d4a59f761bd7f24fe
+2025-10-10T07:49:09.8969383Z Copying blob sha256:63b040a831cd876cf9ee413b2347abbd1222f3e63c80fccd0f69992962e9d7e3
+2025-10-10T07:49:09.9673169Z Copying blob sha256:4170f55c66b53d10494a06b56259a3aa8b9915aa32e48e76d804fa3d8858b14a
+2025-10-10T07:49:10.1271998Z Copying blob sha256:c88c43a15383088c1dd388082857c094ad3334ae84a0c6d546d4f06eee6a721b
+2025-10-10T07:49:10.2508925Z Copying blob sha256:254235fa8067245719789a898197f59816a43b841a30f1414dfc8fa4ffdfb0a5
+2025-10-10T07:49:10.2902517Z Copying blob sha256:e91edddee38fd04236c59a7aed0f04ee408de8c7d076e91ade416118a318387b
+2025-10-10T07:49:10.3232104Z Copying blob sha256:409e36ae34c13b90b2aba1797b40eb54a3d914764e272b9c2ae065480b05e3ca
+2025-10-10T07:49:10.3981985Z Copying blob sha256:d753a5d66fb17f1b74a5c4312ece3584dcf697c1c35961f0c995c159e634b34f
+2025-10-10T07:49:10.4562735Z Copying blob sha256:157ded773e7a92a3763dbec098ff0581bda48aedd72b49d31a8b5d65a076a129
+2025-10-10T07:49:10.4693633Z Copying blob sha256:5b856357623aecf5fd02d603bb11298d6329d05db7e420f830dcbe0ba40307db
+2025-10-10T07:49:10.4953491Z Copying blob sha256:63d1b9582fbfdee5701cfc52173c8d4f54325311f5bfe28fe6eae1e6de38f8b1
+2025-10-10T07:49:10.5321125Z Copying blob sha256:d5fd4473dae776355a9cd12ee9227d79dd9fe987d99a7eaef3284152c86c1db6
+2025-10-10T07:49:10.5953198Z Copying blob sha256:01fbea8862c218217b1275df2045bcec65dfc5cc9a04a5f93f2963630cd4aee8
+2025-10-10T07:49:10.6130460Z Copying blob sha256:8f14a422129bc16f7850793a8c055a90dcc9810a4008c27345d464e842cbe769
+2025-10-10T07:49:19.8200786Z Copying config sha256:39da5bbd7c3eab0f00cea6560b1f5211d1dae7b89da7e75f8aa1a29e414eead3
+2025-10-10T07:49:19.8219301Z Writing manifest to image destination
+2025-10-10T07:49:20.5906487Z 75c5c404a2faa5e43134d0f768d28f08922b8d14967761092d137cb7cfb08198
+2025-10-10T07:49:20.6088732Z ⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)...
+2025-10-10T07:49:20.6090795Z    This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,
+2025-10-10T07:49:20.6091540Z    API server, CNI, storage provisioner, and CoreDNS
+2025-10-10T07:49:20.7300597Z ✅ Container responding
+2025-10-10T07:49:20.7301323Z ⏳ Waiting for systemd (checking if it reaches running state)...
+2025-10-10T07:51:20.7322496Z ..........................................................
+2025-10-10T07:51:20.7324408Z ❌ Systemd timeout - checking status...
+2025-10-10T07:51:20.7900629Z starting
+2025-10-10T07:51:20.8568931Z   UNIT LOAD ACTIVE SUB DESCRIPTION
+2025-10-10T07:51:20.8569827Z 
+2025-10-10T07:51:20.8570049Z 0 loaded units listed.
+2025-10-10T07:51:20.9276755Z Oct 10 07:51:08 kinc-control-plane crio[54]: time="2025-10-10T07:51:08.932173214Z" level=info msg="runSandbox: cleaning up namespaces after failing to run sandbox 2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528" id=274520f4-0250-4b49-8ffc-b110081b8b5f name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9282902Z Oct 10 07:51:08 kinc-control-plane crio[54]: time="2025-10-10T07:51:08.932523275Z" level=info msg="runSandbox: deleting pod ID 2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528 from idIndex" id=274520f4-0250-4b49-8ffc-b110081b8b5f name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9286232Z Oct 10 07:51:08 kinc-control-plane crio[54]: time="2025-10-10T07:51:08.932560765Z" level=info msg="runSandbox: removing pod sandbox 2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528" id=274520f4-0250-4b49-8ffc-b110081b8b5f name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9290063Z Oct 10 07:51:08 kinc-control-plane crio[54]: time="2025-10-10T07:51:08.932590981Z" level=info msg="runSandbox: deleting container ID from idIndex for sandbox 2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528" id=274520f4-0250-4b49-8ffc-b110081b8b5f name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9293471Z Oct 10 07:51:08 kinc-control-plane crio[54]: time="2025-10-10T07:51:08.932608314Z" level=info msg="runSandbox: unmounting shmPath for sandbox 2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528" id=274520f4-0250-4b49-8ffc-b110081b8b5f name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9296795Z Oct 10 07:51:08 kinc-control-plane crio[54]: time="2025-10-10T07:51:08.93274581Z" level=info msg="runSandbox: removing pod sandbox from storage: 2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528" id=274520f4-0250-4b49-8ffc-b110081b8b5f name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9299299Z Oct 10 07:51:08 kinc-control-plane systemd[1]: run-netns-375afaee\x2d16b0\x2d4730\x2db149\x2d0563d10cb115.mount: Deactivated successfully.
+2025-10-10T07:51:20.9300681Z ░░ Subject: Unit succeeded
+2025-10-10T07:51:20.9301110Z ░░ Defined-By: systemd
+2025-10-10T07:51:20.9301814Z ░░ Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+2025-10-10T07:51:20.9302492Z ░░ 
+2025-10-10T07:51:20.9303480Z ░░ The unit run-netns-375afaee\x2d16b0\x2d4730\x2db149\x2d0563d10cb115.mount has successfully entered the 'dead' state.
+2025-10-10T07:51:20.9304851Z Oct 10 07:51:08 kinc-control-plane systemd[1]: run-ipcns-375afaee\x2d16b0\x2d4730\x2db149\x2d0563d10cb115.mount: Deactivated successfully.
+2025-10-10T07:51:20.9305832Z ░░ Subject: Unit succeeded
+2025-10-10T07:51:20.9306273Z ░░ Defined-By: systemd
+2025-10-10T07:51:20.9306970Z ░░ Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+2025-10-10T07:51:20.9307584Z ░░ 
+2025-10-10T07:51:20.9308501Z ░░ The unit run-ipcns-375afaee\x2d16b0\x2d4730\x2db149\x2d0563d10cb115.mount has successfully entered the 'dead' state.
+2025-10-10T07:51:20.9310051Z Oct 10 07:51:08 kinc-control-plane systemd[1]: run-utsns-375afaee\x2d16b0\x2d4730\x2db149\x2d0563d10cb115.mount: Deactivated successfully.
+2025-10-10T07:51:20.9311040Z ░░ Subject: Unit succeeded
+2025-10-10T07:51:20.9311470Z ░░ Defined-By: systemd
+2025-10-10T07:51:20.9312142Z ░░ Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+2025-10-10T07:51:20.9312786Z ░░ 
+2025-10-10T07:51:20.9313698Z ░░ The unit run-utsns-375afaee\x2d16b0\x2d4730\x2db149\x2d0563d10cb115.mount has successfully entered the 'dead' state.
+2025-10-10T07:51:20.9315539Z Oct 10 07:51:08 kinc-control-plane systemd[1]: tmp-containers-overlay\x2dcontainers-2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528-userdata-shm.mount: Deactivated successfully.
+2025-10-10T07:51:20.9317010Z ░░ Subject: Unit succeeded
+2025-10-10T07:51:20.9317424Z ░░ Defined-By: systemd
+2025-10-10T07:51:20.9318093Z ░░ Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+2025-10-10T07:51:20.9318727Z ░░ 
+2025-10-10T07:51:20.9320376Z ░░ The unit tmp-containers-overlay\x2dcontainers-2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528-userdata-shm.mount has successfully entered the 'dead' state.
+2025-10-10T07:51:20.9323217Z Oct 10 07:51:08 kinc-control-plane crio[54]: time="2025-10-10T07:51:08.934709554Z" level=info msg="runSandbox: releasing container name: k8s_POD_coredns-674b8bbfcf-lfbht_kube-system_3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77_0" id=274520f4-0250-4b49-8ffc-b110081b8b5f name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9325166Z Oct 10 07:51:08 kinc-control-plane crio[54]: time="2025-10-10T07:51:08.934743397Z" level=info msg="runSandbox: releasing pod sandbox name: k8s_coredns-674b8bbfcf-lfbht_kube-system_3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77_0" id=274520f4-0250-4b49-8ffc-b110081b8b5f name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9328210Z Oct 10 07:51:08 kinc-control-plane kubelet[835]: E1010 07:51:08.934944     835 log.go:32] "RunPodSandbox from runtime service failed" err="rpc error: code = Unknown desc = failed to create pod network sandbox k8s_coredns-674b8bbfcf-lfbht_kube-system_3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77_0(2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528): error adding pod kube-system_coredns-674b8bbfcf-lfbht to CNI network \"crio\": plugin type=\"bridge\" failed (add): failed to enable keep_addr_on_down for interface \"eth0\": open /proc/sys/net/ipv6/conf/eth0/keep_addr_on_down: read-only file system"
+2025-10-10T07:51:20.9332595Z Oct 10 07:51:08 kinc-control-plane kubelet[835]: E1010 07:51:08.935037     835 kuberuntime_sandbox.go:70] "Failed to create sandbox for pod" err="rpc error: code = Unknown desc = failed to create pod network sandbox k8s_coredns-674b8bbfcf-lfbht_kube-system_3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77_0(2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528): error adding pod kube-system_coredns-674b8bbfcf-lfbht to CNI network \"crio\": plugin type=\"bridge\" failed (add): failed to enable keep_addr_on_down for interface \"eth0\": open /proc/sys/net/ipv6/conf/eth0/keep_addr_on_down: read-only file system" pod="kube-system/coredns-674b8bbfcf-lfbht"
+2025-10-10T07:51:20.9337160Z Oct 10 07:51:08 kinc-control-plane kubelet[835]: E1010 07:51:08.935064     835 kuberuntime_manager.go:1252] "CreatePodSandbox for pod failed" err="rpc error: code = Unknown desc = failed to create pod network sandbox k8s_coredns-674b8bbfcf-lfbht_kube-system_3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77_0(2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528): error adding pod kube-system_coredns-674b8bbfcf-lfbht to CNI network \"crio\": plugin type=\"bridge\" failed (add): failed to enable keep_addr_on_down for interface \"eth0\": open /proc/sys/net/ipv6/conf/eth0/keep_addr_on_down: read-only file system" pod="kube-system/coredns-674b8bbfcf-lfbht"
+2025-10-10T07:51:20.9342407Z Oct 10 07:51:08 kinc-control-plane kubelet[835]: E1010 07:51:08.935122     835 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"CreatePodSandbox\" for \"coredns-674b8bbfcf-lfbht_kube-system(3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77)\" with CreatePodSandboxError: \"Failed to create sandbox for pod \\\"coredns-674b8bbfcf-lfbht_kube-system(3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77)\\\": rpc error: code = Unknown desc = failed to create pod network sandbox k8s_coredns-674b8bbfcf-lfbht_kube-system_3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77_0(2a07d4b20259a018f850ab3f7f648f991c8b75546959a9a37dfa0931d2e0f528): error adding pod kube-system_coredns-674b8bbfcf-lfbht to CNI network \\\"crio\\\": plugin type=\\\"bridge\\\" failed (add): failed to enable keep_addr_on_down for interface \\\"eth0\\\": open /proc/sys/net/ipv6/conf/eth0/keep_addr_on_down: read-only file system\"" pod="kube-system/coredns-674b8bbfcf-lfbht" podUID="3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77"
+2025-10-10T07:51:20.9346040Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.871149151Z" level=info msg="Running pod sandbox: local-path-storage/local-path-provisioner-59f7658548-vh2hn/POD" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9347340Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.871207409Z" level=info msg="Allowed annotations are specified for workload []"
+2025-10-10T07:51:20.9349843Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.876905043Z" level=info msg="Got pod network &{Name:local-path-provisioner-59f7658548-vh2hn Namespace:local-path-storage ID:11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca UID:fc434194-97f7-47f5-a940-67a4b184d101 NetNS:/var/run/netns/4fb5921f-8a46-441b-b674-cb2bba037e40 Networks:[{Name:crio Ifname:eth0}] RuntimeConfig:map[crio:{IP: MAC: PortMappings:[] Bandwidth:<nil> IpRanges:[] CgroupPath:/kubepods/besteffort/podfc434194-97f7-47f5-a940-67a4b184d101 PodAnnotations:0xc000080af0}] Aliases:map[]}"
+2025-10-10T07:51:20.9352467Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.876933255Z" level=info msg="Adding pod local-path-storage_local-path-provisioner-59f7658548-vh2hn to CNI network \"crio\" (type=bridge)"
+2025-10-10T07:51:20.9354002Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.889930946Z" level=info msg="NetworkStart: stopping network for sandbox 11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9356908Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.890054507Z" level=info msg="Got pod network &{Name:local-path-provisioner-59f7658548-vh2hn Namespace:local-path-storage ID:11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca UID:fc434194-97f7-47f5-a940-67a4b184d101 NetNS:/var/run/netns/4fb5921f-8a46-441b-b674-cb2bba037e40 Networks:[{Name:crio Ifname:eth0}] RuntimeConfig:map[crio:{IP: MAC: PortMappings:[] Bandwidth:<nil> IpRanges:[] CgroupPath:/kubepods/besteffort/podfc434194-97f7-47f5-a940-67a4b184d101 PodAnnotations:0xc000080bf0}] Aliases:map[]}"
+2025-10-10T07:51:20.9359202Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.890093309Z" level=error msg="Error loading cached network config: network \"crio\" not found in CNI cache"
+2025-10-10T07:51:20.9360792Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.89010475Z" level=warning msg="Falling back to loading from existing plugins on disk"
+2025-10-10T07:51:20.9361882Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.8901154Z" level=info msg="Deleting pod local-path-storage_local-path-provisioner-59f7658548-vh2hn from CNI network \"crio\" (type=bridge)"
+2025-10-10T07:51:20.9363477Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.922244608Z" level=info msg="runSandbox: cleaning up namespaces after failing to run sandbox 11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9365337Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.922597956Z" level=info msg="runSandbox: deleting pod ID 11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca from idIndex" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9367076Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.922634383Z" level=info msg="runSandbox: removing pod sandbox 11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9368874Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.922671352Z" level=info msg="runSandbox: deleting container ID from idIndex for sandbox 11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9371056Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.922689095Z" level=info msg="runSandbox: unmounting shmPath for sandbox 11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9372843Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.922814289Z" level=info msg="runSandbox: removing pod sandbox from storage: 11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9374131Z Oct 10 07:51:15 kinc-control-plane systemd[1]: run-netns-4fb5921f\x2d8a46\x2d441b\x2db674\x2dcb2bba037e40.mount: Deactivated successfully.
+2025-10-10T07:51:20.9374949Z ░░ Subject: Unit succeeded
+2025-10-10T07:51:20.9375201Z ░░ Defined-By: systemd
+2025-10-10T07:51:20.9375597Z ░░ Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+2025-10-10T07:51:20.9375949Z ░░ 
+2025-10-10T07:51:20.9376483Z ░░ The unit run-netns-4fb5921f\x2d8a46\x2d441b\x2db674\x2dcb2bba037e40.mount has successfully entered the 'dead' state.
+2025-10-10T07:51:20.9377271Z Oct 10 07:51:15 kinc-control-plane systemd[1]: run-ipcns-4fb5921f\x2d8a46\x2d441b\x2db674\x2dcb2bba037e40.mount: Deactivated successfully.
+2025-10-10T07:51:20.9377819Z ░░ Subject: Unit succeeded
+2025-10-10T07:51:20.9378053Z ░░ Defined-By: systemd
+2025-10-10T07:51:20.9378430Z ░░ Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+2025-10-10T07:51:20.9378779Z ░░ 
+2025-10-10T07:51:20.9379278Z ░░ The unit run-ipcns-4fb5921f\x2d8a46\x2d441b\x2db674\x2dcb2bba037e40.mount has successfully entered the 'dead' state.
+2025-10-10T07:51:20.9380187Z Oct 10 07:51:15 kinc-control-plane systemd[1]: run-utsns-4fb5921f\x2d8a46\x2d441b\x2db674\x2dcb2bba037e40.mount: Deactivated successfully.
+2025-10-10T07:51:20.9380832Z ░░ Subject: Unit succeeded
+2025-10-10T07:51:20.9381066Z ░░ Defined-By: systemd
+2025-10-10T07:51:20.9381563Z ░░ Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+2025-10-10T07:51:20.9381922Z ░░ 
+2025-10-10T07:51:20.9382428Z ░░ The unit run-utsns-4fb5921f\x2d8a46\x2d441b\x2db674\x2dcb2bba037e40.mount has successfully entered the 'dead' state.
+2025-10-10T07:51:20.9383465Z Oct 10 07:51:15 kinc-control-plane systemd[1]: tmp-containers-overlay\x2dcontainers-11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca-userdata-shm.mount: Deactivated successfully.
+2025-10-10T07:51:20.9384263Z ░░ Subject: Unit succeeded
+2025-10-10T07:51:20.9384496Z ░░ Defined-By: systemd
+2025-10-10T07:51:20.9384858Z ░░ Support: https://lists.freedesktop.org/mailman/listinfo/systemd-devel
+2025-10-10T07:51:20.9385195Z ░░ 
+2025-10-10T07:51:20.9385991Z ░░ The unit tmp-containers-overlay\x2dcontainers-11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca-userdata-shm.mount has successfully entered the 'dead' state.
+2025-10-10T07:51:20.9389477Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.924714498Z" level=info msg="runSandbox: releasing container name: k8s_POD_local-path-provisioner-59f7658548-vh2hn_local-path-storage_fc434194-97f7-47f5-a940-67a4b184d101_0" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9393307Z Oct 10 07:51:15 kinc-control-plane crio[54]: time="2025-10-10T07:51:15.924739905Z" level=info msg="runSandbox: releasing pod sandbox name: k8s_local-path-provisioner-59f7658548-vh2hn_local-path-storage_fc434194-97f7-47f5-a940-67a4b184d101_0" id=f10caaa3-bc82-4260-acd0-39df97d992f9 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9398547Z Oct 10 07:51:15 kinc-control-plane kubelet[835]: E1010 07:51:15.924948     835 log.go:32] "RunPodSandbox from runtime service failed" err="rpc error: code = Unknown desc = failed to create pod network sandbox k8s_local-path-provisioner-59f7658548-vh2hn_local-path-storage_fc434194-97f7-47f5-a940-67a4b184d101_0(11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca): error adding pod local-path-storage_local-path-provisioner-59f7658548-vh2hn to CNI network \"crio\": plugin type=\"bridge\" failed (add): failed to enable keep_addr_on_down for interface \"eth0\": open /proc/sys/net/ipv6/conf/eth0/keep_addr_on_down: read-only file system"
+2025-10-10T07:51:20.9403551Z Oct 10 07:51:15 kinc-control-plane kubelet[835]: E1010 07:51:15.925028     835 kuberuntime_sandbox.go:70] "Failed to create sandbox for pod" err="rpc error: code = Unknown desc = failed to create pod network sandbox k8s_local-path-provisioner-59f7658548-vh2hn_local-path-storage_fc434194-97f7-47f5-a940-67a4b184d101_0(11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca): error adding pod local-path-storage_local-path-provisioner-59f7658548-vh2hn to CNI network \"crio\": plugin type=\"bridge\" failed (add): failed to enable keep_addr_on_down for interface \"eth0\": open /proc/sys/net/ipv6/conf/eth0/keep_addr_on_down: read-only file system" pod="local-path-storage/local-path-provisioner-59f7658548-vh2hn"
+2025-10-10T07:51:20.9408659Z Oct 10 07:51:15 kinc-control-plane kubelet[835]: E1010 07:51:15.925049     835 kuberuntime_manager.go:1252] "CreatePodSandbox for pod failed" err="rpc error: code = Unknown desc = failed to create pod network sandbox k8s_local-path-provisioner-59f7658548-vh2hn_local-path-storage_fc434194-97f7-47f5-a940-67a4b184d101_0(11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca): error adding pod local-path-storage_local-path-provisioner-59f7658548-vh2hn to CNI network \"crio\": plugin type=\"bridge\" failed (add): failed to enable keep_addr_on_down for interface \"eth0\": open /proc/sys/net/ipv6/conf/eth0/keep_addr_on_down: read-only file system" pod="local-path-storage/local-path-provisioner-59f7658548-vh2hn"
+2025-10-10T07:51:20.9417595Z Oct 10 07:51:15 kinc-control-plane kubelet[835]: E1010 07:51:15.925140     835 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"CreatePodSandbox\" for \"local-path-provisioner-59f7658548-vh2hn_local-path-storage(fc434194-97f7-47f5-a940-67a4b184d101)\" with CreatePodSandboxError: \"Failed to create sandbox for pod \\\"local-path-provisioner-59f7658548-vh2hn_local-path-storage(fc434194-97f7-47f5-a940-67a4b184d101)\\\": rpc error: code = Unknown desc = failed to create pod network sandbox k8s_local-path-provisioner-59f7658548-vh2hn_local-path-storage_fc434194-97f7-47f5-a940-67a4b184d101_0(11b2928484daba94ecfe0c6469a210f06880f932a10f4f498c865eb632afcbca): error adding pod local-path-storage_local-path-provisioner-59f7658548-vh2hn to CNI network \\\"crio\\\": plugin type=\\\"bridge\\\" failed (add): failed to enable keep_addr_on_down for interface \\\"eth0\\\": open /proc/sys/net/ipv6/conf/eth0/keep_addr_on_down: read-only file system\"" pod="local-path-storage/local-path-provisioner-59f7658548-vh2hn" podUID="fc434194-97f7-47f5-a940-67a4b184d101"
+2025-10-10T07:51:20.9425180Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.870878914Z" level=info msg="Running pod sandbox: kube-system/coredns-674b8bbfcf-7vlqv/POD" id=a3b664b3-78fa-4176-88ca-104ba03b5151 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9427174Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.870947041Z" level=info msg="Allowed annotations are specified for workload []"
+2025-10-10T07:51:20.9431272Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.88160019Z" level=info msg="Got pod network &{Name:coredns-674b8bbfcf-7vlqv Namespace:kube-system ID:9f3afb3c9d041de86a2d13b2d466c58f5c0f705f910c64f6bc00240c34c652a8 UID:371c306e-8042-4e43-bb0f-720b445b98f6 NetNS:/var/run/netns/4f69b5c8-7566-4d72-b87f-2302a9693ba6 Networks:[{Name:crio Ifname:eth0}] RuntimeConfig:map[crio:{IP: MAC: PortMappings:[] Bandwidth:<nil> IpRanges:[] CgroupPath:/kubepods/burstable/pod371c306e-8042-4e43-bb0f-720b445b98f6 PodAnnotations:0xc0029ce1e8}] Aliases:map[]}"
+2025-10-10T07:51:20.9435315Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.881783422Z" level=info msg="Adding pod kube-system_coredns-674b8bbfcf-7vlqv to CNI network \"crio\" (type=bridge)"
+2025-10-10T07:51:20.9437876Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.900581353Z" level=info msg="NetworkStart: stopping network for sandbox 9f3afb3c9d041de86a2d13b2d466c58f5c0f705f910c64f6bc00240c34c652a8" id=a3b664b3-78fa-4176-88ca-104ba03b5151 name=/runtime.v1.RuntimeService/RunPodSandbox
+2025-10-10T07:51:20.9442956Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.90082654Z" level=info msg="Got pod network &{Name:coredns-674b8bbfcf-7vlqv Namespace:kube-system ID:9f3afb3c9d041de86a2d13b2d466c58f5c0f705f910c64f6bc00240c34c652a8 UID:371c306e-8042-4e43-bb0f-720b445b98f6 NetNS:/var/run/netns/4f69b5c8-7566-4d72-b87f-2302a9693ba6 Networks:[{Name:crio Ifname:eth0}] RuntimeConfig:map[crio:{IP: MAC: PortMappings:[] Bandwidth:<nil> IpRanges:[] CgroupPath:/kubepods/burstable/pod371c306e-8042-4e43-bb0f-720b445b98f6 PodAnnotations:0xc00051c390}] Aliases:map[]}"
+2025-10-10T07:51:20.9447304Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.900925276Z" level=error msg="Error loading cached network config: network \"crio\" not found in CNI cache"
+2025-10-10T07:51:20.9448931Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.9009383Z" level=warning msg="Falling back to loading from existing plugins on disk"
+2025-10-10T07:51:20.9450799Z Oct 10 07:51:20 kinc-control-plane crio[54]: time="2025-10-10T07:51:20.900972785Z" level=info msg="Deleting pod kube-system_coredns-674b8bbfcf-7vlqv from CNI network \"crio\" (type=bridge)"
+2025-10-10T07:51:20.9931084Z --- Checking if critical services exist ---
+2025-10-10T07:51:21.1242068Z   etc-kinc-config.mount                                                                                                                         loaded    active     mounted         /etc/kinc/config
+2025-10-10T07:51:21.1244200Z   var-lib-kubelet-pods-371c306e\x2d8042\x2d4e43\x2dbb0f\x2d720b445b98f6-volumes-kubernetes.io\x7eprojected-kube\x2dapi\x2daccess\x2d5m8sg.mount loaded    active     mounted         /var/lib/kubelet/pods/371c306e-8042-4e43-bb0f-720b445b98f6/volumes/kubernetes.io~projected/kube-api-access-5m8sg
+2025-10-10T07:51:21.1247605Z   var-lib-kubelet-pods-3e5bf9c4\x2d7e49\x2d4bb7\x2dbe2c\x2d3672c8c5bb77-volumes-kubernetes.io\x7eprojected-kube\x2dapi\x2daccess\x2dct9fw.mount loaded    active     mounted         /var/lib/kubelet/pods/3e5bf9c4-7e49-4bb7-be2c-3672c8c5bb77/volumes/kubernetes.io~projected/kube-api-access-ct9fw
+2025-10-10T07:51:21.1249837Z   var-lib-kubelet-pods-6837bd75\x2d1a4b\x2d4c0d\x2d9a24\x2d8b813eb15406-volumes-kubernetes.io\x7eprojected-kube\x2dapi\x2daccess\x2dw5mjv.mount loaded    active     mounted         /var/lib/kubelet/pods/6837bd75-1a4b-4c0d-9a24-8b813eb15406/volumes/kubernetes.io~projected/kube-api-access-w5mjv
+2025-10-10T07:51:21.1252067Z   var-lib-kubelet-pods-a1e828ad\x2dbc84\x2d4bb1\x2d9d21\x2dd15b278292cf-volumes-kubernetes.io\x7eprojected-kube\x2dapi\x2daccess\x2d7gt9f.mount loaded    active     mounted         /var/lib/kubelet/pods/a1e828ad-bc84-4bb1-9d21-d15b278292cf/volumes/kubernetes.io~projected/kube-api-access-7gt9f
+2025-10-10T07:51:21.1254091Z   var-lib-kubelet-pods-fc434194\x2d97f7\x2d47f5\x2da940\x2d67a4b184d101-volumes-kubernetes.io\x7eprojected-kube\x2dapi\x2daccess\x2d6bt92.mount loaded    active     mounted         /var/lib/kubelet/pods/fc434194-97f7-47f5-a940-67a4b184d101/volumes/kubernetes.io~projected/kube-api-access-6bt92
+2025-10-10T07:51:21.1255372Z   var-lib-kubelet.mount                                                                                                                         loaded    active     mounted         /var/lib/kubelet
+2025-10-10T07:51:21.1256057Z   crio.service                                                                                                                                  loaded    active     running         Container Runtime Interface for OCI (CRI-O)
+2025-10-10T07:51:21.1256816Z   kinc-cgroup-setup.service                                                                                                                     loaded    active     exited          kinc cgroup v2 controller delegation setup
+2025-10-10T07:51:21.1257837Z ● kinc-init.service                                                                                                                             loaded    activating start     start kinc Kubernetes Cluster Initialization
+2025-10-10T07:51:21.1258577Z   kubelet.service                                                                                                                               loaded    active     running         kubelet: The Kubernetes Node Agent
+2025-10-10T07:51:21.1259273Z   kubelet.slice                                                                                                                                 loaded    active     active          slice used to run Kubernetes / Kubelet
+2025-10-10T07:51:21.1274122Z ##[error]Process completed with exit code 1.
+2025-10-10T07:51:21.1369353Z ##[group]Run actions/upload-artifact@v4
+2025-10-10T07:51:21.1369795Z with:
+2025-10-10T07:51:21.1369974Z   name: test-logs-18
+2025-10-10T07:51:21.1370246Z   path: work/
 tests/**/*.log
 tests/**/*.json
 **/*.log
 **/*.json
 
-2025-10-10T07:38:25.6480245Z   retention-days: 30
-2025-10-10T07:38:25.6480450Z   if-no-files-found: warn
-2025-10-10T07:38:25.6480656Z   compression-level: 6
-2025-10-10T07:38:25.6480854Z   overwrite: false
-2025-10-10T07:38:25.6481051Z   include-hidden-files: false
-2025-10-10T07:38:25.6481472Z ##[endgroup]
-2025-10-10T07:38:25.8849982Z ##[warning]No files were found with the provided path: work/
+2025-10-10T07:51:21.1370565Z   retention-days: 30
+2025-10-10T07:51:21.1370770Z   if-no-files-found: warn
+2025-10-10T07:51:21.1370997Z   compression-level: 6
+2025-10-10T07:51:21.1371219Z   overwrite: false
+2025-10-10T07:51:21.1371424Z   include-hidden-files: false
+2025-10-10T07:51:21.1371672Z ##[endgroup]
+2025-10-10T07:51:21.3858015Z ##[warning]No files were found with the provided path: work/
 tests/**/*.log
 tests/**/*.json
 **/*.log
 **/*.json. No artifacts will be uploaded.
-2025-10-10T07:38:25.8934289Z ##[group]Run podman rm -f kinc-cluster || true
-2025-10-10T07:38:25.8934655Z [36;1mpodman rm -f kinc-cluster || true[0m
-2025-10-10T07:38:25.8967515Z shell: /usr/bin/bash -e {0}
-2025-10-10T07:38:25.8967776Z ##[endgroup]
-2025-10-10T07:38:26.5996441Z kinc-cluster
-2025-10-10T07:38:26.6094375Z Post job cleanup.
-2025-10-10T07:38:26.7070229Z [command]/usr/bin/git version
-2025-10-10T07:38:26.7106719Z git version 2.51.0
-2025-10-10T07:38:26.7150640Z Temporarily overriding HOME='/home/runner/work/_temp/033888b3-4420-47e4-aacc-68d5d4a89120' before making global git config changes
-2025-10-10T07:38:26.7151975Z Adding repository directory to the temporary git global config as a safe directory
-2025-10-10T07:38:26.7164515Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
-2025-10-10T07:38:26.7199281Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2025-10-10T07:38:26.7231624Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2025-10-10T07:38:26.7444411Z fatal: No url found for submodule path 'kinc' in .gitmodules
-2025-10-10T07:38:26.7473250Z ##[warning]The process '/usr/bin/git' failed with exit code 128
-2025-10-10T07:38:26.7563444Z Cleaning up orphan processes
-2025-10-10T07:38:26.7882811Z Terminate orphan process: pid (2128) (catatonit)
+2025-10-10T07:51:21.3951006Z ##[group]Run podman rm -f kinc-cluster || true
+2025-10-10T07:51:21.3951374Z [36;1mpodman rm -f kinc-cluster || true[0m
+2025-10-10T07:51:21.3983593Z shell: /usr/bin/bash -e {0}
+2025-10-10T07:51:21.3983832Z ##[endgroup]
+2025-10-10T07:51:31.4570623Z time="2025-10-10T07:51:31Z" level=warning msg="StopSignal (37) failed to stop container kinc-cluster in 10 seconds, resorting to SIGKILL"
+2025-10-10T07:51:31.8345995Z kinc-cluster
+2025-10-10T07:51:31.8458596Z Post job cleanup.
+2025-10-10T07:51:31.9401387Z [command]/usr/bin/git version
+2025-10-10T07:51:31.9438268Z git version 2.51.0
+2025-10-10T07:51:31.9487419Z Temporarily overriding HOME='/home/runner/work/_temp/49a06142-a051-463c-ac3d-c3c2e1cf1dcd' before making global git config changes
+2025-10-10T07:51:31.9488560Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-10T07:51:31.9492863Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
+2025-10-10T07:51:31.9527879Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-10T07:51:31.9560034Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-10T07:51:31.9773937Z fatal: No url found for submodule path 'kinc' in .gitmodules
+2025-10-10T07:51:31.9802822Z ##[warning]The process '/usr/bin/git' failed with exit code 128
+2025-10-10T07:51:31.9901094Z Cleaning up orphan processes
+2025-10-10T07:51:32.0210191Z Terminate orphan process: pid (2126) (catatonit)
