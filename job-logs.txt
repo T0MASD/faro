@@ -1,616 +1,617 @@
-﻿2025-10-10T08:59:13.6369890Z Current runner version: '2.328.0'
-2025-10-10T08:59:13.6391749Z ##[group]Runner Image Provisioner
-2025-10-10T08:59:13.6392429Z Hosted Compute Agent
-2025-10-10T08:59:13.6392999Z Version: 20250912.392
-2025-10-10T08:59:13.6393670Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
-2025-10-10T08:59:13.6394296Z Build Date: 2025-09-12T15:23:14Z
-2025-10-10T08:59:13.6394883Z ##[endgroup]
-2025-10-10T08:59:13.6395364Z ##[group]Operating System
-2025-10-10T08:59:13.6395877Z Ubuntu
-2025-10-10T08:59:13.6396323Z 24.04.3
-2025-10-10T08:59:13.6396745Z LTS
-2025-10-10T08:59:13.6397127Z ##[endgroup]
-2025-10-10T08:59:13.6397598Z ##[group]Runner Image
-2025-10-10T08:59:13.6398085Z Image: ubuntu-24.04
-2025-10-10T08:59:13.6398549Z Version: 20250929.60.1
-2025-10-10T08:59:13.6399499Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20250929.60/images/ubuntu/Ubuntu2404-Readme.md
-2025-10-10T08:59:13.6400881Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20250929.60
-2025-10-10T08:59:13.6401743Z ##[endgroup]
-2025-10-10T08:59:13.6402657Z ##[group]GITHUB_TOKEN Permissions
-2025-10-10T08:59:13.6404790Z Contents: read
-2025-10-10T08:59:13.6405287Z Metadata: read
-2025-10-10T08:59:13.6405704Z ##[endgroup]
-2025-10-10T08:59:13.6408003Z Secret source: Actions
-2025-10-10T08:59:13.6408597Z Prepare workflow directory
-2025-10-10T08:59:13.6750250Z Prepare all required actions
-2025-10-10T08:59:13.6796094Z Getting action download info
-2025-10-10T08:59:14.0529362Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
-2025-10-10T08:59:14.2187491Z Download action repository 'actions/setup-go@v5' (SHA:d35c59abb061a4a6fb18e82ac0862c26744d6ab5)
-2025-10-10T08:59:14.8399384Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
-2025-10-10T08:59:14.9977463Z Complete job name: test
-2025-10-10T08:59:15.0622642Z ##[group]Run actions/checkout@v4
-2025-10-10T08:59:15.0623882Z with:
-2025-10-10T08:59:15.0624347Z   fetch-depth: 0
-2025-10-10T08:59:15.0732169Z   repository: T0MASD/faro
-2025-10-10T08:59:15.0733525Z   token: ***
-2025-10-10T08:59:15.0733991Z   ssh-strict: true
-2025-10-10T08:59:15.0734404Z   ssh-user: git
-2025-10-10T08:59:15.0734819Z   persist-credentials: true
-2025-10-10T08:59:15.0735295Z   clean: true
-2025-10-10T08:59:15.0735717Z   sparse-checkout-cone-mode: true
-2025-10-10T08:59:15.0736239Z   fetch-tags: false
-2025-10-10T08:59:15.0736677Z   show-progress: true
-2025-10-10T08:59:15.0737115Z   lfs: false
-2025-10-10T08:59:15.0737532Z   submodules: false
-2025-10-10T08:59:15.0737977Z   set-safe-directory: true
-2025-10-10T08:59:15.0738990Z ##[endgroup]
-2025-10-10T08:59:15.1735059Z Syncing repository: T0MASD/faro
-2025-10-10T08:59:15.1737260Z ##[group]Getting Git version info
-2025-10-10T08:59:15.1737951Z Working directory is '/home/runner/work/faro/faro'
-2025-10-10T08:59:15.1739109Z [command]/usr/bin/git version
-2025-10-10T08:59:15.1778395Z git version 2.51.0
-2025-10-10T08:59:15.1800218Z ##[endgroup]
-2025-10-10T08:59:15.1813424Z Temporarily overriding HOME='/home/runner/work/_temp/50d97fc7-18ad-44d2-a6b2-9f9323a35b40' before making global git config changes
-2025-10-10T08:59:15.1815102Z Adding repository directory to the temporary git global config as a safe directory
-2025-10-10T08:59:15.1817501Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
-2025-10-10T08:59:15.1846903Z Deleting the contents of '/home/runner/work/faro/faro'
-2025-10-10T08:59:15.1849849Z ##[group]Initializing the repository
-2025-10-10T08:59:15.1853344Z [command]/usr/bin/git init /home/runner/work/faro/faro
-2025-10-10T08:59:15.1930631Z hint: Using 'master' as the name for the initial branch. This default branch name
-2025-10-10T08:59:15.1932191Z hint: is subject to change. To configure the initial branch name to use in all
-2025-10-10T08:59:15.1933914Z hint: of your new repositories, which will suppress this warning, call:
-2025-10-10T08:59:15.1934631Z hint:
-2025-10-10T08:59:15.1935161Z hint: 	git config --global init.defaultBranch <name>
-2025-10-10T08:59:15.1935950Z hint:
-2025-10-10T08:59:15.1936535Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
-2025-10-10T08:59:15.1937908Z hint: 'development'. The just-created branch can be renamed via this command:
-2025-10-10T08:59:15.1938869Z hint:
-2025-10-10T08:59:15.1939289Z hint: 	git branch -m <name>
-2025-10-10T08:59:15.1939731Z hint:
-2025-10-10T08:59:15.1940358Z hint: Disable this message with "git config set advice.defaultBranchName false"
-2025-10-10T08:59:15.1941314Z Initialized empty Git repository in /home/runner/work/faro/faro/.git/
-2025-10-10T08:59:15.1943516Z [command]/usr/bin/git remote add origin https://github.com/T0MASD/faro
-2025-10-10T08:59:15.1971667Z ##[endgroup]
-2025-10-10T08:59:15.1972426Z ##[group]Disabling automatic garbage collection
-2025-10-10T08:59:15.1975330Z [command]/usr/bin/git config --local gc.auto 0
-2025-10-10T08:59:15.1997618Z ##[endgroup]
-2025-10-10T08:59:15.1998342Z ##[group]Setting up auth
-2025-10-10T08:59:15.2003354Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2025-10-10T08:59:15.2027010Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2025-10-10T08:59:15.2274232Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
-2025-10-10T08:59:15.2296748Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
-2025-10-10T08:59:15.2460362Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
-2025-10-10T08:59:15.2495172Z ##[endgroup]
-2025-10-10T08:59:15.2496664Z ##[group]Fetching the repository
-2025-10-10T08:59:15.2503947Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +1cf4e583de65c40deaa06714c150d719f689bc73:refs/remotes/pull/6/merge
-2025-10-10T08:59:15.9423925Z From https://github.com/T0MASD/faro
-2025-10-10T08:59:15.9424922Z  * [new branch]      ci                                       -> origin/ci
-2025-10-10T08:59:15.9425632Z  * [new branch]      main                                     -> origin/main
-2025-10-10T08:59:15.9426386Z  * [new branch]      middleware                               -> origin/middleware
-2025-10-10T08:59:15.9427106Z  * [new tag]         v1.0.0                                   -> v1.0.0
-2025-10-10T08:59:15.9427756Z  * [new tag]         v1.1.0                                   -> v1.1.0
-2025-10-10T08:59:15.9428400Z  * [new tag]         v1.2.0                                   -> v1.2.0
-2025-10-10T08:59:15.9429086Z  * [new tag]         v1.2.1                                   -> v1.2.1
-2025-10-10T08:59:15.9429722Z  * [new tag]         v1.3.0                                   -> v1.3.0
-2025-10-10T08:59:15.9430449Z  * [new ref]         1cf4e583de65c40deaa06714c150d719f689bc73 -> pull/6/merge
-2025-10-10T08:59:15.9457995Z ##[endgroup]
-2025-10-10T08:59:15.9459203Z ##[group]Determining the checkout info
-2025-10-10T08:59:15.9460439Z ##[endgroup]
-2025-10-10T08:59:15.9465440Z [command]/usr/bin/git sparse-checkout disable
-2025-10-10T08:59:15.9500484Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
-2025-10-10T08:59:15.9522963Z ##[group]Checking out the ref
-2025-10-10T08:59:15.9527397Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/6/merge
-2025-10-10T08:59:15.9597630Z Note: switching to 'refs/remotes/pull/6/merge'.
-2025-10-10T08:59:15.9598206Z 
-2025-10-10T08:59:15.9598580Z You are in 'detached HEAD' state. You can look around, make experimental
-2025-10-10T08:59:15.9599819Z changes and commit them, and you can discard any commits you make in this
-2025-10-10T08:59:15.9601269Z state without impacting any branches by switching back to a branch.
-2025-10-10T08:59:15.9602088Z 
-2025-10-10T08:59:15.9603005Z If you want to create a new branch to retain commits you create, you may
-2025-10-10T08:59:15.9604606Z do so (now or later) by using -c with the switch command. Example:
-2025-10-10T08:59:15.9605397Z 
-2025-10-10T08:59:15.9605763Z   git switch -c <new-branch-name>
-2025-10-10T08:59:15.9606343Z 
-2025-10-10T08:59:15.9606663Z Or undo this operation with:
-2025-10-10T08:59:15.9607175Z 
-2025-10-10T08:59:15.9607448Z   git switch -
-2025-10-10T08:59:15.9607838Z 
-2025-10-10T08:59:15.9608484Z Turn off this advice by setting config variable advice.detachedHead to false
-2025-10-10T08:59:15.9609479Z 
-2025-10-10T08:59:15.9610490Z HEAD is now at 1cf4e58 Merge 4ed86aa704ede14d219d52c7adcc2948e538e0f0 into c656f2d0e66497e6470f15704d8124941629b0bc
-2025-10-10T08:59:15.9613645Z ##[endgroup]
-2025-10-10T08:59:15.9635853Z [command]/usr/bin/git log -1 --format=%H
-2025-10-10T08:59:15.9653578Z 1cf4e583de65c40deaa06714c150d719f689bc73
-2025-10-10T08:59:15.9849673Z ##[group]Run actions/setup-go@v5
-2025-10-10T08:59:15.9850183Z with:
-2025-10-10T08:59:15.9850543Z   go-version: 1.24
-2025-10-10T08:59:15.9850933Z   check-latest: false
-2025-10-10T08:59:15.9851519Z   token: ***
-2025-10-10T08:59:15.9851884Z   cache: true
-2025-10-10T08:59:15.9852255Z ##[endgroup]
-2025-10-10T08:59:16.1362599Z Setup go version spec 1.24
-2025-10-10T08:59:16.1566235Z Found in cache @ /opt/hostedtoolcache/go/1.24.7/x64
-2025-10-10T08:59:16.1570339Z Added go to the path
-2025-10-10T08:59:16.1573548Z Successfully set up Go version 1.24
-2025-10-10T08:59:16.6410406Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOMODCACHE
-2025-10-10T08:59:16.6436746Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOCACHE
-2025-10-10T08:59:16.6454615Z /home/runner/go/pkg/mod
-2025-10-10T08:59:16.6477976Z /home/runner/.cache/go-build
-2025-10-10T08:59:16.9039295Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
-2025-10-10T08:59:18.1190274Z Received 54525952 of 549431188 (9.9%), 52.0 MBs/sec
-2025-10-10T08:59:19.1200181Z Received 209715200 of 549431188 (38.2%), 100.0 MBs/sec
-2025-10-10T08:59:20.1207957Z Received 377487360 of 549431188 (68.7%), 119.9 MBs/sec
-2025-10-10T08:59:21.1216011Z Received 536870912 of 549431188 (97.7%), 127.9 MBs/sec
-2025-10-10T08:59:21.2561608Z Received 549431188 of 549431188 (100.0%), 126.7 MBs/sec
-2025-10-10T08:59:21.2562800Z Cache Size: ~524 MB (549431188 B)
-2025-10-10T08:59:21.2701246Z [command]/usr/bin/tar -xf /home/runner/work/_temp/bcae0cca-1acc-4bb0-8b8c-52821beedc7d/cache.tzst -P -C /home/runner/work/faro/faro --use-compress-program unzstd
-2025-10-10T08:59:23.7210040Z Cache restored successfully
-2025-10-10T08:59:23.7796321Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
-2025-10-10T08:59:23.7823616Z go version go1.24.7 linux/amd64
-2025-10-10T08:59:23.7823835Z 
-2025-10-10T08:59:23.7824170Z ##[group]go env
-2025-10-10T08:59:23.8906306Z AR='ar'
-2025-10-10T08:59:23.8906582Z CC='gcc'
-2025-10-10T08:59:23.8906784Z CGO_CFLAGS='-O2 -g'
-2025-10-10T08:59:23.8907016Z CGO_CPPFLAGS=''
-2025-10-10T08:59:23.8907201Z CGO_CXXFLAGS='-O2 -g'
-2025-10-10T08:59:23.8907399Z CGO_ENABLED='1'
-2025-10-10T08:59:23.8907594Z CGO_FFLAGS='-O2 -g'
-2025-10-10T08:59:23.8907774Z CGO_LDFLAGS='-O2 -g'
-2025-10-10T08:59:23.8907971Z CXX='g++'
-2025-10-10T08:59:23.8908148Z GCCGO='gccgo'
-2025-10-10T08:59:23.8908329Z GO111MODULE=''
-2025-10-10T08:59:23.8908512Z GOAMD64='v1'
-2025-10-10T08:59:23.8908741Z GOARCH='amd64'
-2025-10-10T08:59:23.8908914Z GOAUTH='netrc'
-2025-10-10T08:59:23.8909098Z GOBIN=''
-2025-10-10T08:59:23.8909312Z GOCACHE='/home/runner/.cache/go-build'
-2025-10-10T08:59:23.8909567Z GOCACHEPROG=''
-2025-10-10T08:59:23.8909784Z GODEBUG=''
-2025-10-10T08:59:23.8910002Z GOENV='/home/runner/.config/go/env'
-2025-10-10T08:59:23.8910255Z GOEXE=''
-2025-10-10T08:59:23.8910431Z GOEXPERIMENT=''
-2025-10-10T08:59:23.8910613Z GOFIPS140='off'
-2025-10-10T08:59:23.8910791Z GOFLAGS=''
-2025-10-10T08:59:23.8911356Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build1310164197=/tmp/go-build -gno-record-gcc-switches'
-2025-10-10T08:59:23.8912262Z GOHOSTARCH='amd64'
-2025-10-10T08:59:23.8912454Z GOHOSTOS='linux'
-2025-10-10T08:59:23.8912641Z GOINSECURE=''
-2025-10-10T08:59:23.8912876Z GOMOD='/home/runner/work/faro/faro/go.mod'
-2025-10-10T08:59:23.8913458Z GOMODCACHE='/home/runner/go/pkg/mod'
-2025-10-10T08:59:23.8913699Z GONOPROXY=''
-2025-10-10T08:59:23.8913865Z GONOSUMDB=''
-2025-10-10T08:59:23.8914046Z GOOS='linux'
-2025-10-10T08:59:23.8914230Z GOPATH='/home/runner/go'
-2025-10-10T08:59:23.8914439Z GOPRIVATE=''
-2025-10-10T08:59:23.8914809Z GOPROXY='https://proxy.golang.org,direct'
-2025-10-10T08:59:23.8915108Z GOROOT='/opt/hostedtoolcache/go/1.24.7/x64'
-2025-10-10T08:59:23.8915370Z GOSUMDB='sum.golang.org'
-2025-10-10T08:59:23.8915570Z GOTELEMETRY='local'
-2025-10-10T08:59:23.8915811Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
-2025-10-10T08:59:23.8916269Z GOTMPDIR=''
-2025-10-10T08:59:23.8916447Z GOTOOLCHAIN='auto'
-2025-10-10T08:59:23.8916751Z GOTOOLDIR='/opt/hostedtoolcache/go/1.24.7/x64/pkg/tool/linux_amd64'
-2025-10-10T08:59:23.8917065Z GOVCS=''
-2025-10-10T08:59:23.8917229Z GOVERSION='go1.24.7'
-2025-10-10T08:59:23.8917425Z GOWORK=''
-2025-10-10T08:59:23.8917610Z PKG_CONFIG='pkg-config'
-2025-10-10T08:59:23.8917744Z 
-2025-10-10T08:59:23.8918183Z ##[endgroup]
-2025-10-10T08:59:23.9028581Z ##[group]Run # Enable IP forwarding (required for kinc networking)
-2025-10-10T08:59:23.9029622Z [36;1m# Enable IP forwarding (required for kinc networking)[0m
-2025-10-10T08:59:23.9029959Z [36;1mecho 1 | sudo tee /proc/sys/net/ipv4/ip_forward[0m
-2025-10-10T08:59:23.9030232Z [36;1m[0m
-2025-10-10T08:59:23.9030429Z [36;1m# Prepare kubeadm config for kinc[0m
-2025-10-10T08:59:23.9030807Z [36;1m# kinc-init.service reads /etc/kinc/config/kubeadm.conf[0m
-2025-10-10T08:59:23.9031113Z [36;1mmkdir -p /tmp/kinc-config[0m
-2025-10-10T08:59:23.9031386Z [36;1mcat > /tmp/kinc-config/kubeadm.conf << 'EOF'[0m
-2025-10-10T08:59:23.9031650Z [36;1mapiServer:[0m
-2025-10-10T08:59:23.9031853Z [36;1m  certSANs:[0m
-2025-10-10T08:59:23.9032052Z [36;1m  - localhost[0m
-2025-10-10T08:59:23.9032249Z [36;1m  - 127.0.0.1[0m
-2025-10-10T08:59:23.9032433Z [36;1m  extraArgs:[0m
-2025-10-10T08:59:23.9032632Z [36;1m    runtime-config: ""[0m
-2025-10-10T08:59:23.9032940Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
-2025-10-10T08:59:23.9033573Z [36;1mclusterName: kinc[0m
-2025-10-10T08:59:23.9033851Z [36;1mcontrolPlaneEndpoint: kinc-control-plane:6443[0m
-2025-10-10T08:59:23.9034137Z [36;1mcontrollerManager:[0m
-2025-10-10T08:59:23.9034346Z [36;1m  extraArgs:[0m
-2025-10-10T08:59:23.9034566Z [36;1m    enable-hostpath-provisioner: "true"[0m
-2025-10-10T08:59:23.9034837Z [36;1mkind: ClusterConfiguration[0m
-2025-10-10T08:59:23.9035082Z [36;1mkubernetesVersion: v1.33.5[0m
-2025-10-10T08:59:23.9035302Z [36;1mnetworking:[0m
-2025-10-10T08:59:23.9035498Z [36;1m  podSubnet: 10.244.0.0/16[0m
-2025-10-10T08:59:23.9035723Z [36;1m  serviceSubnet: 10.96.0.0/16[0m
-2025-10-10T08:59:23.9035950Z [36;1mpatches:[0m
-2025-10-10T08:59:23.9036147Z [36;1m  directory: /etc/kinc/patches[0m
-2025-10-10T08:59:23.9036390Z [36;1mscheduler:[0m
-2025-10-10T08:59:23.9036584Z [36;1m  extraArgs: null[0m
-2025-10-10T08:59:23.9036788Z [36;1m---[0m
-2025-10-10T08:59:23.9036991Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
-2025-10-10T08:59:23.9037237Z [36;1mbootstrapTokens:[0m
-2025-10-10T08:59:23.9037452Z [36;1m- token: abcdef.0123456789abcdef[0m
-2025-10-10T08:59:23.9037699Z [36;1mkind: InitConfiguration[0m
-2025-10-10T08:59:23.9037937Z [36;1mlocalAPIEndpoint:[0m
-2025-10-10T08:59:23.9038184Z [36;1m  advertiseAddress: CONTAINER_IP_PLACEHOLDER[0m
-2025-10-10T08:59:23.9038453Z [36;1m  bindPort: 6443[0m
-2025-10-10T08:59:23.9038662Z [36;1mnodeRegistration:[0m
-2025-10-10T08:59:23.9038896Z [36;1m  criSocket: unix:///var/run/crio/crio.sock[0m
-2025-10-10T08:59:23.9039158Z [36;1m  kubeletExtraArgs:[0m
-2025-10-10T08:59:23.9039404Z [36;1m    node-ip: CONTAINER_IP_PLACEHOLDER[0m
-2025-10-10T08:59:23.9039836Z [36;1m    node-labels: ""[0m
-2025-10-10T08:59:23.9040127Z [36;1m    provider-id: kind://podman/kinc/kinc-control-plane[0m
-2025-10-10T08:59:23.9040409Z [36;1m---[0m
-2025-10-10T08:59:23.9040610Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
-2025-10-10T08:59:23.9040849Z [36;1mcontrolPlane:[0m
-2025-10-10T08:59:23.9041065Z [36;1m  localAPIEndpoint:[0m
-2025-10-10T08:59:23.9041322Z [36;1m    advertiseAddress: CONTAINER_IP_PLACEHOLDER[0m
-2025-10-10T08:59:23.9041587Z [36;1m    bindPort: 6443[0m
-2025-10-10T08:59:23.9041789Z [36;1mdiscovery:[0m
-2025-10-10T08:59:23.9041983Z [36;1m  bootstrapToken:[0m
-2025-10-10T08:59:23.9042228Z [36;1m    apiServerEndpoint: kinc-control-plane:6443[0m
-2025-10-10T08:59:23.9042501Z [36;1m    token: abcdef.0123456789abcdef[0m
-2025-10-10T08:59:23.9042761Z [36;1m    unsafeSkipCAVerification: true[0m
-2025-10-10T08:59:23.9043014Z [36;1mkind: JoinConfiguration[0m
-2025-10-10T08:59:23.9043390Z [36;1mnodeRegistration:[0m
-2025-10-10T08:59:23.9043638Z [36;1m  criSocket: unix:///var/run/crio/crio.sock[0m
-2025-10-10T08:59:23.9043899Z [36;1m  kubeletExtraArgs:[0m
-2025-10-10T08:59:23.9044129Z [36;1m    node-ip: CONTAINER_IP_PLACEHOLDER[0m
-2025-10-10T08:59:23.9044376Z [36;1m    node-labels: ""[0m
-2025-10-10T08:59:23.9044766Z [36;1m    provider-id: kind://podman/kinc/kinc-control-plane[0m
-2025-10-10T08:59:23.9045046Z [36;1m---[0m
-2025-10-10T08:59:23.9045255Z [36;1mapiVersion: kubelet.config.k8s.io/v1beta1[0m
-2025-10-10T08:59:23.9045522Z [36;1mcgroupDriver: cgroupfs[0m
-2025-10-10T08:59:23.9045751Z [36;1mcgroupRoot: /[0m
-2025-10-10T08:59:23.9045942Z [36;1mevictionHard:[0m
-2025-10-10T08:59:23.9046144Z [36;1m  imagefs.available: 0%[0m
-2025-10-10T08:59:23.9046381Z [36;1m  nodefs.available: 0%[0m
-2025-10-10T08:59:23.9046595Z [36;1m  nodefs.inodesFree: 0%[0m
-2025-10-10T08:59:23.9046817Z [36;1mfailSwapOn: false[0m
-2025-10-10T08:59:23.9047019Z [36;1mfeatureGates:[0m
-2025-10-10T08:59:23.9047231Z [36;1m  KubeletInUserNamespace: true[0m
-2025-10-10T08:59:23.9047599Z [36;1mimageGCHighThresholdPercent: 100[0m
-2025-10-10T08:59:23.9047895Z [36;1mkind: KubeletConfiguration[0m
-2025-10-10T08:59:23.9048115Z [36;1m---[0m
-2025-10-10T08:59:23.9048333Z [36;1mapiVersion: kubeproxy.config.k8s.io/v1alpha1[0m
-2025-10-10T08:59:23.9048606Z [36;1mconntrack:[0m
-2025-10-10T08:59:23.9048799Z [36;1m  maxPerCore: 0[0m
-2025-10-10T08:59:23.9048987Z [36;1mnftables:[0m
-2025-10-10T08:59:23.9049179Z [36;1m  masqueradeAll: false[0m
-2025-10-10T08:59:23.9049397Z [36;1m  masqueradeBit: 14[0m
-2025-10-10T08:59:23.9049601Z [36;1m  minSyncPeriod: 1s[0m
-2025-10-10T08:59:23.9049814Z [36;1m  syncPeriod: 30s[0m
-2025-10-10T08:59:23.9050037Z [36;1mkind: KubeProxyConfiguration[0m
-2025-10-10T08:59:23.9050273Z [36;1mmode: nftables[0m
-2025-10-10T08:59:23.9050460Z [36;1mEOF[0m
-2025-10-10T08:59:23.9050624Z [36;1m[0m
-2025-10-10T08:59:23.9050807Z [36;1mecho "✅ kubeadm.conf prepared"[0m
-2025-10-10T08:59:23.9051028Z [36;1m[0m
-2025-10-10T08:59:23.9051267Z [36;1m# Start kinc cluster (systemd-based Kubernetes container)[0m
-2025-10-10T08:59:23.9051641Z [36;1m# TEMPORARY: Using --privileged to verify permission issue[0m
-2025-10-10T08:59:23.9052015Z [36;1m# Based on kinc/runtime/quadlet/kinc-control-plane.container[0m
-2025-10-10T08:59:23.9052326Z [36;1mpodman run -d \[0m
-2025-10-10T08:59:23.9052549Z [36;1m  --name kinc-cluster \[0m
-2025-10-10T08:59:23.9052795Z [36;1m  --hostname kinc-control-plane \[0m
-2025-10-10T08:59:23.9053035Z [36;1m  --privileged \[0m
-2025-10-10T08:59:23.9053482Z [36;1m  --device /dev/fuse \[0m
-2025-10-10T08:59:23.9053763Z [36;1m  --sysctl net.ipv6.conf.all.disable_ipv6=0 \[0m
-2025-10-10T08:59:23.9054087Z [36;1m  --sysctl net.ipv6.conf.default.keep_addr_on_down=1 \[0m
-2025-10-10T08:59:23.9054431Z [36;1m  --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \[0m
-2025-10-10T08:59:23.9054771Z [36;1m  --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
-2025-10-10T08:59:23.9055116Z [36;1m  --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
-2025-10-10T08:59:23.9055681Z [36;1m  --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
-2025-10-10T08:59:23.9056023Z [36;1m  --volume /tmp/kinc-config:/etc/kinc/config:ro \[0m
-2025-10-10T08:59:23.9056314Z [36;1m  --publish 127.0.0.1:6443:6443/tcp \[0m
-2025-10-10T08:59:23.9056556Z [36;1m  -e container=podman \[0m
-2025-10-10T08:59:23.9056823Z [36;1m  -e KUBECONFIG=/etc/kubernetes/admin.conf \[0m
-2025-10-10T08:59:23.9057088Z [36;1m  ghcr.io/t0masd/kinc:v0-1[0m
-2025-10-10T08:59:23.9057308Z [36;1m[0m
-2025-10-10T08:59:23.9057602Z [36;1mecho "⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)..."[0m
-2025-10-10T08:59:23.9058090Z [36;1mecho "   This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,"[0m
-2025-10-10T08:59:23.9058692Z [36;1mecho "   API server, CNI, storage provisioner, and CoreDNS"[0m
-2025-10-10T08:59:23.9058987Z [36;1m[0m
-2025-10-10T08:59:23.9059174Z [36;1m# Wait for container to respond[0m
-2025-10-10T08:59:23.9059569Z [36;1mtimeout 30 bash -c 'until podman exec kinc-cluster echo ok >/dev/null 2>&1; do sleep 2; done'[0m
-2025-10-10T08:59:23.9059964Z [36;1mecho "✅ Container responding"[0m
-2025-10-10T08:59:23.9060188Z [36;1m[0m
-2025-10-10T08:59:23.9060378Z [36;1m# Wait for systemd inside container[0m
-2025-10-10T08:59:23.9060726Z [36;1mecho "⏳ Waiting for systemd..."[0m
-2025-10-10T08:59:23.9061252Z [36;1mif ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running 2>&1 | grep -q "running"; do echo -n "."; sleep 2; done'; then[0m
-2025-10-10T08:59:23.9061753Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9062078Z [36;1m  SYSTEMD_STATE=$(podman exec kinc-cluster systemctl is-system-running 2>&1 || true)[0m
-2025-10-10T08:59:23.9062503Z [36;1m  echo "❌ Systemd not running (state: $SYSTEMD_STATE)"[0m
-2025-10-10T08:59:23.9062786Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9062987Z [36;1m  echo "=== Failed Services ==="[0m
-2025-10-10T08:59:23.9063661Z [36;1m  podman exec kinc-cluster systemctl --failed --no-pager || true[0m
-2025-10-10T08:59:23.9064127Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9064334Z [36;1m  echo "=== kinc/crio/kubelet Status ==="[0m
-2025-10-10T08:59:23.9064794Z [36;1m  podman exec kinc-cluster systemctl status kinc-init.service crio.service kubelet.service --no-pager || true[0m
-2025-10-10T08:59:23.9065213Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9065427Z [36;1m  echo "=== Checking Pod Status ==="[0m
-2025-10-10T08:59:23.9065867Z [36;1m  podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -A -o wide || true[0m
-2025-10-10T08:59:23.9066274Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9066474Z [36;1m  echo "=== Pod Logs (kube-proxy) ==="[0m
-2025-10-10T08:59:23.9067003Z [36;1m  podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf logs -n kube-system -l k8s-app=kube-proxy --tail=50 || true[0m
-2025-10-10T08:59:23.9067504Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9067735Z [36;1m  echo "=== Pod Logs (local-path-provisioner) ==="[0m
-2025-10-10T08:59:23.9068349Z [36;1m  podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf logs -n local-path-storage -l app=local-path-provisioner --tail=50 || true[0m
-2025-10-10T08:59:23.9068901Z [36;1m  exit 1[0m
-2025-10-10T08:59:23.9069077Z [36;1mfi[0m
-2025-10-10T08:59:23.9069261Z [36;1mecho "✅ Systemd operational"[0m
-2025-10-10T08:59:23.9069489Z [36;1m[0m
-2025-10-10T08:59:23.9069676Z [36;1m# Wait for CRI-O[0m
-2025-10-10T08:59:23.9070111Z [36;1mtimeout 60 bash -c 'until podman exec kinc-cluster systemctl is-active crio.service >/dev/null 2>&1; do sleep 2; done'[0m
-2025-10-10T08:59:23.9070573Z [36;1mecho "✅ CRI-O active"[0m
-2025-10-10T08:59:23.9070774Z [36;1m[0m
-2025-10-10T08:59:23.9071046Z [36;1m# Wait for cluster initialization (kinc-init.service runs kubeadm init)[0m
-2025-10-10T08:59:23.9071423Z [36;1m# This can take 3-5 minutes, so use longer timeout[0m
-2025-10-10T08:59:23.9071819Z [36;1mecho "⏳ Waiting for kinc-init.service (this runs kubeadm init, takes 3-5 min)..."[0m
-2025-10-10T08:59:23.9072586Z [36;1mif ! timeout 600 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do echo -n "."; sleep 10; done'; then[0m
-2025-10-10T08:59:23.9073285Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9073532Z [36;1m  echo "❌ kinc-init.service timeout after 10 minutes"[0m
-2025-10-10T08:59:23.9073818Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9074020Z [36;1m  echo "=== Debugging Information ==="[0m
-2025-10-10T08:59:23.9074319Z [36;1m  echo "--- systemctl status kinc-init.service ---"[0m
-2025-10-10T08:59:23.9074725Z [36;1m  podman exec kinc-cluster systemctl status kinc-init.service --no-pager || true[0m
-2025-10-10T08:59:23.9075072Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9075288Z [36;1m  echo "--- journalctl for kinc-init ---"[0m
-2025-10-10T08:59:23.9075696Z [36;1m  podman exec kinc-cluster journalctl -xeu kinc-init.service --no-pager -n 100 || true[0m
-2025-10-10T08:59:23.9076065Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9076280Z [36;1m  echo "--- Check if kubeadm.conf exists ---"[0m
-2025-10-10T08:59:23.9076614Z [36;1m  podman exec kinc-cluster ls -la /etc/kinc/config/ || true[0m
-2025-10-10T08:59:23.9076994Z [36;1m  podman exec kinc-cluster cat /etc/kinc/config/kubeadm.conf || true[0m
-2025-10-10T08:59:23.9077296Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9077560Z [36;1m  echo "--- kubelet status ---"[0m
-2025-10-10T08:59:23.9077915Z [36;1m  podman exec kinc-cluster systemctl status kubelet.service --no-pager || true[0m
-2025-10-10T08:59:23.9078261Z [36;1m  echo ""[0m
-2025-10-10T08:59:23.9078472Z [36;1m  echo "--- Container logs (last 50 lines) ---"[0m
-2025-10-10T08:59:23.9078767Z [36;1m  podman logs kinc-cluster --tail 50 || true[0m
-2025-10-10T08:59:23.9079018Z [36;1m  exit 1[0m
-2025-10-10T08:59:23.9079361Z [36;1mfi[0m
-2025-10-10T08:59:23.9079568Z [36;1mecho ""[0m
-2025-10-10T08:59:23.9079782Z [36;1mecho "✅ Cluster initialization started"[0m
-2025-10-10T08:59:23.9080020Z [36;1m[0m
-2025-10-10T08:59:23.9080202Z [36;1m# Show init service status[0m
-2025-10-10T08:59:23.9080566Z [36;1mpodman exec kinc-cluster systemctl status kinc-init.service --no-pager || true[0m
-2025-10-10T08:59:23.9080919Z [36;1m[0m
-2025-10-10T08:59:23.9081093Z [36;1m# Wait for API server (from host)[0m
-2025-10-10T08:59:23.9081517Z [36;1mtimeout 120 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null 2>&1; do sleep 2; done'[0m
-2025-10-10T08:59:23.9081926Z [36;1mecho "✅ API server responding"[0m
-2025-10-10T08:59:23.9082148Z [36;1m[0m
-2025-10-10T08:59:23.9082315Z [36;1m# Wait for node ready[0m
-2025-10-10T08:59:23.9082949Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=10s >/dev/null 2>&1; do sleep 5; done'[0m
-2025-10-10T08:59:23.9083765Z [36;1mecho "✅ Node ready"[0m
-2025-10-10T08:59:23.9083964Z [36;1m[0m
-2025-10-10T08:59:23.9084168Z [36;1m# Wait for CoreDNS (critical for Faro tests)[0m
-2025-10-10T08:59:23.9084924Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pod -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running >/dev/null 2>&1; do sleep 5; done'[0m
-2025-10-10T08:59:23.9085674Z [36;1mecho "✅ CoreDNS running"[0m
-2025-10-10T08:59:23.9085887Z [36;1m[0m
-2025-10-10T08:59:23.9086065Z [36;1m# Extract kubeconfig[0m
-2025-10-10T08:59:23.9086280Z [36;1mmkdir -p ~/.kube[0m
-2025-10-10T08:59:23.9086577Z [36;1mpodman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config[0m
-2025-10-10T08:59:23.9087030Z [36;1msed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config[0m
-2025-10-10T08:59:23.9087367Z [36;1m[0m
-2025-10-10T08:59:23.9087538Z [36;1m# Verify cluster[0m
-2025-10-10T08:59:23.9087730Z [36;1mecho ""[0m
-2025-10-10T08:59:23.9087927Z [36;1mecho "📊 Cluster Status:"[0m
-2025-10-10T08:59:23.9088163Z [36;1mkubectl get nodes -o wide[0m
-2025-10-10T08:59:23.9088387Z [36;1mkubectl get pods -A[0m
-2025-10-10T08:59:23.9088706Z [36;1mkubectl cluster-info[0m
-2025-10-10T08:59:23.9115486Z shell: /usr/bin/bash -e {0}
-2025-10-10T08:59:23.9115753Z ##[endgroup]
-2025-10-10T08:59:23.9230280Z 1
-2025-10-10T08:59:23.9256398Z ✅ kubeadm.conf prepared
-2025-10-10T08:59:27.5128758Z Trying to pull ghcr.io/t0masd/kinc:v0-1...
-2025-10-10T08:59:28.8797620Z Getting image source signatures
-2025-10-10T08:59:28.8800712Z Copying blob sha256:1c3165eadf68bc96ed33f2878fbea0730fd3210acb1787a1be2cabc1205e508f
-2025-10-10T08:59:28.8801457Z Copying blob sha256:79fbaf31284b97b3d3859ef109d5ee5097b2ecf41ef7a98d486f6e72b77f5e13
-2025-10-10T08:59:28.8802047Z Copying blob sha256:926690fefe603d28f0c526549e910212a929b903937a9470a40078bc6e4143b9
-2025-10-10T08:59:28.8802626Z Copying blob sha256:f4ebc8a2ad80e5c68607f77352fa9cd013853438ebb46fba1fcd8d32cd2ed294
-2025-10-10T08:59:28.8803262Z Copying blob sha256:a36872a969c8ec4cc257c3d32629bb9ab0a5391564e8e589ebcdfdf345c0a2c8
-2025-10-10T08:59:28.8803910Z Copying blob sha256:bfa0c27a39a64631c3172367295c01c6767ddd14f09589b80eb8ef1d297b794c
-2025-10-10T08:59:29.0763433Z Copying blob sha256:ec151b0a58e825b197e33a8f26b6e250df1db60c61e46d46accbf5851042727e
-2025-10-10T08:59:29.1354149Z Copying blob sha256:3fdc23ae00c4c88b0648d79ab063f55f36f6a1b865dc2e0066722d59e746f326
-2025-10-10T08:59:29.1932439Z Copying blob sha256:fa20e998b13a4939ef513c13aad60100b9dddc37bbf22f93e6f938dba86c04c2
-2025-10-10T08:59:29.2098649Z Copying blob sha256:576943d1883f80ec0e6bbe3d414f2dc57c6b96a446af173d4a59f761bd7f24fe
-2025-10-10T08:59:29.2998477Z Copying blob sha256:63b040a831cd876cf9ee413b2347abbd1222f3e63c80fccd0f69992962e9d7e3
-2025-10-10T08:59:29.4342584Z Copying blob sha256:4170f55c66b53d10494a06b56259a3aa8b9915aa32e48e76d804fa3d8858b14a
-2025-10-10T08:59:29.4734953Z Copying blob sha256:c88c43a15383088c1dd388082857c094ad3334ae84a0c6d546d4f06eee6a721b
-2025-10-10T08:59:29.6326313Z Copying blob sha256:254235fa8067245719789a898197f59816a43b841a30f1414dfc8fa4ffdfb0a5
-2025-10-10T08:59:29.6812876Z Copying blob sha256:e91edddee38fd04236c59a7aed0f04ee408de8c7d076e91ade416118a318387b
-2025-10-10T08:59:29.7010207Z Copying blob sha256:409e36ae34c13b90b2aba1797b40eb54a3d914764e272b9c2ae065480b05e3ca
-2025-10-10T08:59:29.8180942Z Copying blob sha256:d753a5d66fb17f1b74a5c4312ece3584dcf697c1c35961f0c995c159e634b34f
-2025-10-10T08:59:29.8782225Z Copying blob sha256:157ded773e7a92a3763dbec098ff0581bda48aedd72b49d31a8b5d65a076a129
-2025-10-10T08:59:29.9039829Z Copying blob sha256:5b856357623aecf5fd02d603bb11298d6329d05db7e420f830dcbe0ba40307db
-2025-10-10T08:59:30.0116098Z Copying blob sha256:63d1b9582fbfdee5701cfc52173c8d4f54325311f5bfe28fe6eae1e6de38f8b1
-2025-10-10T08:59:30.0732263Z Copying blob sha256:d5fd4473dae776355a9cd12ee9227d79dd9fe987d99a7eaef3284152c86c1db6
-2025-10-10T08:59:30.1115550Z Copying blob sha256:01fbea8862c218217b1275df2045bcec65dfc5cc9a04a5f93f2963630cd4aee8
-2025-10-10T08:59:30.1298588Z Copying blob sha256:8f14a422129bc16f7850793a8c055a90dcc9810a4008c27345d464e842cbe769
-2025-10-10T08:59:38.9573918Z Copying config sha256:39da5bbd7c3eab0f00cea6560b1f5211d1dae7b89da7e75f8aa1a29e414eead3
-2025-10-10T08:59:38.9588516Z Writing manifest to image destination
-2025-10-10T08:59:39.9522433Z a8b6fb93ef85810b17f8df91066573fe5c3b787f9b003cfe5a0905bd1e91976a
-2025-10-10T08:59:39.9708842Z ⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)...
-2025-10-10T08:59:39.9709736Z    This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,
-2025-10-10T08:59:39.9710390Z    API server, CNI, storage provisioner, and CoreDNS
-2025-10-10T08:59:40.0962266Z ✅ Container responding
-2025-10-10T08:59:40.0963862Z ⏳ Waiting for systemd...
-2025-10-10T09:01:40.0967511Z ..........................................................
-2025-10-10T09:01:40.1697808Z ❌ Systemd not running (state: degraded)
-2025-10-10T09:01:40.1698125Z 
-2025-10-10T09:01:40.1698220Z === Failed Services ===
-2025-10-10T09:01:40.2282882Z   UNIT                     LOAD   ACTIVE SUB    DESCRIPTION
-2025-10-10T09:01:40.2284150Z ● sys-kernel-config.mount  loaded failed failed Kernel Configuration File System
-2025-10-10T09:01:40.2285373Z ● sys-kernel-debug.mount   loaded failed failed Kernel Debug File System
-2025-10-10T09:01:40.2286197Z ● sys-kernel-tracing.mount loaded failed failed Kernel Trace File System
-2025-10-10T09:01:40.2286675Z 
-2025-10-10T09:01:40.2287118Z Legend: LOAD   → Reflects whether the unit definition was properly loaded.
-2025-10-10T09:01:40.2288087Z         ACTIVE → The high-level unit activation state, i.e. generalization of SUB.
-2025-10-10T09:01:40.2288947Z         SUB    → The low-level unit activation state, values depend on unit type.
-2025-10-10T09:01:40.2289185Z 
-2025-10-10T09:01:40.2289279Z 3 loaded units listed.
-2025-10-10T09:01:40.2819767Z 
-2025-10-10T09:01:40.2820492Z === kinc/crio/kubelet Status ===
-2025-10-10T09:01:40.3549936Z ● kinc-init.service - kinc Kubernetes Cluster Initialization
-2025-10-10T09:01:40.3550955Z      Loaded: loaded (/etc/systemd/system/kinc-init.service; enabled; preset: disabled)
-2025-10-10T09:01:40.3551747Z     Drop-In: /usr/lib/systemd/system/service.d
-2025-10-10T09:01:40.3552459Z              └─10-timeout-abort.conf
-2025-10-10T09:01:40.3553526Z      Active: active (exited) since Fri 2025-10-10 09:00:22 UTC; 1min 17s ago
-2025-10-10T09:01:40.3554134Z  Invocation: f14cc1e85bc14e4880154a81ce851c0b
-2025-10-10T09:01:40.3555227Z     Process: 113 ExecStart=/etc/kinc/scripts/kinc-init.sh (code=exited, status=0/SUCCESS)
-2025-10-10T09:01:40.3555990Z    Main PID: 113 (code=exited, status=0/SUCCESS)
-2025-10-10T09:01:40.3556456Z    Mem peak: 46.4M
-2025-10-10T09:01:40.3556795Z         CPU: 4.615s
-2025-10-10T09:01:40.3556961Z 
-2025-10-10T09:01:40.3557226Z Oct 10 09:00:19 kinc-control-plane kinc-init.sh[1921]: deployment.apps/local-path-provisioner created
-2025-10-10T09:01:40.3557777Z Oct 10 09:00:19 kinc-control-plane kinc-init.sh[1921]: storageclass.storage.k8s.io/standard created
-2025-10-10T09:01:40.3558286Z Oct 10 09:00:19 kinc-control-plane kinc-init.sh[1921]: configmap/local-path-config created
-2025-10-10T09:01:40.3558908Z Oct 10 09:00:19 kinc-control-plane kinc-init.sh[113]: ✅ Storage class installed successfully
-2025-10-10T09:01:40.3559433Z Oct 10 09:00:19 kinc-control-plane kinc-init.sh[113]: Waiting for storage provisioner to be ready...
-2025-10-10T09:01:40.3559989Z Oct 10 09:00:22 kinc-control-plane kinc-init.sh[1929]: deployment.apps/local-path-provisioner condition met
-2025-10-10T09:01:40.3560534Z Oct 10 09:00:22 kinc-control-plane kinc-init.sh[113]: === kinc Kind-Free Initialization Complete ===
-2025-10-10T09:01:40.3561005Z Oct 10 09:00:22 kinc-control-plane kinc-init.sh[113]: Cluster is ready!
-2025-10-10T09:01:40.3561458Z Oct 10 09:00:22 kinc-control-plane kinc-init.sh[113]: === Continuing with normal systemd operation ===
-2025-10-10T09:01:40.3562033Z Oct 10 09:00:22 kinc-control-plane systemd[1]: Finished kinc-init.service - kinc Kubernetes Cluster Initialization.
-2025-10-10T09:01:40.3562375Z 
-2025-10-10T09:01:40.3562581Z ● crio.service - Container Runtime Interface for OCI (CRI-O)
-2025-10-10T09:01:40.3563184Z      Loaded: loaded (/etc/systemd/system/crio.service; enabled; preset: disabled)
-2025-10-10T09:01:40.3563643Z     Drop-In: /usr/lib/systemd/system/service.d
-2025-10-10T09:01:40.3564027Z              └─10-timeout-abort.conf
-2025-10-10T09:01:40.3564409Z      Active: active (running) since Fri 2025-10-10 08:59:40 UTC; 2min 0s ago
-2025-10-10T09:01:40.3564759Z  Invocation: f24c47095f514a3a9a0d0ebc83327bbf
-2025-10-10T09:01:40.3565091Z        Docs: https://cri-o.io
-2025-10-10T09:01:40.3565351Z    Main PID: 76 (crio)
-2025-10-10T09:01:40.3565553Z       Tasks: 37
-2025-10-10T09:01:40.3565770Z      Memory: 833.9M (peak: 896.4M)
-2025-10-10T09:01:40.3566006Z         CPU: 15.776s
-2025-10-10T09:01:40.3566248Z      CGroup: /system.slice/crio.service
-2025-10-10T09:01:40.3566589Z              ├─  76 /usr/bin/crio
-2025-10-10T09:01:40.3569990Z              ├─ 239 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/2d41f1e68f787045dd5acf96c61946fbdd5f2647ea0e4ca779b611ff99d42497/diff,workdir=/root/.local/share/containers/storage/overlay/2d41f1e68f787045dd5acf96c61946fbdd5f2647ea0e4ca779b611ff99d42497/work,volatile /root/.local/share/containers/storage/overlay/2d41f1e68f787045dd5acf96c61946fbdd5f2647ea0e4ca779b611ff99d42497/merged
-2025-10-10T09:01:40.3575257Z              ├─ 241 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/3b1576650bc885512c5113feb6bfbe623eaae4b72086d5f1c46eaa373d91d6db/diff,workdir=/root/.local/share/containers/storage/overlay/3b1576650bc885512c5113feb6bfbe623eaae4b72086d5f1c46eaa373d91d6db/work,volatile /root/.local/share/containers/storage/overlay/3b1576650bc885512c5113feb6bfbe623eaae4b72086d5f1c46eaa373d91d6db/merged
-2025-10-10T09:01:40.3581192Z              ├─ 244 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/08d764dcaa2afe1d4db0cf19cf9257ff667b1c2602790ca07cd1afbfe217aa1d/diff,workdir=/root/.local/share/containers/storage/overlay/08d764dcaa2afe1d4db0cf19cf9257ff667b1c2602790ca07cd1afbfe217aa1d/work,volatile /root/.local/share/containers/storage/overlay/08d764dcaa2afe1d4db0cf19cf9257ff667b1c2602790ca07cd1afbfe217aa1d/merged
-2025-10-10T09:01:40.3587878Z              ├─ 247 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/774acb94a95100ddf7f896a6dc6c25bd76bf66f481f66c33c8a99b4a03d95713/diff,workdir=/root/.local/share/containers/storage/overlay/774acb94a95100ddf7f896a6dc6c25bd76bf66f481f66c33c8a99b4a03d95713/work,volatile /root/.local/share/containers/storage/overlay/774acb94a95100ddf7f896a6dc6c25bd76bf66f481f66c33c8a99b4a03d95713/merged
-2025-10-10T09:01:40.3599786Z              ├─ 476 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/KKDFC6HLDMS2NAWLK735KJZKKN:/root/.local/share/containers/storage/overlay/l/ZT5WCAJXW7DCXKETS4MAK4T2T7:/root/.local/share/containers/storage/overlay/l/LZC3OHF6DJAVRANPHZPO63UL7M:/root/.local/share/containers/storage/overlay/l/UZLPA5JQENIFWGWKJPVODNPDEE:/root/.local/share/containers/storage/overlay/l/FTTQMXCXCLOM6UM4WOA7M4HYEB:/root/.local/share/containers/storage/overlay/l/BFLURJCFLANE5ZCSZRRVQT5EVI:/root/.local/share/containers/storage/overlay/l/2TQ4PFAVFRS6DMP4S4SEMMB73X:/root/.local/share/containers/storage/overlay/l/Z4TLYLZU2CFQCVCN3VUKSKRMB5:/root/.local/share/containers/storage/overlay/l/GVIC6EURLCXVSO4COCX6254FTZ:/root/.local/share/containers/storage/overlay/l/XE7IVIXYK2QKHGY5KGYF7Q7L33:/root/.local/share/containers/storage/overlay/l/6KHL73XS5SULMFTOP6HYPFX73A:/root/.local/share/containers/storage/overlay/l/7ZKEUZZKTRC5547FUCCJLP3F52:/root/.local/share/containers/storage/overlay/l/KADXMU5AUY2DN7ANOYRRDXVZG2:/root/.local/share/containers/storage/overlay/l/3V3KDD4Y36UUJFGDEV5TZWIC4F,upperdir=/root/.local/share/containers/storage/overlay/599d9cab35c41016609954328d23645519a9ca60f9d5fa5ca4ac92be2de7f1c2/diff,workdir=/root/.local/share/containers/storage/overlay/599d9cab35c41016609954328d23645519a9ca60f9d5fa5ca4ac92be2de7f1c2/work,volatile /root/.local/share/containers/storage/overlay/599d9cab35c41016609954328d23645519a9ca60f9d5fa5ca4ac92be2de7f1c2/merged
-2025-10-10T09:01:40.3612097Z              ├─ 478 /usr/bin/conmon -b /tmp/containers/overlay-containers/7515781ecda5498d32c30e53909abd6e210894aff2e68c58466aba7b95bb81d3/userdata -c 7515781ecda5498d32c30e53909abd6e210894aff2e68c58466aba7b95bb81d3 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_kube-scheduler-kinc-control-plane_3dcdb4e5997cfd64641b3bd29902e28d/kube-scheduler/0.log --log-level info -n k8s_kube-scheduler_kube-scheduler-kinc-control-plane_kube-system_3dcdb4e5997cfd64641b3bd29902e28d_0 -P /tmp/containers/overlay-containers/7515781ecda5498d32c30e53909abd6e210894aff2e68c58466aba7b95bb81d3/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/7515781ecda5498d32c30e53909abd6e210894aff2e68c58466aba7b95bb81d3/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/7515781ecda5498d32c30e53909abd6e210894aff2e68c58466aba7b95bb81d3/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 7515781ecda5498d32c30e53909abd6e210894aff2e68c58466aba7b95bb81d3
-2025-10-10T09:01:40.3625850Z              ├─ 528 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/ZLFJBKXFUGYUF7SHPSVIFFFTYN:/root/.local/share/containers/storage/overlay/l/ZT5WCAJXW7DCXKETS4MAK4T2T7:/root/.local/share/containers/storage/overlay/l/LZC3OHF6DJAVRANPHZPO63UL7M:/root/.local/share/containers/storage/overlay/l/UZLPA5JQENIFWGWKJPVODNPDEE:/root/.local/share/containers/storage/overlay/l/FTTQMXCXCLOM6UM4WOA7M4HYEB:/root/.local/share/containers/storage/overlay/l/BFLURJCFLANE5ZCSZRRVQT5EVI:/root/.local/share/containers/storage/overlay/l/2TQ4PFAVFRS6DMP4S4SEMMB73X:/root/.local/share/containers/storage/overlay/l/Z4TLYLZU2CFQCVCN3VUKSKRMB5:/root/.local/share/containers/storage/overlay/l/GVIC6EURLCXVSO4COCX6254FTZ:/root/.local/share/containers/storage/overlay/l/XE7IVIXYK2QKHGY5KGYF7Q7L33:/root/.local/share/containers/storage/overlay/l/6KHL73XS5SULMFTOP6HYPFX73A:/root/.local/share/containers/storage/overlay/l/7ZKEUZZKTRC5547FUCCJLP3F52:/root/.local/share/containers/storage/overlay/l/KADXMU5AUY2DN7ANOYRRDXVZG2:/root/.local/share/containers/storage/overlay/l/3V3KDD4Y36UUJFGDEV5TZWIC4F,upperdir=/root/.local/share/containers/storage/overlay/ccaef2660f45a27d08fa8e59333080dfc402e7de0cbd2cc13796e1d69d21b370/diff,workdir=/root/.local/share/containers/storage/overlay/ccaef2660f45a27d08fa8e59333080dfc402e7de0cbd2cc13796e1d69d21b370/work,volatile /root/.local/share/containers/storage/overlay/ccaef2660f45a27d08fa8e59333080dfc402e7de0cbd2cc13796e1d69d21b370/merged
-2025-10-10T09:01:40.3637873Z              ├─ 530 /usr/bin/conmon -b /tmp/containers/overlay-containers/d86b4c31c0c13f5f235f96c917c14ad0dc140ce186f1bd0b9b334bf88a935ab3/userdata -c d86b4c31c0c13f5f235f96c917c14ad0dc140ce186f1bd0b9b334bf88a935ab3 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_kube-controller-manager-kinc-control-plane_02ab0148790b09c2ce7263fc4575ffd2/kube-controller-manager/0.log --log-level info -n k8s_kube-controller-manager_kube-controller-manager-kinc-control-plane_kube-system_02ab0148790b09c2ce7263fc4575ffd2_0 -P /tmp/containers/overlay-containers/d86b4c31c0c13f5f235f96c917c14ad0dc140ce186f1bd0b9b334bf88a935ab3/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/d86b4c31c0c13f5f235f96c917c14ad0dc140ce186f1bd0b9b334bf88a935ab3/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/d86b4c31c0c13f5f235f96c917c14ad0dc140ce186f1bd0b9b334bf88a935ab3/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u d86b4c31c0c13f5f235f96c917c14ad0dc140ce186f1bd0b9b334bf88a935ab3
-2025-10-10T09:01:40.3651184Z              ├─ 733 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/CHPRMG3M24IKXMYT337FP2OH5I:/root/.local/share/containers/storage/overlay/l/P6SB5M4V2QIJ2N2RKP7EUR6U5W:/root/.local/share/containers/storage/overlay/l/WSLUHMLOEVY5J7FIU5AS2GVTFV:/root/.local/share/containers/storage/overlay/l/MQWCXVO2GXBCGBE2OBVUDNXNW7:/root/.local/share/containers/storage/overlay/l/6QBDOSDVAJG64VCVRP3GJPF7YR:/root/.local/share/containers/storage/overlay/l/PX6GU33BAO3RFWAOA6ADSHW5UM:/root/.local/share/containers/storage/overlay/l/CQF5FDE5KEK4DYBJOZB7J5NHUM:/root/.local/share/containers/storage/overlay/l/IKG3XRSTX37GZNBQM23BZSSHR4:/root/.local/share/containers/storage/overlay/l/CMW5YENVG3324R3HFH5LCXQA5B:/root/.local/share/containers/storage/overlay/l/UAXXJR2MCRABW663J43AIBGYNB:/root/.local/share/containers/storage/overlay/l/QIADO3FB6MSF6A2Z6DTXL2EPGS:/root/.local/share/containers/storage/overlay/l/GFWZ2F6XJM6CVCQ4O3JBS5V7BQ:/root/.local/share/containers/storage/overlay/l/D2NRINGYD6MX2NP4HYRPB3XM7D:/root/.local/share/containers/storage/overlay/l/XCM3UAUUWW5WSJ4OC2WVJA4O4O,upperdir=/root/.local/share/containers/storage/overlay/08b6535143571de8c3567c6b4e02dfa8a895ff017941e27493ed1907a1c52406/diff,workdir=/root/.local/share/containers/storage/overlay/08b6535143571de8c3567c6b4e02dfa8a895ff017941e27493ed1907a1c52406/work,volatile /root/.local/share/containers/storage/overlay/08b6535143571de8c3567c6b4e02dfa8a895ff017941e27493ed1907a1c52406/merged
-2025-10-10T09:01:40.3662800Z              ├─ 735 /usr/bin/conmon -b /tmp/containers/overlay-containers/5d29b075b4a2a67a4850aa1cc17310512f2e1aa0f9eb2026b1293540ceb30c23/userdata -c 5d29b075b4a2a67a4850aa1cc17310512f2e1aa0f9eb2026b1293540ceb30c23 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_etcd-kinc-control-plane_58a40aac12df8da14e38379dac984429/etcd/0.log --log-level info -n k8s_etcd_etcd-kinc-control-plane_kube-system_58a40aac12df8da14e38379dac984429_0 -P /tmp/containers/overlay-containers/5d29b075b4a2a67a4850aa1cc17310512f2e1aa0f9eb2026b1293540ceb30c23/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/5d29b075b4a2a67a4850aa1cc17310512f2e1aa0f9eb2026b1293540ceb30c23/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/5d29b075b4a2a67a4850aa1cc17310512f2e1aa0f9eb2026b1293540ceb30c23/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 5d29b075b4a2a67a4850aa1cc17310512f2e1aa0f9eb2026b1293540ceb30c23
-2025-10-10T09:01:40.3680913Z              ├─ 785 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/7XSA5LO2B3MM2SICJ76K3HD5KO:/root/.local/share/containers/storage/overlay/l/ZT5WCAJXW7DCXKETS4MAK4T2T7:/root/.local/share/containers/storage/overlay/l/LZC3OHF6DJAVRANPHZPO63UL7M:/root/.local/share/containers/storage/overlay/l/UZLPA5JQENIFWGWKJPVODNPDEE:/root/.local/share/containers/storage/overlay/l/FTTQMXCXCLOM6UM4WOA7M4HYEB:/root/.local/share/containers/storage/overlay/l/BFLURJCFLANE5ZCSZRRVQT5EVI:/root/.local/share/containers/storage/overlay/l/2TQ4PFAVFRS6DMP4S4SEMMB73X:/root/.local/share/containers/storage/overlay/l/Z4TLYLZU2CFQCVCN3VUKSKRMB5:/root/.local/share/containers/storage/overlay/l/GVIC6EURLCXVSO4COCX6254FTZ:/root/.local/share/containers/storage/overlay/l/XE7IVIXYK2QKHGY5KGYF7Q7L33:/root/.local/share/containers/storage/overlay/l/6KHL73XS5SULMFTOP6HYPFX73A:/root/.local/share/containers/storage/overlay/l/7ZKEUZZKTRC5547FUCCJLP3F52:/root/.local/share/containers/storage/overlay/l/KADXMU5AUY2DN7ANOYRRDXVZG2:/root/.local/share/containers/storage/overlay/l/3V3KDD4Y36UUJFGDEV5TZWIC4F,upperdir=/root/.local/share/containers/storage/overlay/426ba6122a65062cd3fef91b758def20e764a39affcabdd32aa2d8798cf1cfd4/diff,workdir=/root/.local/share/containers/storage/overlay/426ba6122a65062cd3fef91b758def20e764a39affcabdd32aa2d8798cf1cfd4/work,volatile /root/.local/share/containers/storage/overlay/426ba6122a65062cd3fef91b758def20e764a39affcabdd32aa2d8798cf1cfd4/merged
-2025-10-10T09:01:40.3696263Z              ├─ 787 /usr/bin/conmon -b /tmp/containers/overlay-containers/adfbf648e1d0f687b5e1776c9dcd04b11ebd9e68d670789b922c830ebe3a9305/userdata -c adfbf648e1d0f687b5e1776c9dcd04b11ebd9e68d670789b922c830ebe3a9305 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_kube-apiserver-kinc-control-plane_8b13cfa3d4fca03ad76b15222d6b184a/kube-apiserver/0.log --log-level info -n k8s_kube-apiserver_kube-apiserver-kinc-control-plane_kube-system_8b13cfa3d4fca03ad76b15222d6b184a_0 -P /tmp/containers/overlay-containers/adfbf648e1d0f687b5e1776c9dcd04b11ebd9e68d670789b922c830ebe3a9305/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/adfbf648e1d0f687b5e1776c9dcd04b11ebd9e68d670789b922c830ebe3a9305/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/adfbf648e1d0f687b5e1776c9dcd04b11ebd9e68d670789b922c830ebe3a9305/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u adfbf648e1d0f687b5e1776c9dcd04b11ebd9e68d670789b922c830ebe3a9305
-2025-10-10T09:01:40.3703002Z              ├─ 949 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/ecb37b9fa6af7b1351bb5b076aca42f3d6b32ebde6876f91c0beb3dae6aee390/diff,workdir=/root/.local/share/containers/storage/overlay/ecb37b9fa6af7b1351bb5b076aca42f3d6b32ebde6876f91c0beb3dae6aee390/work,volatile /root/.local/share/containers/storage/overlay/ecb37b9fa6af7b1351bb5b076aca42f3d6b32ebde6876f91c0beb3dae6aee390/merged
-2025-10-10T09:01:40.3708239Z              ├─ 951 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/5f45ac776273c8277295f9ede01b281a5d7e0080acfe3724358f6c217b2af7b7/diff,workdir=/root/.local/share/containers/storage/overlay/5f45ac776273c8277295f9ede01b281a5d7e0080acfe3724358f6c217b2af7b7/work,volatile /root/.local/share/containers/storage/overlay/5f45ac776273c8277295f9ede01b281a5d7e0080acfe3724358f6c217b2af7b7/merged
-2025-10-10T09:01:40.3717816Z              ├─1063 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/58cff1deefef52fe2846bbb502409289ce14ca3015706da5e3d7c4f9d65ebcd9/diff,workdir=/root/.local/share/containers/storage/overlay/58cff1deefef52fe2846bbb502409289ce14ca3015706da5e3d7c4f9d65ebcd9/work,volatile /root/.local/share/containers/storage/overlay/58cff1deefef52fe2846bbb502409289ce14ca3015706da5e3d7c4f9d65ebcd9/merged
-2025-10-10T09:01:40.3725810Z              ├─1065 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/defa0ef46645e5afe7cae097488ba49c55544872150db4b28cc151d1f33c67b1/diff,workdir=/root/.local/share/containers/storage/overlay/defa0ef46645e5afe7cae097488ba49c55544872150db4b28cc151d1f33c67b1/work,volatile /root/.local/share/containers/storage/overlay/defa0ef46645e5afe7cae097488ba49c55544872150db4b28cc151d1f33c67b1/merged
-2025-10-10T09:01:40.3736544Z              ├─1135 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/WBIYQW7X7Z3GV6WYNQTPF2LBDB:/root/.local/share/containers/storage/overlay/l/UE35LURZEEPTJWVZZZWAWQ45OG:/root/.local/share/containers/storage/overlay/l/36PVUGYSBIJUAVS5JWAZQXIE77:/root/.local/share/containers/storage/overlay/l/GY3UVTNABKPC2CDROBKREAGWX7,upperdir=/root/.local/share/containers/storage/overlay/2657fa592524e0891ab0174b757bd47c4f23e5daad9cf3b26a2bc63048cb1620/diff,workdir=/root/.local/share/containers/storage/overlay/2657fa592524e0891ab0174b757bd47c4f23e5daad9cf3b26a2bc63048cb1620/work,volatile /root/.local/share/containers/storage/overlay/2657fa592524e0891ab0174b757bd47c4f23e5daad9cf3b26a2bc63048cb1620/merged
-2025-10-10T09:01:40.3748816Z              ├─1137 /usr/bin/conmon -b /tmp/containers/overlay-containers/1cf1c83eaa61415f6b10e4ef473fecff9fc849d8d5eb1efc505a8339b15dbb45/userdata -c 1cf1c83eaa61415f6b10e4ef473fecff9fc849d8d5eb1efc505a8339b15dbb45 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_kincnet-l69hl_945d2e6f-1abc-444b-84c7-8d7edf059347/kincnet-cni/0.log --log-level info -n k8s_kincnet-cni_kincnet-l69hl_kube-system_945d2e6f-1abc-444b-84c7-8d7edf059347_0 -P /tmp/containers/overlay-containers/1cf1c83eaa61415f6b10e4ef473fecff9fc849d8d5eb1efc505a8339b15dbb45/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/1cf1c83eaa61415f6b10e4ef473fecff9fc849d8d5eb1efc505a8339b15dbb45/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/1cf1c83eaa61415f6b10e4ef473fecff9fc849d8d5eb1efc505a8339b15dbb45/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 1cf1c83eaa61415f6b10e4ef473fecff9fc849d8d5eb1efc505a8339b15dbb45
-2025-10-10T09:01:40.3767281Z              ├─1809 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/63GKGM7BOEDGQILKM66POQBC2Q:/root/.local/share/containers/storage/overlay/l/NB2CBQCKWRDVFPPP6SBP4P5Q5T:/root/.local/share/containers/storage/overlay/l/CVPNNO6CAOUP27TJGAYQVNHQEM:/root/.local/share/containers/storage/overlay/l/HSDMRKDJPH7NAQD473CIIHAXBL:/root/.local/share/containers/storage/overlay/l/MXJAJA2FAFF6WLAFPOJ5PSPZGW:/root/.local/share/containers/storage/overlay/l/ZRMHGJEEID35UYDKITS3RZ2UQP:/root/.local/share/containers/storage/overlay/l/L5NERVQRM4MCM2RPICZ6UC7RYR:/root/.local/share/containers/storage/overlay/l/ZMSGHRFJIVXX2NHYN4EOOIJE5I:/root/.local/share/containers/storage/overlay/l/23W3CYYKGWVDS4OGUIDTHX52OU:/root/.local/share/containers/storage/overlay/l/45UO2IVTD75ZZXAG4YFJLDF235:/root/.local/share/containers/storage/overlay/l/K5J655S7EWNKYRMQ3KYVXOSGLY:/root/.local/share/containers/storage/overlay/l/OGIDBP2UYKXL62N4WZELWAP2CN:/root/.local/share/containers/storage/overlay/l/HOZWRYN2MPDI23LP2RZOIV6KXT,upperdir=/root/.local/share/containers/storage/overlay/620d911ea5f5dc16f4d8e0e9d2c76501f518f55ba904855d2b5f9af13eb0fcdb/diff,workdir=/root/.local/share/containers/storage/overlay/620d911ea5f5dc16f4d8e0e9d2c76501f518f55ba904855d2b5f9af13eb0fcdb/work,volatile /root/.local/share/containers/storage/overlay/620d911ea5f5dc16f4d8e0e9d2c76501f518f55ba904855d2b5f9af13eb0fcdb/merged
-2025-10-10T09:01:40.3782627Z              ├─1811 /usr/bin/conmon -b /tmp/containers/overlay-containers/1cba832fe9aa4bfab7d22eff5d584e6079e41e7adf3f382a8b0e2fe2bf2a1382/userdata -c 1cba832fe9aa4bfab7d22eff5d584e6079e41e7adf3f382a8b0e2fe2bf2a1382 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_coredns-674b8bbfcf-gqz9w_5bb7bd23-287e-4586-8000-70d79af97127/coredns/0.log --log-level info -n k8s_coredns_coredns-674b8bbfcf-gqz9w_kube-system_5bb7bd23-287e-4586-8000-70d79af97127_0 -P /tmp/containers/overlay-containers/1cba832fe9aa4bfab7d22eff5d584e6079e41e7adf3f382a8b0e2fe2bf2a1382/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/1cba832fe9aa4bfab7d22eff5d584e6079e41e7adf3f382a8b0e2fe2bf2a1382/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/1cba832fe9aa4bfab7d22eff5d584e6079e41e7adf3f382a8b0e2fe2bf2a1382/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 1cba832fe9aa4bfab7d22eff5d584e6079e41e7adf3f382a8b0e2fe2bf2a1382
-2025-10-10T09:01:40.3795863Z              ├─1849 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/63GKGM7BOEDGQILKM66POQBC2Q:/root/.local/share/containers/storage/overlay/l/NB2CBQCKWRDVFPPP6SBP4P5Q5T:/root/.local/share/containers/storage/overlay/l/CVPNNO6CAOUP27TJGAYQVNHQEM:/root/.local/share/containers/storage/overlay/l/HSDMRKDJPH7NAQD473CIIHAXBL:/root/.local/share/containers/storage/overlay/l/MXJAJA2FAFF6WLAFPOJ5PSPZGW:/root/.local/share/containers/storage/overlay/l/ZRMHGJEEID35UYDKITS3RZ2UQP:/root/.local/share/containers/storage/overlay/l/L5NERVQRM4MCM2RPICZ6UC7RYR:/root/.local/share/containers/storage/overlay/l/ZMSGHRFJIVXX2NHYN4EOOIJE5I:/root/.local/share/containers/storage/overlay/l/23W3CYYKGWVDS4OGUIDTHX52OU:/root/.local/share/containers/storage/overlay/l/45UO2IVTD75ZZXAG4YFJLDF235:/root/.local/share/containers/storage/overlay/l/K5J655S7EWNKYRMQ3KYVXOSGLY:/root/.local/share/containers/storage/overlay/l/OGIDBP2UYKXL62N4WZELWAP2CN:/root/.local/share/containers/storage/overlay/l/HOZWRYN2MPDI23LP2RZOIV6KXT,upperdir=/root/.local/share/containers/storage/overlay/e572d57151ad752de69af6c3bb0e2188f24034f4af318c545ab140c3094c9f35/diff,workdir=/root/.local/share/containers/storage/overlay/e572d57151ad752de69af6c3bb0e2188f24034f4af318c545ab140c3094c9f35/work,volatile /root/.local/share/containers/storage/overlay/e572d57151ad752de69af6c3bb0e2188f24034f4af318c545ab140c3094c9f35/merged
-2025-10-10T09:01:40.3807621Z              ├─1851 /usr/bin/conmon -b /tmp/containers/overlay-containers/e7fda08f4d08322a3f377dba0b5ed314ea63a8b5722c12d0816bae41a4ea9e4c/userdata -c e7fda08f4d08322a3f377dba0b5ed314ea63a8b5722c12d0816bae41a4ea9e4c --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_coredns-674b8bbfcf-lkhvc_2501b70e-6baa-4549-a503-e9d6e82a987d/coredns/0.log --log-level info -n k8s_coredns_coredns-674b8bbfcf-lkhvc_kube-system_2501b70e-6baa-4549-a503-e9d6e82a987d_0 -P /tmp/containers/overlay-containers/e7fda08f4d08322a3f377dba0b5ed314ea63a8b5722c12d0816bae41a4ea9e4c/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/e7fda08f4d08322a3f377dba0b5ed314ea63a8b5722c12d0816bae41a4ea9e4c/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/e7fda08f4d08322a3f377dba0b5ed314ea63a8b5722c12d0816bae41a4ea9e4c/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u e7fda08f4d08322a3f377dba0b5ed314ea63a8b5722c12d0816bae41a4ea9e4c
-2025-10-10T09:01:40.3814296Z              ├─1998 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/IIJQDVDEVLPSCDFOXAWTU5VEC3,upperdir=/root/.local/share/containers/storage/overlay/2eaa6806731dfab873917bfd4b881b1d696fc25a2eb231500da0d9cd65371c2e/diff,workdir=/root/.local/share/containers/storage/overlay/2eaa6806731dfab873917bfd4b881b1d696fc25a2eb231500da0d9cd65371c2e/work,volatile /root/.local/share/containers/storage/overlay/2eaa6806731dfab873917bfd4b881b1d696fc25a2eb231500da0d9cd65371c2e/merged
-2025-10-10T09:01:40.3819820Z              ├─2489 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/KSMZTRQ4MQEYCVH2GTROUA73QH:/root/.local/share/containers/storage/overlay/l/MZKYEFIO7OI42B5IB73VDJ7GLY,upperdir=/root/.local/share/containers/storage/overlay/34798febaab5f0c5e22668eaeca768797e3d962134eeab0b1b1cbf84095042f7/diff,workdir=/root/.local/share/containers/storage/overlay/34798febaab5f0c5e22668eaeca768797e3d962134eeab0b1b1cbf84095042f7/work,volatile /root/.local/share/containers/storage/overlay/34798febaab5f0c5e22668eaeca768797e3d962134eeab0b1b1cbf84095042f7/merged
-2025-10-10T09:01:40.3832154Z              ├─2527 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/FNYN7YSVX2PFPEUI2FEA4YOSFF:/root/.local/share/containers/storage/overlay/l/AZ6DOBDODF2AF2RVZEGKWFLARG:/root/.local/share/containers/storage/overlay/l/FZY4FSZJVSL5YY3FYFS6BQGMUJ:/root/.local/share/containers/storage/overlay/l/OXMHTNDRROXQLMBG7SNBPZYLPG:/root/.local/share/containers/storage/overlay/l/46JVXPSYDTEOJ3FUXIOAZIQ7HJ:/root/.local/share/containers/storage/overlay/l/Z5YLNJ7KF4CKEE3TEYN44XQHFE:/root/.local/share/containers/storage/overlay/l/ACDEDLP3QEJXXQAGSYZS2HNHUT:/root/.local/share/containers/storage/overlay/l/IAIH2MNF22MQCIQCU3QYP2XOOQ:/root/.local/share/containers/storage/overlay/l/GJB3NEITACNGNQSHHVO2WBGKDY:/root/.local/share/containers/storage/overlay/l/37VIOSO7M45D24OE4FWDWNBNLB:/root/.local/share/containers/storage/overlay/l/3MUPMV6KFVLI7SIXIGEBLE4WIG:/root/.local/share/containers/storage/overlay/l/ZRTI4Q4ADZN2RSQ44VHQMZODMT:/root/.local/share/containers/storage/overlay/l/A3AXW24227YE6FF6CQ3YAUVO6X:/root/.local/share/containers/storage/overlay/l/CY3UTGRSXK3GWUAJWOPY6UZO5E:/root/.local/share/containers/storage/overlay/l/RJLQGF4CQU5V7MYJYU5QYNULTZ,upperdir=/root/.local/share/containers/storage/overlay/ffae6928a622556d804fee15c1883a54121e0e3067794cd878917320cfe9de82/diff,workdir=/root/.local/share/containers/storage/overlay/ffae6928a622556d804fee15c1883a54121e0e3067794cd878917320cfe9de82/work,volatile /root/.local/share/containers/storage/overlay/ffae6928a622556d804fee15c1883a54121e0e3067794cd878917320cfe9de82/merged
-2025-10-10T09:01:40.3849171Z              ├─2759 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/FNYN7YSVX2PFPEUI2FEA4YOSFF:/root/.local/share/containers/storage/overlay/l/AZ6DOBDODF2AF2RVZEGKWFLARG:/root/.local/share/containers/storage/overlay/l/FZY4FSZJVSL5YY3FYFS6BQGMUJ:/root/.local/share/containers/storage/overlay/l/OXMHTNDRROXQLMBG7SNBPZYLPG:/root/.local/share/containers/storage/overlay/l/46JVXPSYDTEOJ3FUXIOAZIQ7HJ:/root/.local/share/containers/storage/overlay/l/Z5YLNJ7KF4CKEE3TEYN44XQHFE:/root/.local/share/containers/storage/overlay/l/ACDEDLP3QEJXXQAGSYZS2HNHUT:/root/.local/share/containers/storage/overlay/l/IAIH2MNF22MQCIQCU3QYP2XOOQ:/root/.local/share/containers/storage/overlay/l/GJB3NEITACNGNQSHHVO2WBGKDY:/root/.local/share/containers/storage/overlay/l/37VIOSO7M45D24OE4FWDWNBNLB:/root/.local/share/containers/storage/overlay/l/3MUPMV6KFVLI7SIXIGEBLE4WIG:/root/.local/share/containers/storage/overlay/l/ZRTI4Q4ADZN2RSQ44VHQMZODMT:/root/.local/share/containers/storage/overlay/l/A3AXW24227YE6FF6CQ3YAUVO6X:/root/.local/share/containers/storage/overlay/l/CY3UTGRSXK3GWUAJWOPY6UZO5E:/root/.local/share/containers/storage/overlay/l/RJLQGF4CQU5V7MYJYU5QYNULTZ,upperdir=/root/.local/share/containers/storage/overlay/90a7384db2df787891cdee1d00bc31fcdc60eba6442c2873149dcbed80d4322c/diff,workdir=/root/.local/share/containers/storage/overlay/90a7384db2df787891cdee1d00bc31fcdc60eba6442c2873149dcbed80d4322c/work,volatile /root/.local/share/containers/storage/overlay/90a7384db2df787891cdee1d00bc31fcdc60eba6442c2873149dcbed80d4322c/merged
-2025-10-10T09:01:40.3869140Z              └─2761 /usr/bin/conmon -b /tmp/containers/overlay-containers/44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860/userdata -c 44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860 --exit-dir /var/run/crio/exits -l /var/log/pods/local-path-storage_local-path-provisioner-59f7658548-bkn74_536c779d-a8c3-4496-8dff-240da2eb5dc9/local-path-provisioner/2.log --log-level info -n k8s_local-path-provisioner_local-path-provisioner-59f7658548-bkn74_local-path-storage_536c779d-a8c3-4496-8dff-240da2eb5dc9_2 -P /tmp/containers/overlay-containers/44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860
-2025-10-10T09:01:40.3873474Z 
-2025-10-10T09:01:40.3875006Z Oct 10 09:01:22 kinc-control-plane crio[76]: time="2025-10-10T09:01:22.940140174Z" level=info msg="Removed container 2c0502f67fff7fe1a0a58f84ade8a3a4d82672220b53a1dcc9241cdd4d70738a: local-path-storage/local-path-provisioner-59f7658548-bkn74/local-path-provisioner" id=f4188944-052f-4d4d-9e81-f18297dd212d name=/runtime.v1.RuntimeService/RemoveContainer
-2025-10-10T09:01:40.3877652Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.76647443Z" level=info msg="Checking image status: docker.io/kindest/local-path-provisioner:v20240202-8f1494ea" id=1ca3fd45-008f-4acc-95e3-a7546338539d name=/runtime.v1.ImageService/ImageStatus
-2025-10-10T09:01:40.3880007Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.767404739Z" level=info msg="Checking image status: docker.io/kindest/local-path-provisioner:v20240202-8f1494ea" id=e4882526-8fc3-48bd-92a3-8b0fc3646337 name=/runtime.v1.ImageService/ImageStatus
-2025-10-10T09:01:40.3882562Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.768156968Z" level=info msg="Creating container: local-path-storage/local-path-provisioner-59f7658548-bkn74/local-path-provisioner" id=f297e027-8993-4ef5-911f-da5e06be8997 name=/runtime.v1.RuntimeService/CreateContainer
-2025-10-10T09:01:40.3884727Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.768358038Z" level=info msg="Allowed annotations are specified for workload []"
-2025-10-10T09:01:40.3885466Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.77561702Z" level=info msg="Allowed annotations are specified for workload []"
-2025-10-10T09:01:40.3886205Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.777731077Z" level=info msg="Allowed annotations are specified for workload []"
-2025-10-10T09:01:40.3887634Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.814902027Z" level=info msg="Created container 44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860: local-path-storage/local-path-provisioner-59f7658548-bkn74/local-path-provisioner" id=f297e027-8993-4ef5-911f-da5e06be8997 name=/runtime.v1.RuntimeService/CreateContainer
-2025-10-10T09:01:40.3889625Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.815276471Z" level=info msg="Starting container: 44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860" id=cfb37234-df79-44a9-af3f-5970182f04b5 name=/runtime.v1.RuntimeService/StartContainer
-2025-10-10T09:01:40.3891811Z Oct 10 09:01:33 kinc-control-plane crio[76]: time="2025-10-10T09:01:33.819741133Z" level=info msg="Started container" PID=2783 containerID=44df8e68eaa1bf57fb2ac2355098286085169e8fb32e0acd8805438fcb2af860 description=local-path-storage/local-path-provisioner-59f7658548-bkn74/local-path-provisioner id=cfb37234-df79-44a9-af3f-5970182f04b5 name=/runtime.v1.RuntimeService/StartContainer sandboxID=ae7117087906a15df1f03b0a68bc7b0420135b5e715573d38b70dd633412cccb
-2025-10-10T09:01:40.3893412Z 
-2025-10-10T09:01:40.3893689Z ● kubelet.service - kubelet: The Kubernetes Node Agent
-2025-10-10T09:01:40.3894168Z      Loaded: loaded (/etc/systemd/system/kubelet.service; enabled; preset: disabled)
-2025-10-10T09:01:40.3894609Z     Drop-In: /etc/systemd/system/kubelet.service.d
-2025-10-10T09:01:40.3894982Z              └─10-kubeadm.conf
-2025-10-10T09:01:40.3895302Z              /usr/lib/systemd/system/service.d
-2025-10-10T09:01:40.3895656Z              └─10-timeout-abort.conf
-2025-10-10T09:01:40.3896096Z              /etc/systemd/system/kubelet.service.d
-2025-10-10T09:01:40.3896434Z              └─11-cgroups.conf
-2025-10-10T09:01:40.3896790Z      Active: active (running) since Fri 2025-10-10 09:00:02 UTC; 1min 37s ago
-2025-10-10T09:01:40.3897138Z  Invocation: dca4606235474b34b4d3fed378bea2ce
-2025-10-10T09:01:40.3897473Z        Docs: http://kubernetes.io/docs/
-2025-10-10T09:01:40.3897735Z    Main PID: 853 (kubelet)
-2025-10-10T09:01:40.3897970Z       Tasks: 12 (limit: 307)
-2025-10-10T09:01:40.3898216Z      Memory: 44.3M (peak: 45.3M)
-2025-10-10T09:01:40.3898449Z         CPU: 1.627s
-2025-10-10T09:01:40.3898683Z      CGroup: /kubelet.slice/kubelet.service
-2025-10-10T09:01:40.3901301Z              └─853 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --config=/var/lib/kubelet/config.yaml --container-runtime-endpoint=unix:///var/run/crio/crio.sock --node-ip=10.0.2.100 --node-labels= --pod-infra-container-image=registry.k8s.io/pause:3.10 --provider-id=kind://podman/kinc/kinc-control-plane --feature-gates=KubeletInUserNamespace=true
-2025-10-10T09:01:40.3902581Z 
-2025-10-10T09:01:40.3903397Z Oct 10 09:01:06 kinc-control-plane kubelet[853]: I1010 09:01:06.766170     853 scope.go:117] "RemoveContainer" containerID="7fc30d9e028c6c105894afed297ff3fee46b9aa9adebb9fb3fd56d72b97c60e3"
-2025-10-10T09:01:40.3905063Z Oct 10 09:01:06 kinc-control-plane kubelet[853]: E1010 09:01:06.766342     853 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"StartContainer\" for \"kube-proxy\" with CrashLoopBackOff: \"back-off 40s restarting failed container=kube-proxy pod=kube-proxy-mjhkd_kube-system(08b1c1a4-672e-4ff9-81e1-5ca6aac3f223)\"" pod="kube-system/kube-proxy-mjhkd" podUID="08b1c1a4-672e-4ff9-81e1-5ca6aac3f223"
-2025-10-10T09:01:40.3906662Z Oct 10 09:01:17 kinc-control-plane kubelet[853]: I1010 09:01:17.765959     853 scope.go:117] "RemoveContainer" containerID="7fc30d9e028c6c105894afed297ff3fee46b9aa9adebb9fb3fd56d72b97c60e3"
-2025-10-10T09:01:40.3908312Z Oct 10 09:01:17 kinc-control-plane kubelet[853]: E1010 09:01:17.766068     853 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"StartContainer\" for \"kube-proxy\" with CrashLoopBackOff: \"back-off 40s restarting failed container=kube-proxy pod=kube-proxy-mjhkd_kube-system(08b1c1a4-672e-4ff9-81e1-5ca6aac3f223)\"" pod="kube-system/kube-proxy-mjhkd" podUID="08b1c1a4-672e-4ff9-81e1-5ca6aac3f223"
-2025-10-10T09:01:40.3909900Z Oct 10 09:01:22 kinc-control-plane kubelet[853]: I1010 09:01:22.923671     853 scope.go:117] "RemoveContainer" containerID="2c0502f67fff7fe1a0a58f84ade8a3a4d82672220b53a1dcc9241cdd4d70738a"
-2025-10-10T09:01:40.3910875Z Oct 10 09:01:22 kinc-control-plane kubelet[853]: I1010 09:01:22.923939     853 scope.go:117] "RemoveContainer" containerID="177c98e0441fe0ea6cf40c281409e57741148577388c0fe6110d5b3b962cbbc7"
-2025-10-10T09:01:40.3912888Z Oct 10 09:01:22 kinc-control-plane kubelet[853]: E1010 09:01:22.924596     853 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"StartContainer\" for \"local-path-provisioner\" with CrashLoopBackOff: \"back-off 10s restarting failed container=local-path-provisioner pod=local-path-provisioner-59f7658548-bkn74_local-path-storage(536c779d-a8c3-4496-8dff-240da2eb5dc9)\"" pod="local-path-storage/local-path-provisioner-59f7658548-bkn74" podUID="536c779d-a8c3-4496-8dff-240da2eb5dc9"
-2025-10-10T09:01:40.3914914Z Oct 10 09:01:28 kinc-control-plane kubelet[853]: I1010 09:01:28.767050     853 scope.go:117] "RemoveContainer" containerID="7fc30d9e028c6c105894afed297ff3fee46b9aa9adebb9fb3fd56d72b97c60e3"
-2025-10-10T09:01:40.3916526Z Oct 10 09:01:28 kinc-control-plane kubelet[853]: E1010 09:01:28.767180     853 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"StartContainer\" for \"kube-proxy\" with CrashLoopBackOff: \"back-off 40s restarting failed container=kube-proxy pod=kube-proxy-mjhkd_kube-system(08b1c1a4-672e-4ff9-81e1-5ca6aac3f223)\"" pod="kube-system/kube-proxy-mjhkd" podUID="08b1c1a4-672e-4ff9-81e1-5ca6aac3f223"
-2025-10-10T09:01:40.3918167Z Oct 10 09:01:33 kinc-control-plane kubelet[853]: I1010 09:01:33.766051     853 scope.go:117] "RemoveContainer" containerID="177c98e0441fe0ea6cf40c281409e57741148577388c0fe6110d5b3b962cbbc7"
-2025-10-10T09:01:40.4138504Z 
-2025-10-10T09:01:40.4139229Z === Checking Pod Status ===
-2025-10-10T09:01:40.5080413Z NAMESPACE            NAME                                         READY   STATUS             RESTARTS      AGE   IP           NODE                 NOMINATED NODE   READINESS GATES
-2025-10-10T09:01:40.5081748Z kube-system          coredns-674b8bbfcf-gqz9w                     0/1     Running            0             93s   10.85.0.2    kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5083495Z kube-system          coredns-674b8bbfcf-lkhvc                     0/1     Running            0             93s   10.85.0.3    kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5084856Z kube-system          etcd-kinc-control-plane                      1/1     Running            0             99s   10.0.2.100   kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5086134Z kube-system          kincnet-l69hl                                1/1     Running            0             93s   10.0.2.100   kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5087468Z kube-system          kube-apiserver-kinc-control-plane            1/1     Running            0             99s   10.0.2.100   kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5088742Z kube-system          kube-controller-manager-kinc-control-plane   1/1     Running            0             99s   10.0.2.100   kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5090149Z kube-system          kube-proxy-mjhkd                             0/1     CrashLoopBackOff   3 (48s ago)   93s   10.0.2.100   kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5091583Z kube-system          kube-scheduler-kinc-control-plane            1/1     Running            0             99s   10.0.2.100   kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5093024Z local-path-storage   local-path-provisioner-59f7658548-bkn74      1/1     Running            2 (19s ago)   81s   10.85.0.4    kinc-control-plane   <none>           <none>
-2025-10-10T09:01:40.5654555Z 
-2025-10-10T09:01:40.5655131Z === Pod Logs (kube-proxy) ===
-2025-10-10T09:01:40.6875136Z time="2025-10-10T09:00:51Z" level=warning msg="Running modprobe ip_vs failed with message: `modprobe: WARNING: Module ip_vs not found in directory /lib/modules/6.11.0-1018-azure`, error: exit status 1"
-2025-10-10T09:01:40.6876081Z E1010 09:00:51.951131       1 proxier.go:703] "Error flushing ipvs rules" err="operation not permitted"
-2025-10-10T09:01:40.6877054Z E1010 09:00:52.033379       1 proxier.go:703] "Error flushing ipvs rules" err="operation not permitted"
-2025-10-10T09:01:40.6877543Z I1010 09:00:52.100654       1 server.go:715] "Successfully retrieved node IP(s)" IPs=["10.0.2.100"]
-2025-10-10T09:01:40.6878141Z I1010 09:00:52.100751       1 conntrack.go:121] "Set sysctl" entry="net/netfilter/nf_conntrack_tcp_timeout_established" value=86400
-2025-10-10T09:01:40.6878963Z E1010 09:00:52.100772       1 server.go:136] "Error running ProxyServer" err="open /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established: read-only file system"
-2025-10-10T09:01:40.6879767Z E1010 09:00:52.100843       1 run.go:72] "command failed" err="open /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_established: read-only file system"
-2025-10-10T09:01:40.7461846Z 
-2025-10-10T09:01:40.7463035Z === Pod Logs (local-path-provisioner) ===
-2025-10-10T09:01:40.8946603Z ##[error]Process completed with exit code 1.
-2025-10-10T09:01:40.9038103Z ##[group]Run actions/upload-artifact@v4
-2025-10-10T09:01:40.9038366Z with:
-2025-10-10T09:01:40.9038540Z   name: test-logs-21
-2025-10-10T09:01:40.9038781Z   path: work/
+﻿2025-10-10T09:05:52.9048546Z Current runner version: '2.328.0'
+2025-10-10T09:05:52.9072219Z ##[group]Runner Image Provisioner
+2025-10-10T09:05:52.9073094Z Hosted Compute Agent
+2025-10-10T09:05:52.9073685Z Version: 20250912.392
+2025-10-10T09:05:52.9074255Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
+2025-10-10T09:05:52.9075045Z Build Date: 2025-09-12T15:23:14Z
+2025-10-10T09:05:52.9075627Z ##[endgroup]
+2025-10-10T09:05:52.9076165Z ##[group]Operating System
+2025-10-10T09:05:52.9076678Z Ubuntu
+2025-10-10T09:05:52.9077632Z 24.04.3
+2025-10-10T09:05:52.9078111Z LTS
+2025-10-10T09:05:52.9078559Z ##[endgroup]
+2025-10-10T09:05:52.9079162Z ##[group]Runner Image
+2025-10-10T09:05:52.9079696Z Image: ubuntu-24.04
+2025-10-10T09:05:52.9080198Z Version: 20250929.60.1
+2025-10-10T09:05:52.9081271Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20250929.60/images/ubuntu/Ubuntu2404-Readme.md
+2025-10-10T09:05:52.9082895Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20250929.60
+2025-10-10T09:05:52.9083947Z ##[endgroup]
+2025-10-10T09:05:52.9084916Z ##[group]GITHUB_TOKEN Permissions
+2025-10-10T09:05:52.9087163Z Contents: read
+2025-10-10T09:05:52.9087690Z Metadata: read
+2025-10-10T09:05:52.9088207Z ##[endgroup]
+2025-10-10T09:05:52.9090357Z Secret source: Actions
+2025-10-10T09:05:52.9091123Z Prepare workflow directory
+2025-10-10T09:05:52.9409858Z Prepare all required actions
+2025-10-10T09:05:52.9448241Z Getting action download info
+2025-10-10T09:05:53.3268201Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-10-10T09:05:53.5082768Z Download action repository 'actions/setup-go@v5' (SHA:d35c59abb061a4a6fb18e82ac0862c26744d6ab5)
+2025-10-10T09:05:53.8513004Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-10-10T09:05:54.0488151Z Complete job name: test
+2025-10-10T09:05:54.1203874Z ##[group]Run actions/checkout@v4
+2025-10-10T09:05:54.1204751Z with:
+2025-10-10T09:05:54.1205123Z   fetch-depth: 0
+2025-10-10T09:05:54.1205555Z   repository: T0MASD/faro
+2025-10-10T09:05:54.1206220Z   token: ***
+2025-10-10T09:05:54.1206599Z   ssh-strict: true
+2025-10-10T09:05:54.1207359Z   ssh-user: git
+2025-10-10T09:05:54.1207763Z   persist-credentials: true
+2025-10-10T09:05:54.1208208Z   clean: true
+2025-10-10T09:05:54.1208598Z   sparse-checkout-cone-mode: true
+2025-10-10T09:05:54.1209091Z   fetch-tags: false
+2025-10-10T09:05:54.1209507Z   show-progress: true
+2025-10-10T09:05:54.1209910Z   lfs: false
+2025-10-10T09:05:54.1210263Z   submodules: false
+2025-10-10T09:05:54.1210685Z   set-safe-directory: true
+2025-10-10T09:05:54.1211438Z ##[endgroup]
+2025-10-10T09:05:54.2321949Z Syncing repository: T0MASD/faro
+2025-10-10T09:05:54.2323774Z ##[group]Getting Git version info
+2025-10-10T09:05:54.2324436Z Working directory is '/home/runner/work/faro/faro'
+2025-10-10T09:05:54.2325506Z [command]/usr/bin/git version
+2025-10-10T09:05:54.2414064Z git version 2.51.0
+2025-10-10T09:05:54.2439794Z ##[endgroup]
+2025-10-10T09:05:54.2453223Z Temporarily overriding HOME='/home/runner/work/_temp/5f131816-58eb-4703-8f24-513f3644887f' before making global git config changes
+2025-10-10T09:05:54.2454625Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-10T09:05:54.2458518Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
+2025-10-10T09:05:54.2495424Z Deleting the contents of '/home/runner/work/faro/faro'
+2025-10-10T09:05:54.2499454Z ##[group]Initializing the repository
+2025-10-10T09:05:54.2503978Z [command]/usr/bin/git init /home/runner/work/faro/faro
+2025-10-10T09:05:54.2629478Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-10-10T09:05:54.2631220Z hint: is subject to change. To configure the initial branch name to use in all
+2025-10-10T09:05:54.2632790Z hint: of your new repositories, which will suppress this warning, call:
+2025-10-10T09:05:54.2633888Z hint:
+2025-10-10T09:05:54.2634652Z hint: 	git config --global init.defaultBranch <name>
+2025-10-10T09:05:54.2635719Z hint:
+2025-10-10T09:05:54.2636258Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-10-10T09:05:54.2637369Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-10-10T09:05:54.2638059Z hint:
+2025-10-10T09:05:54.2638438Z hint: 	git branch -m <name>
+2025-10-10T09:05:54.2638881Z hint:
+2025-10-10T09:05:54.2639459Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-10-10T09:05:54.2640906Z Initialized empty Git repository in /home/runner/work/faro/faro/.git/
+2025-10-10T09:05:54.2645773Z [command]/usr/bin/git remote add origin https://github.com/T0MASD/faro
+2025-10-10T09:05:54.2682282Z ##[endgroup]
+2025-10-10T09:05:54.2682995Z ##[group]Disabling automatic garbage collection
+2025-10-10T09:05:54.2685972Z [command]/usr/bin/git config --local gc.auto 0
+2025-10-10T09:05:54.2714307Z ##[endgroup]
+2025-10-10T09:05:54.2714967Z ##[group]Setting up auth
+2025-10-10T09:05:54.2721262Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-10T09:05:54.2750120Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-10T09:05:54.3074789Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-10T09:05:54.3104122Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-10T09:05:54.3320363Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-10-10T09:05:54.3354275Z ##[endgroup]
+2025-10-10T09:05:54.3355288Z ##[group]Fetching the repository
+2025-10-10T09:05:54.3364281Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +7929075fc1ee8cc9995bde28102a1bbd55ce866d:refs/remotes/pull/6/merge
+2025-10-10T09:05:54.6184724Z From https://github.com/T0MASD/faro
+2025-10-10T09:05:54.6185960Z  * [new branch]      ci                                       -> origin/ci
+2025-10-10T09:05:54.6187169Z  * [new branch]      main                                     -> origin/main
+2025-10-10T09:05:54.6187956Z  * [new branch]      middleware                               -> origin/middleware
+2025-10-10T09:05:54.6188685Z  * [new tag]         v1.0.0                                   -> v1.0.0
+2025-10-10T09:05:54.6189355Z  * [new tag]         v1.1.0                                   -> v1.1.0
+2025-10-10T09:05:54.6190009Z  * [new tag]         v1.2.0                                   -> v1.2.0
+2025-10-10T09:05:54.6190701Z  * [new tag]         v1.2.1                                   -> v1.2.1
+2025-10-10T09:05:54.6191337Z  * [new tag]         v1.3.0                                   -> v1.3.0
+2025-10-10T09:05:54.6192063Z  * [new ref]         7929075fc1ee8cc9995bde28102a1bbd55ce866d -> pull/6/merge
+2025-10-10T09:05:54.6235439Z ##[endgroup]
+2025-10-10T09:05:54.6237073Z ##[group]Determining the checkout info
+2025-10-10T09:05:54.6238511Z ##[endgroup]
+2025-10-10T09:05:54.6243428Z [command]/usr/bin/git sparse-checkout disable
+2025-10-10T09:05:54.6293925Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-10-10T09:05:54.6323712Z ##[group]Checking out the ref
+2025-10-10T09:05:54.6327276Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/6/merge
+2025-10-10T09:05:54.6425863Z Note: switching to 'refs/remotes/pull/6/merge'.
+2025-10-10T09:05:54.6427300Z 
+2025-10-10T09:05:54.6428020Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-10-10T09:05:54.6429725Z changes and commit them, and you can discard any commits you make in this
+2025-10-10T09:05:54.6431885Z state without impacting any branches by switching back to a branch.
+2025-10-10T09:05:54.6433115Z 
+2025-10-10T09:05:54.6434275Z If you want to create a new branch to retain commits you create, you may
+2025-10-10T09:05:54.6436262Z do so (now or later) by using -c with the switch command. Example:
+2025-10-10T09:05:54.6437561Z 
+2025-10-10T09:05:54.6438059Z   git switch -c <new-branch-name>
+2025-10-10T09:05:54.6438897Z 
+2025-10-10T09:05:54.6439410Z Or undo this operation with:
+2025-10-10T09:05:54.6440213Z 
+2025-10-10T09:05:54.6440716Z   git switch -
+2025-10-10T09:05:54.6441345Z 
+2025-10-10T09:05:54.6442292Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-10-10T09:05:54.6443765Z 
+2025-10-10T09:05:54.6445333Z HEAD is now at 7929075 Merge 1097ac6c783727664840620d5a86c05be0e14bec into c656f2d0e66497e6470f15704d8124941629b0bc
+2025-10-10T09:05:54.6449328Z ##[endgroup]
+2025-10-10T09:05:54.6476001Z [command]/usr/bin/git log -1 --format=%H
+2025-10-10T09:05:54.6497854Z 7929075fc1ee8cc9995bde28102a1bbd55ce866d
+2025-10-10T09:05:54.6772310Z ##[group]Run actions/setup-go@v5
+2025-10-10T09:05:54.6773433Z with:
+2025-10-10T09:05:54.6774239Z   go-version: 1.24
+2025-10-10T09:05:54.6775116Z   check-latest: false
+2025-10-10T09:05:54.6776298Z   token: ***
+2025-10-10T09:05:54.6777444Z   cache: true
+2025-10-10T09:05:54.6778277Z ##[endgroup]
+2025-10-10T09:05:54.8362472Z Setup go version spec 1.24
+2025-10-10T09:05:54.8724584Z Found in cache @ /opt/hostedtoolcache/go/1.24.7/x64
+2025-10-10T09:05:54.8729093Z Added go to the path
+2025-10-10T09:05:54.8732693Z Successfully set up Go version 1.24
+2025-10-10T09:05:55.4025672Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOMODCACHE
+2025-10-10T09:05:55.4060700Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOCACHE
+2025-10-10T09:05:55.4084322Z /home/runner/go/pkg/mod
+2025-10-10T09:05:55.4113458Z /home/runner/.cache/go-build
+2025-10-10T09:05:55.5451164Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
+2025-10-10T09:05:56.5785752Z Received 226492416 of 549431188 (41.2%), 215.8 MBs/sec
+2025-10-10T09:05:57.5787798Z Received 452984832 of 549431188 (82.4%), 215.9 MBs/sec
+2025-10-10T09:05:58.1421573Z Received 549431188 of 549431188 (100.0%), 204.4 MBs/sec
+2025-10-10T09:05:58.1422983Z Cache Size: ~524 MB (549431188 B)
+2025-10-10T09:05:58.1543910Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ffdc6daf-eaf2-4c04-8c89-4174658ae8e3/cache.tzst -P -C /home/runner/work/faro/faro --use-compress-program unzstd
+2025-10-10T09:06:01.8089077Z Cache restored successfully
+2025-10-10T09:06:01.9143620Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
+2025-10-10T09:06:01.9169249Z go version go1.24.7 linux/amd64
+2025-10-10T09:06:01.9169479Z 
+2025-10-10T09:06:01.9169822Z ##[group]go env
+2025-10-10T09:06:02.0772811Z AR='ar'
+2025-10-10T09:06:02.0773239Z CC='gcc'
+2025-10-10T09:06:02.0773586Z CGO_CFLAGS='-O2 -g'
+2025-10-10T09:06:02.0773996Z CGO_CPPFLAGS=''
+2025-10-10T09:06:02.0774307Z CGO_CXXFLAGS='-O2 -g'
+2025-10-10T09:06:02.0774580Z CGO_ENABLED='1'
+2025-10-10T09:06:02.0774815Z CGO_FFLAGS='-O2 -g'
+2025-10-10T09:06:02.0775033Z CGO_LDFLAGS='-O2 -g'
+2025-10-10T09:06:02.0775266Z CXX='g++'
+2025-10-10T09:06:02.0775460Z GCCGO='gccgo'
+2025-10-10T09:06:02.0775663Z GO111MODULE=''
+2025-10-10T09:06:02.0775865Z GOAMD64='v1'
+2025-10-10T09:06:02.0776216Z GOARCH='amd64'
+2025-10-10T09:06:02.0776435Z GOAUTH='netrc'
+2025-10-10T09:06:02.0776633Z GOBIN=''
+2025-10-10T09:06:02.0777095Z GOCACHE='/home/runner/.cache/go-build'
+2025-10-10T09:06:02.0777376Z GOCACHEPROG=''
+2025-10-10T09:06:02.0777583Z GODEBUG=''
+2025-10-10T09:06:02.0777795Z GOENV='/home/runner/.config/go/env'
+2025-10-10T09:06:02.0778068Z GOEXE=''
+2025-10-10T09:06:02.0846574Z GOEXPERIMENT=''
+2025-10-10T09:06:02.0847392Z GOFIPS140='off'
+2025-10-10T09:06:02.0847777Z GOFLAGS=''
+2025-10-10T09:06:02.0849042Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build1279919491=/tmp/go-build -gno-record-gcc-switches'
+2025-10-10T09:06:02.0850028Z GOHOSTARCH='amd64'
+2025-10-10T09:06:02.0850893Z GOHOSTOS='linux'
+2025-10-10T09:06:02.0851242Z GOINSECURE=''
+2025-10-10T09:06:02.0851639Z GOMOD='/home/runner/work/faro/faro/go.mod'
+2025-10-10T09:06:02.0852114Z GOMODCACHE='/home/runner/go/pkg/mod'
+2025-10-10T09:06:02.0852595Z GONOPROXY=''
+2025-10-10T09:06:02.0852920Z GONOSUMDB=''
+2025-10-10T09:06:02.0853237Z GOOS='linux'
+2025-10-10T09:06:02.0853576Z GOPATH='/home/runner/go'
+2025-10-10T09:06:02.0853942Z GOPRIVATE=''
+2025-10-10T09:06:02.0854527Z GOPROXY='https://proxy.golang.org,direct'
+2025-10-10T09:06:02.0855141Z GOROOT='/opt/hostedtoolcache/go/1.24.7/x64'
+2025-10-10T09:06:02.0855666Z GOSUMDB='sum.golang.org'
+2025-10-10T09:06:02.0856071Z GOTELEMETRY='local'
+2025-10-10T09:06:02.0856535Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2025-10-10T09:06:02.0857292Z GOTMPDIR=''
+2025-10-10T09:06:02.0857629Z GOTOOLCHAIN='auto'
+2025-10-10T09:06:02.0858581Z GOTOOLDIR='/opt/hostedtoolcache/go/1.24.7/x64/pkg/tool/linux_amd64'
+2025-10-10T09:06:02.0859232Z GOVCS=''
+2025-10-10T09:06:02.0859624Z GOVERSION='go1.24.7'
+2025-10-10T09:06:02.0859986Z GOWORK=''
+2025-10-10T09:06:02.0860330Z PKG_CONFIG='pkg-config'
+2025-10-10T09:06:02.0860574Z 
+2025-10-10T09:06:02.0861173Z ##[endgroup]
+2025-10-10T09:06:02.0936341Z ##[group]Run # Enable IP forwarding (required for kinc networking)
+2025-10-10T09:06:02.0937458Z [36;1m# Enable IP forwarding (required for kinc networking)[0m
+2025-10-10T09:06:02.0937858Z [36;1mecho 1 | sudo tee /proc/sys/net/ipv4/ip_forward[0m
+2025-10-10T09:06:02.0938155Z [36;1m[0m
+2025-10-10T09:06:02.0938360Z [36;1m# Prepare kubeadm config for kinc[0m
+2025-10-10T09:06:02.0938699Z [36;1m# kinc-init.service reads /etc/kinc/config/kubeadm.conf[0m
+2025-10-10T09:06:02.0939035Z [36;1mmkdir -p /tmp/kinc-config[0m
+2025-10-10T09:06:02.0939320Z [36;1mcat > /tmp/kinc-config/kubeadm.conf << 'EOF'[0m
+2025-10-10T09:06:02.0939593Z [36;1mapiServer:[0m
+2025-10-10T09:06:02.0939792Z [36;1m  certSANs:[0m
+2025-10-10T09:06:02.0939995Z [36;1m  - localhost[0m
+2025-10-10T09:06:02.0940198Z [36;1m  - 127.0.0.1[0m
+2025-10-10T09:06:02.0940433Z [36;1m  extraArgs:[0m
+2025-10-10T09:06:02.0940648Z [36;1m    runtime-config: ""[0m
+2025-10-10T09:06:02.0940944Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
+2025-10-10T09:06:02.0941238Z [36;1mclusterName: kinc[0m
+2025-10-10T09:06:02.0941542Z [36;1mcontrolPlaneEndpoint: kinc-control-plane:6443[0m
+2025-10-10T09:06:02.0941851Z [36;1mcontrollerManager:[0m
+2025-10-10T09:06:02.0942074Z [36;1m  extraArgs:[0m
+2025-10-10T09:06:02.0942312Z [36;1m    enable-hostpath-provisioner: "true"[0m
+2025-10-10T09:06:02.0942600Z [36;1mkind: ClusterConfiguration[0m
+2025-10-10T09:06:02.0942858Z [36;1mkubernetesVersion: v1.33.5[0m
+2025-10-10T09:06:02.0943111Z [36;1mnetworking:[0m
+2025-10-10T09:06:02.0943320Z [36;1m  podSubnet: 10.244.0.0/16[0m
+2025-10-10T09:06:02.0943568Z [36;1m  serviceSubnet: 10.96.0.0/16[0m
+2025-10-10T09:06:02.0943811Z [36;1mpatches:[0m
+2025-10-10T09:06:02.0944017Z [36;1m  directory: /etc/kinc/patches[0m
+2025-10-10T09:06:02.0944283Z [36;1mscheduler:[0m
+2025-10-10T09:06:02.0944496Z [36;1m  extraArgs: null[0m
+2025-10-10T09:06:02.0944705Z [36;1m---[0m
+2025-10-10T09:06:02.0944926Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
+2025-10-10T09:06:02.0945194Z [36;1mbootstrapTokens:[0m
+2025-10-10T09:06:02.0945429Z [36;1m- token: abcdef.0123456789abcdef[0m
+2025-10-10T09:06:02.0945687Z [36;1mkind: InitConfiguration[0m
+2025-10-10T09:06:02.0945932Z [36;1mlocalAPIEndpoint:[0m
+2025-10-10T09:06:02.0946196Z [36;1m  advertiseAddress: CONTAINER_IP_PLACEHOLDER[0m
+2025-10-10T09:06:02.0946479Z [36;1m  bindPort: 6443[0m
+2025-10-10T09:06:02.0946695Z [36;1mnodeRegistration:[0m
+2025-10-10T09:06:02.0947099Z [36;1m  criSocket: unix:///var/run/crio/crio.sock[0m
+2025-10-10T09:06:02.0947379Z [36;1m  kubeletExtraArgs:[0m
+2025-10-10T09:06:02.0947630Z [36;1m    node-ip: CONTAINER_IP_PLACEHOLDER[0m
+2025-10-10T09:06:02.0947897Z [36;1m    node-labels: ""[0m
+2025-10-10T09:06:02.0948206Z [36;1m    provider-id: kind://podman/kinc/kinc-control-plane[0m
+2025-10-10T09:06:02.0948698Z [36;1m---[0m
+2025-10-10T09:06:02.0948907Z [36;1mapiVersion: kubeadm.k8s.io/v1beta3[0m
+2025-10-10T09:06:02.0949169Z [36;1mcontrolPlane:[0m
+2025-10-10T09:06:02.0949388Z [36;1m  localAPIEndpoint:[0m
+2025-10-10T09:06:02.0949655Z [36;1m    advertiseAddress: CONTAINER_IP_PLACEHOLDER[0m
+2025-10-10T09:06:02.0949937Z [36;1m    bindPort: 6443[0m
+2025-10-10T09:06:02.0950147Z [36;1mdiscovery:[0m
+2025-10-10T09:06:02.0950362Z [36;1m  bootstrapToken:[0m
+2025-10-10T09:06:02.0950639Z [36;1m    apiServerEndpoint: kinc-control-plane:6443[0m
+2025-10-10T09:06:02.0950946Z [36;1m    token: abcdef.0123456789abcdef[0m
+2025-10-10T09:06:02.0951224Z [36;1m    unsafeSkipCAVerification: true[0m
+2025-10-10T09:06:02.0951497Z [36;1mkind: JoinConfiguration[0m
+2025-10-10T09:06:02.0951746Z [36;1mnodeRegistration:[0m
+2025-10-10T09:06:02.0951998Z [36;1m  criSocket: unix:///var/run/crio/crio.sock[0m
+2025-10-10T09:06:02.0952284Z [36;1m  kubeletExtraArgs:[0m
+2025-10-10T09:06:02.0952536Z [36;1m    node-ip: CONTAINER_IP_PLACEHOLDER[0m
+2025-10-10T09:06:02.0952806Z [36;1m    node-labels: ""[0m
+2025-10-10T09:06:02.0953260Z [36;1m    provider-id: kind://podman/kinc/kinc-control-plane[0m
+2025-10-10T09:06:02.0953594Z [36;1m---[0m
+2025-10-10T09:06:02.0953826Z [36;1mapiVersion: kubelet.config.k8s.io/v1beta1[0m
+2025-10-10T09:06:02.0954114Z [36;1mcgroupDriver: cgroupfs[0m
+2025-10-10T09:06:02.0954354Z [36;1mcgroupRoot: /[0m
+2025-10-10T09:06:02.0954568Z [36;1mevictionHard:[0m
+2025-10-10T09:06:02.0954778Z [36;1m  imagefs.available: 0%[0m
+2025-10-10T09:06:02.0955020Z [36;1m  nodefs.available: 0%[0m
+2025-10-10T09:06:02.0955256Z [36;1m  nodefs.inodesFree: 0%[0m
+2025-10-10T09:06:02.0955485Z [36;1mfailSwapOn: false[0m
+2025-10-10T09:06:02.0955705Z [36;1mfeatureGates:[0m
+2025-10-10T09:06:02.0955935Z [36;1m  KubeletInUserNamespace: true[0m
+2025-10-10T09:06:02.0956220Z [36;1mimageGCHighThresholdPercent: 100[0m
+2025-10-10T09:06:02.0956494Z [36;1mkind: KubeletConfiguration[0m
+2025-10-10T09:06:02.0956738Z [36;1m---[0m
+2025-10-10T09:06:02.0957076Z [36;1mapiVersion: kubeproxy.config.k8s.io/v1alpha1[0m
+2025-10-10T09:06:02.0957360Z [36;1mconntrack:[0m
+2025-10-10T09:06:02.0957598Z [36;1m  maxPerCore: 0[0m
+2025-10-10T09:06:02.0957808Z [36;1mnftables:[0m
+2025-10-10T09:06:02.0958007Z [36;1m  masqueradeAll: false[0m
+2025-10-10T09:06:02.0958242Z [36;1m  masqueradeBit: 14[0m
+2025-10-10T09:06:02.0958468Z [36;1m  minSyncPeriod: 1s[0m
+2025-10-10T09:06:02.0958685Z [36;1m  syncPeriod: 30s[0m
+2025-10-10T09:06:02.0958922Z [36;1mkind: KubeProxyConfiguration[0m
+2025-10-10T09:06:02.0959177Z [36;1mmode: nftables[0m
+2025-10-10T09:06:02.0959380Z [36;1mEOF[0m
+2025-10-10T09:06:02.0959550Z [36;1m[0m
+2025-10-10T09:06:02.0959748Z [36;1mecho "✅ kubeadm.conf prepared"[0m
+2025-10-10T09:06:02.0959995Z [36;1m[0m
+2025-10-10T09:06:02.0960242Z [36;1m# Start kinc cluster (systemd-based Kubernetes container)[0m
+2025-10-10T09:06:02.0960643Z [36;1m# TEMPORARY: Using --privileged to verify permission issue[0m
+2025-10-10T09:06:02.0961074Z [36;1m# Based on kinc/runtime/quadlet/kinc-control-plane.container[0m
+2025-10-10T09:06:02.0961406Z [36;1mpodman run -d \[0m
+2025-10-10T09:06:02.0961649Z [36;1m  --name kinc-cluster \[0m
+2025-10-10T09:06:02.0961913Z [36;1m  --hostname kinc-control-plane \[0m
+2025-10-10T09:06:02.0962182Z [36;1m  --privileged \[0m
+2025-10-10T09:06:02.0962399Z [36;1m  --device /dev/fuse \[0m
+2025-10-10T09:06:02.0962673Z [36;1m  --sysctl net.ipv6.conf.all.disable_ipv6=0 \[0m
+2025-10-10T09:06:02.0963025Z [36;1m  --sysctl net.ipv6.conf.default.keep_addr_on_down=1 \[0m
+2025-10-10T09:06:02.0963380Z [36;1m  --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \[0m
+2025-10-10T09:06:02.0963775Z [36;1m  --sysctl net.netfilter.nf_conntrack_tcp_timeout_established=86400 \[0m
+2025-10-10T09:06:02.0964189Z [36;1m  --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T09:06:02.0964552Z [36;1m  --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T09:06:02.0964924Z [36;1m  --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T09:06:02.0965420Z [36;1m  --volume /tmp/kinc-config:/etc/kinc/config:ro \[0m
+2025-10-10T09:06:02.0965734Z [36;1m  --publish 127.0.0.1:6443:6443/tcp \[0m
+2025-10-10T09:06:02.0966001Z [36;1m  -e container=podman \[0m
+2025-10-10T09:06:02.0966277Z [36;1m  -e KUBECONFIG=/etc/kubernetes/admin.conf \[0m
+2025-10-10T09:06:02.0966566Z [36;1m  ghcr.io/t0masd/kinc:v0-1[0m
+2025-10-10T09:06:02.0966961Z [36;1m[0m
+2025-10-10T09:06:02.0967283Z [36;1mecho "⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)..."[0m
+2025-10-10T09:06:02.0967794Z [36;1mecho "   This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,"[0m
+2025-10-10T09:06:02.0968249Z [36;1mecho "   API server, CNI, storage provisioner, and CoreDNS"[0m
+2025-10-10T09:06:02.0968551Z [36;1m[0m
+2025-10-10T09:06:02.0968744Z [36;1m# Wait for container to respond[0m
+2025-10-10T09:06:02.0969171Z [36;1mtimeout 30 bash -c 'until podman exec kinc-cluster echo ok >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T09:06:02.0969618Z [36;1mecho "✅ Container responding"[0m
+2025-10-10T09:06:02.0969858Z [36;1m[0m
+2025-10-10T09:06:02.0970246Z [36;1m# Wait for systemd inside container[0m
+2025-10-10T09:06:02.0970536Z [36;1mecho "⏳ Waiting for systemd..."[0m
+2025-10-10T09:06:02.0971094Z [36;1mif ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running 2>&1 | grep -q "running"; do echo -n "."; sleep 2; done'; then[0m
+2025-10-10T09:06:02.0971644Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0971987Z [36;1m  SYSTEMD_STATE=$(podman exec kinc-cluster systemctl is-system-running 2>&1 || true)[0m
+2025-10-10T09:06:02.0972449Z [36;1m  echo "❌ Systemd not running (state: $SYSTEMD_STATE)"[0m
+2025-10-10T09:06:02.0972737Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0972946Z [36;1m  echo "=== Failed Services ==="[0m
+2025-10-10T09:06:02.0973293Z [36;1m  podman exec kinc-cluster systemctl --failed --no-pager || true[0m
+2025-10-10T09:06:02.0973624Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0973863Z [36;1m  echo "=== kinc/crio/kubelet Status ==="[0m
+2025-10-10T09:06:02.0974394Z [36;1m  podman exec kinc-cluster systemctl status kinc-init.service crio.service kubelet.service --no-pager || true[0m
+2025-10-10T09:06:02.0974884Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0975099Z [36;1m  echo "=== Checking Pod Status ==="[0m
+2025-10-10T09:06:02.0975574Z [36;1m  podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pods -A -o wide || true[0m
+2025-10-10T09:06:02.0976026Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0976245Z [36;1m  echo "=== Pod Logs (kube-proxy) ==="[0m
+2025-10-10T09:06:02.0976937Z [36;1m  podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf logs -n kube-system -l k8s-app=kube-proxy --tail=50 || true[0m
+2025-10-10T09:06:02.0977490Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0977738Z [36;1m  echo "=== Pod Logs (local-path-provisioner) ==="[0m
+2025-10-10T09:06:02.0978391Z [36;1m  podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf logs -n local-path-storage -l app=local-path-provisioner --tail=50 || true[0m
+2025-10-10T09:06:02.0978999Z [36;1m  exit 1[0m
+2025-10-10T09:06:02.0979189Z [36;1mfi[0m
+2025-10-10T09:06:02.0979389Z [36;1mecho "✅ Systemd operational"[0m
+2025-10-10T09:06:02.0979622Z [36;1m[0m
+2025-10-10T09:06:02.0979814Z [36;1m# Wait for CRI-O[0m
+2025-10-10T09:06:02.0980276Z [36;1mtimeout 60 bash -c 'until podman exec kinc-cluster systemctl is-active crio.service >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T09:06:02.0980776Z [36;1mecho "✅ CRI-O active"[0m
+2025-10-10T09:06:02.0981002Z [36;1m[0m
+2025-10-10T09:06:02.0981285Z [36;1m# Wait for cluster initialization (kinc-init.service runs kubeadm init)[0m
+2025-10-10T09:06:02.0981699Z [36;1m# This can take 3-5 minutes, so use longer timeout[0m
+2025-10-10T09:06:02.0982131Z [36;1mecho "⏳ Waiting for kinc-init.service (this runs kubeadm init, takes 3-5 min)..."[0m
+2025-10-10T09:06:02.0982843Z [36;1mif ! timeout 600 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do echo -n "."; sleep 10; done'; then[0m
+2025-10-10T09:06:02.0983536Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0983810Z [36;1m  echo "❌ kinc-init.service timeout after 10 minutes"[0m
+2025-10-10T09:06:02.0984109Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0984328Z [36;1m  echo "=== Debugging Information ==="[0m
+2025-10-10T09:06:02.0984642Z [36;1m  echo "--- systemctl status kinc-init.service ---"[0m
+2025-10-10T09:06:02.0985080Z [36;1m  podman exec kinc-cluster systemctl status kinc-init.service --no-pager || true[0m
+2025-10-10T09:06:02.0985469Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0985683Z [36;1m  echo "--- journalctl for kinc-init ---"[0m
+2025-10-10T09:06:02.0986110Z [36;1m  podman exec kinc-cluster journalctl -xeu kinc-init.service --no-pager -n 100 || true[0m
+2025-10-10T09:06:02.0986505Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0986732Z [36;1m  echo "--- Check if kubeadm.conf exists ---"[0m
+2025-10-10T09:06:02.0987223Z [36;1m  podman exec kinc-cluster ls -la /etc/kinc/config/ || true[0m
+2025-10-10T09:06:02.0987767Z [36;1m  podman exec kinc-cluster cat /etc/kinc/config/kubeadm.conf || true[0m
+2025-10-10T09:06:02.0988118Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0988320Z [36;1m  echo "--- kubelet status ---"[0m
+2025-10-10T09:06:02.0988706Z [36;1m  podman exec kinc-cluster systemctl status kubelet.service --no-pager || true[0m
+2025-10-10T09:06:02.0989085Z [36;1m  echo ""[0m
+2025-10-10T09:06:02.0989315Z [36;1m  echo "--- Container logs (last 50 lines) ---"[0m
+2025-10-10T09:06:02.0989624Z [36;1m  podman logs kinc-cluster --tail 50 || true[0m
+2025-10-10T09:06:02.0989902Z [36;1m  exit 1[0m
+2025-10-10T09:06:02.0990086Z [36;1mfi[0m
+2025-10-10T09:06:02.0990260Z [36;1mecho ""[0m
+2025-10-10T09:06:02.0990478Z [36;1mecho "✅ Cluster initialization started"[0m
+2025-10-10T09:06:02.0990743Z [36;1m[0m
+2025-10-10T09:06:02.0990922Z [36;1m# Show init service status[0m
+2025-10-10T09:06:02.0991306Z [36;1mpodman exec kinc-cluster systemctl status kinc-init.service --no-pager || true[0m
+2025-10-10T09:06:02.0991700Z [36;1m[0m
+2025-10-10T09:06:02.0991903Z [36;1m# Wait for API server (from host)[0m
+2025-10-10T09:06:02.0992376Z [36;1mtimeout 120 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T09:06:02.0992848Z [36;1mecho "✅ API server responding"[0m
+2025-10-10T09:06:02.0993098Z [36;1m[0m
+2025-10-10T09:06:02.0993274Z [36;1m# Wait for node ready[0m
+2025-10-10T09:06:02.0993966Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=10s >/dev/null 2>&1; do sleep 5; done'[0m
+2025-10-10T09:06:02.0994668Z [36;1mecho "✅ Node ready"[0m
+2025-10-10T09:06:02.0994887Z [36;1m[0m
+2025-10-10T09:06:02.0995092Z [36;1m# Wait for CoreDNS (critical for Faro tests)[0m
+2025-10-10T09:06:02.0995913Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pod -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running >/dev/null 2>&1; do sleep 5; done'[0m
+2025-10-10T09:06:02.0996851Z [36;1mecho "✅ CoreDNS running"[0m
+2025-10-10T09:06:02.0997093Z [36;1m[0m
+2025-10-10T09:06:02.0997276Z [36;1m# Extract kubeconfig[0m
+2025-10-10T09:06:02.0997504Z [36;1mmkdir -p ~/.kube[0m
+2025-10-10T09:06:02.0997827Z [36;1mpodman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config[0m
+2025-10-10T09:06:02.0998317Z [36;1msed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config[0m
+2025-10-10T09:06:02.0998693Z [36;1m[0m
+2025-10-10T09:06:02.0998866Z [36;1m# Verify cluster[0m
+2025-10-10T09:06:02.0999079Z [36;1mecho ""[0m
+2025-10-10T09:06:02.0999290Z [36;1mecho "📊 Cluster Status:"[0m
+2025-10-10T09:06:02.0999536Z [36;1mkubectl get nodes -o wide[0m
+2025-10-10T09:06:02.0999784Z [36;1mkubectl get pods -A[0m
+2025-10-10T09:06:02.1000018Z [36;1mkubectl cluster-info[0m
+2025-10-10T09:06:02.1040019Z shell: /usr/bin/bash -e {0}
+2025-10-10T09:06:02.1040302Z ##[endgroup]
+2025-10-10T09:06:02.1181378Z 1
+2025-10-10T09:06:02.1214177Z ✅ kubeadm.conf prepared
+2025-10-10T09:06:05.4368205Z Trying to pull ghcr.io/t0masd/kinc:v0-1...
+2025-10-10T09:06:05.9702599Z Getting image source signatures
+2025-10-10T09:06:05.9705379Z Copying blob sha256:1c3165eadf68bc96ed33f2878fbea0730fd3210acb1787a1be2cabc1205e508f
+2025-10-10T09:06:05.9706963Z Copying blob sha256:926690fefe603d28f0c526549e910212a929b903937a9470a40078bc6e4143b9
+2025-10-10T09:06:05.9708140Z Copying blob sha256:bfa0c27a39a64631c3172367295c01c6767ddd14f09589b80eb8ef1d297b794c
+2025-10-10T09:06:05.9709079Z Copying blob sha256:79fbaf31284b97b3d3859ef109d5ee5097b2ecf41ef7a98d486f6e72b77f5e13
+2025-10-10T09:06:05.9709995Z Copying blob sha256:a36872a969c8ec4cc257c3d32629bb9ab0a5391564e8e589ebcdfdf345c0a2c8
+2025-10-10T09:06:05.9710916Z Copying blob sha256:f4ebc8a2ad80e5c68607f77352fa9cd013853438ebb46fba1fcd8d32cd2ed294
+2025-10-10T09:06:06.0393669Z Copying blob sha256:ec151b0a58e825b197e33a8f26b6e250df1db60c61e46d46accbf5851042727e
+2025-10-10T09:06:06.0955811Z Copying blob sha256:3fdc23ae00c4c88b0648d79ab063f55f36f6a1b865dc2e0066722d59e746f326
+2025-10-10T09:06:06.1493800Z Copying blob sha256:fa20e998b13a4939ef513c13aad60100b9dddc37bbf22f93e6f938dba86c04c2
+2025-10-10T09:06:06.2014495Z Copying blob sha256:576943d1883f80ec0e6bbe3d414f2dc57c6b96a446af173d4a59f761bd7f24fe
+2025-10-10T09:06:06.2234029Z Copying blob sha256:63b040a831cd876cf9ee413b2347abbd1222f3e63c80fccd0f69992962e9d7e3
+2025-10-10T09:06:06.2491147Z Copying blob sha256:4170f55c66b53d10494a06b56259a3aa8b9915aa32e48e76d804fa3d8858b14a
+2025-10-10T09:06:06.2598628Z Copying blob sha256:c88c43a15383088c1dd388082857c094ad3334ae84a0c6d546d4f06eee6a721b
+2025-10-10T09:06:06.2656725Z Copying blob sha256:254235fa8067245719789a898197f59816a43b841a30f1414dfc8fa4ffdfb0a5
+2025-10-10T09:06:06.3280901Z Copying blob sha256:e91edddee38fd04236c59a7aed0f04ee408de8c7d076e91ade416118a318387b
+2025-10-10T09:06:06.4211794Z Copying blob sha256:409e36ae34c13b90b2aba1797b40eb54a3d914764e272b9c2ae065480b05e3ca
+2025-10-10T09:06:06.4654720Z Copying blob sha256:d753a5d66fb17f1b74a5c4312ece3584dcf697c1c35961f0c995c159e634b34f
+2025-10-10T09:06:06.4742868Z Copying blob sha256:157ded773e7a92a3763dbec098ff0581bda48aedd72b49d31a8b5d65a076a129
+2025-10-10T09:06:06.5312949Z Copying blob sha256:5b856357623aecf5fd02d603bb11298d6329d05db7e420f830dcbe0ba40307db
+2025-10-10T09:06:06.5376629Z Copying blob sha256:63d1b9582fbfdee5701cfc52173c8d4f54325311f5bfe28fe6eae1e6de38f8b1
+2025-10-10T09:06:06.5684661Z Copying blob sha256:d5fd4473dae776355a9cd12ee9227d79dd9fe987d99a7eaef3284152c86c1db6
+2025-10-10T09:06:06.6611304Z Copying blob sha256:01fbea8862c218217b1275df2045bcec65dfc5cc9a04a5f93f2963630cd4aee8
+2025-10-10T09:06:06.7178155Z Copying blob sha256:8f14a422129bc16f7850793a8c055a90dcc9810a4008c27345d464e842cbe769
+2025-10-10T09:06:16.2252361Z Copying config sha256:39da5bbd7c3eab0f00cea6560b1f5211d1dae7b89da7e75f8aa1a29e414eead3
+2025-10-10T09:06:16.2278646Z Writing manifest to image destination
+2025-10-10T09:06:16.6854215Z 5b8b49f7cead7e0070f32b89c3cf0e39779015c8b1e58c3675f29efb1a14ec23
+2025-10-10T09:06:16.7047696Z ⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)...
+2025-10-10T09:06:16.7048602Z    This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,
+2025-10-10T09:06:16.7049321Z    API server, CNI, storage provisioner, and CoreDNS
+2025-10-10T09:06:16.8569957Z ✅ Container responding
+2025-10-10T09:06:16.8570475Z ⏳ Waiting for systemd...
+2025-10-10T09:08:16.8617054Z ..........................................................
+2025-10-10T09:08:16.9324675Z ❌ Systemd not running (state: degraded)
+2025-10-10T09:08:16.9325060Z 
+2025-10-10T09:08:16.9325364Z === Failed Services ===
+2025-10-10T09:08:16.9976581Z   UNIT                     LOAD   ACTIVE SUB    DESCRIPTION
+2025-10-10T09:08:16.9978314Z ● sys-kernel-config.mount  loaded failed failed Kernel Configuration File System
+2025-10-10T09:08:16.9979215Z ● sys-kernel-debug.mount   loaded failed failed Kernel Debug File System
+2025-10-10T09:08:16.9983050Z ● sys-kernel-tracing.mount loaded failed failed Kernel Trace File System
+2025-10-10T09:08:16.9983521Z 
+2025-10-10T09:08:16.9984024Z Legend: LOAD   → Reflects whether the unit definition was properly loaded.
+2025-10-10T09:08:16.9984895Z         ACTIVE → The high-level unit activation state, i.e. generalization of SUB.
+2025-10-10T09:08:16.9985549Z         SUB    → The low-level unit activation state, values depend on unit type.
+2025-10-10T09:08:16.9985827Z 
+2025-10-10T09:08:16.9985918Z 3 loaded units listed.
+2025-10-10T09:08:17.0586310Z 
+2025-10-10T09:08:17.0587375Z === kinc/crio/kubelet Status ===
+2025-10-10T09:08:17.1296563Z ● kinc-init.service - kinc Kubernetes Cluster Initialization
+2025-10-10T09:08:17.1297891Z      Loaded: loaded (/etc/systemd/system/kinc-init.service; enabled; preset: disabled)
+2025-10-10T09:08:17.1298758Z     Drop-In: /usr/lib/systemd/system/service.d
+2025-10-10T09:08:17.1299324Z              └─10-timeout-abort.conf
+2025-10-10T09:08:17.1300196Z      Active: active (exited) since Fri 2025-10-10 09:06:58 UTC; 1min 19s ago
+2025-10-10T09:08:17.1300596Z  Invocation: df91297ac6804aa2a7225fb4b72e094c
+2025-10-10T09:08:17.1301377Z     Process: 113 ExecStart=/etc/kinc/scripts/kinc-init.sh (code=exited, status=0/SUCCESS)
+2025-10-10T09:08:17.1301857Z    Main PID: 113 (code=exited, status=0/SUCCESS)
+2025-10-10T09:08:17.1302145Z    Mem peak: 45.8M
+2025-10-10T09:08:17.1302362Z         CPU: 4.946s
+2025-10-10T09:08:17.1302481Z 
+2025-10-10T09:08:17.1302767Z Oct 10 09:06:55 kinc-control-plane kinc-init.sh[1922]: deployment.apps/local-path-provisioner created
+2025-10-10T09:08:17.1303365Z Oct 10 09:06:55 kinc-control-plane kinc-init.sh[1922]: storageclass.storage.k8s.io/standard created
+2025-10-10T09:08:17.1303917Z Oct 10 09:06:55 kinc-control-plane kinc-init.sh[1922]: configmap/local-path-config created
+2025-10-10T09:08:17.1304546Z Oct 10 09:06:55 kinc-control-plane kinc-init.sh[113]: ✅ Storage class installed successfully
+2025-10-10T09:08:17.1305107Z Oct 10 09:06:55 kinc-control-plane kinc-init.sh[113]: Waiting for storage provisioner to be ready...
+2025-10-10T09:08:17.1305722Z Oct 10 09:06:58 kinc-control-plane kinc-init.sh[1930]: deployment.apps/local-path-provisioner condition met
+2025-10-10T09:08:17.1306315Z Oct 10 09:06:58 kinc-control-plane kinc-init.sh[113]: === kinc Kind-Free Initialization Complete ===
+2025-10-10T09:08:17.1307042Z Oct 10 09:06:58 kinc-control-plane kinc-init.sh[113]: Cluster is ready!
+2025-10-10T09:08:17.1307549Z Oct 10 09:06:58 kinc-control-plane kinc-init.sh[113]: === Continuing with normal systemd operation ===
+2025-10-10T09:08:17.1308390Z Oct 10 09:06:58 kinc-control-plane systemd[1]: Finished kinc-init.service - kinc Kubernetes Cluster Initialization.
+2025-10-10T09:08:17.1308764Z 
+2025-10-10T09:08:17.1308992Z ● crio.service - Container Runtime Interface for OCI (CRI-O)
+2025-10-10T09:08:17.1309516Z      Loaded: loaded (/etc/systemd/system/crio.service; enabled; preset: disabled)
+2025-10-10T09:08:17.1309949Z     Drop-In: /usr/lib/systemd/system/service.d
+2025-10-10T09:08:17.1310355Z              └─10-timeout-abort.conf
+2025-10-10T09:08:17.1310771Z      Active: active (running) since Fri 2025-10-10 09:06:17 UTC; 1min 59s ago
+2025-10-10T09:08:17.1311148Z  Invocation: ebc0b808bc20474c979304315678d863
+2025-10-10T09:08:17.1311480Z        Docs: https://cri-o.io
+2025-10-10T09:08:17.1311719Z    Main PID: 76 (crio)
+2025-10-10T09:08:17.1311931Z       Tasks: 37
+2025-10-10T09:08:17.1312164Z      Memory: 824.3M (peak: 879.8M)
+2025-10-10T09:08:17.1312420Z         CPU: 20.366s
+2025-10-10T09:08:17.1312680Z      CGroup: /system.slice/crio.service
+2025-10-10T09:08:17.1313043Z              ├─  76 /usr/bin/crio
+2025-10-10T09:08:17.1316620Z              ├─ 238 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/4141bf9d59a039c6e7cb866efcb61e0612db0961af5e7fcf3b2c6daa2276a391/diff,workdir=/root/.local/share/containers/storage/overlay/4141bf9d59a039c6e7cb866efcb61e0612db0961af5e7fcf3b2c6daa2276a391/work,volatile /root/.local/share/containers/storage/overlay/4141bf9d59a039c6e7cb866efcb61e0612db0961af5e7fcf3b2c6daa2276a391/merged
+2025-10-10T09:08:17.1322604Z              ├─ 241 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/4cd87eb0bd1576e2401ca46a3be2f91e9010cc6f1d3376148f9134382e9c5b8f/diff,workdir=/root/.local/share/containers/storage/overlay/4cd87eb0bd1576e2401ca46a3be2f91e9010cc6f1d3376148f9134382e9c5b8f/work,volatile /root/.local/share/containers/storage/overlay/4cd87eb0bd1576e2401ca46a3be2f91e9010cc6f1d3376148f9134382e9c5b8f/merged
+2025-10-10T09:08:17.1331444Z              ├─ 244 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/db3dbd09054f81af40a100bff362ddde60c55547718f8105c393e487af37125e/diff,workdir=/root/.local/share/containers/storage/overlay/db3dbd09054f81af40a100bff362ddde60c55547718f8105c393e487af37125e/work,volatile /root/.local/share/containers/storage/overlay/db3dbd09054f81af40a100bff362ddde60c55547718f8105c393e487af37125e/merged
+2025-10-10T09:08:17.1340474Z              ├─ 247 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/d6c313d267109d4a8dd666e93a7a705609314b4a935a4b33a5a33cb65950b2ce/diff,workdir=/root/.local/share/containers/storage/overlay/d6c313d267109d4a8dd666e93a7a705609314b4a935a4b33a5a33cb65950b2ce/work,volatile /root/.local/share/containers/storage/overlay/d6c313d267109d4a8dd666e93a7a705609314b4a935a4b33a5a33cb65950b2ce/merged
+2025-10-10T09:08:17.1359140Z              ├─ 475 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/K6ZWKP7G6W6SQSD4UGQ5ZGR6QG:/root/.local/share/containers/storage/overlay/l/EMJWZDU6JD5S3QLW7GSGHDOUCG:/root/.local/share/containers/storage/overlay/l/TD5LED7RRRNNUG3U66NHDTNJJL:/root/.local/share/containers/storage/overlay/l/YL7IGF5CFAVOHSHCJMBO2CKVD2:/root/.local/share/containers/storage/overlay/l/HTPBGOV5RICDCLDN4MWWHKGLJY:/root/.local/share/containers/storage/overlay/l/DE3EV2SZ6R6RAEUME5W4GNKCQN:/root/.local/share/containers/storage/overlay/l/DGULT4YO7EMGKRJY5LCKNZOKHS:/root/.local/share/containers/storage/overlay/l/ALZK3TQNU7BYJY35OAQ5ZTPVPV:/root/.local/share/containers/storage/overlay/l/ZYK2X5I6GOR3SWSDMVBIMKELJJ:/root/.local/share/containers/storage/overlay/l/I7BJXYCQWEEJWHYSB7MFZQN57A:/root/.local/share/containers/storage/overlay/l/TNDQYEEWETPPGU5OEHSRR6KXCA:/root/.local/share/containers/storage/overlay/l/TG4OGWFX37EVVXFLI4NFCFAUUV:/root/.local/share/containers/storage/overlay/l/DFYRNPVY6K77ZPAU5AY2CLTWAT:/root/.local/share/containers/storage/overlay/l/RIRTNIIM4OKEDS6ZB6SKVQ57KF,upperdir=/root/.local/share/containers/storage/overlay/1588980e68061da26679cbf14dfec7291aab8a7158e01bbcf2c751dd4e6943c6/diff,workdir=/root/.local/share/containers/storage/overlay/1588980e68061da26679cbf14dfec7291aab8a7158e01bbcf2c751dd4e6943c6/work,volatile /root/.local/share/containers/storage/overlay/1588980e68061da26679cbf14dfec7291aab8a7158e01bbcf2c751dd4e6943c6/merged
+2025-10-10T09:08:17.1371943Z              ├─ 477 /usr/bin/conmon -b /tmp/containers/overlay-containers/a7551bf99fe5e4c149ce62ee2fbefb0c923b2c6d31fb5d39a75edbcc0a992c13/userdata -c a7551bf99fe5e4c149ce62ee2fbefb0c923b2c6d31fb5d39a75edbcc0a992c13 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_kube-scheduler-kinc-control-plane_3dcdb4e5997cfd64641b3bd29902e28d/kube-scheduler/0.log --log-level info -n k8s_kube-scheduler_kube-scheduler-kinc-control-plane_kube-system_3dcdb4e5997cfd64641b3bd29902e28d_0 -P /tmp/containers/overlay-containers/a7551bf99fe5e4c149ce62ee2fbefb0c923b2c6d31fb5d39a75edbcc0a992c13/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/a7551bf99fe5e4c149ce62ee2fbefb0c923b2c6d31fb5d39a75edbcc0a992c13/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/a7551bf99fe5e4c149ce62ee2fbefb0c923b2c6d31fb5d39a75edbcc0a992c13/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u a7551bf99fe5e4c149ce62ee2fbefb0c923b2c6d31fb5d39a75edbcc0a992c13
+2025-10-10T09:08:17.1391884Z              ├─ 683 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/MPFW25F7PTAGQF5W77TVAW5B34:/root/.local/share/containers/storage/overlay/l/PMHJH4745YAFI226XZOKR2N43F:/root/.local/share/containers/storage/overlay/l/YNVK63RYTRGJL2MVMC6CRWYFGF:/root/.local/share/containers/storage/overlay/l/OLYZGLUTMJNRCUOAMHIYN3TU4K:/root/.local/share/containers/storage/overlay/l/XA3JURG5OQ5A6HADMPTURDUJZR:/root/.local/share/containers/storage/overlay/l/JHSL7DI5CPBPE4C2Q7WVD5A6YU:/root/.local/share/containers/storage/overlay/l/OK356EISE5CF2V47Q2METCTEPC:/root/.local/share/containers/storage/overlay/l/RVQGNR2SGZ3R5CZAUYPFVMXQLK:/root/.local/share/containers/storage/overlay/l/BTJJOKRG4W4REBSSKVJ5FTCZVM:/root/.local/share/containers/storage/overlay/l/J5PII2BMUWLE4RWEQSY4KY4RQL:/root/.local/share/containers/storage/overlay/l/N37DBCRAOFEZMKZHWLTZ3MURUP:/root/.local/share/containers/storage/overlay/l/F7AF6OSFT6AXKUQ7K6QALE775R:/root/.local/share/containers/storage/overlay/l/2GF27VMP5T5OBLJINK3EKYIDWM:/root/.local/share/containers/storage/overlay/l/UNZXLE7UIPZWCDVEVSL5FNPI24,upperdir=/root/.local/share/containers/storage/overlay/e13b7c960000302593ccec0c0e13961a5fb94e854b6fea700dd0968047fc16f0/diff,workdir=/root/.local/share/containers/storage/overlay/e13b7c960000302593ccec0c0e13961a5fb94e854b6fea700dd0968047fc16f0/work,volatile /root/.local/share/containers/storage/overlay/e13b7c960000302593ccec0c0e13961a5fb94e854b6fea700dd0968047fc16f0/merged
+2025-10-10T09:08:17.1414164Z              ├─ 685 /usr/bin/conmon -b /tmp/containers/overlay-containers/18867c40212d8ee35973c6313f5e666092aa24607157f4e389b930a08620f0b6/userdata -c 18867c40212d8ee35973c6313f5e666092aa24607157f4e389b930a08620f0b6 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_etcd-kinc-control-plane_58a40aac12df8da14e38379dac984429/etcd/0.log --log-level info -n k8s_etcd_etcd-kinc-control-plane_kube-system_58a40aac12df8da14e38379dac984429_0 -P /tmp/containers/overlay-containers/18867c40212d8ee35973c6313f5e666092aa24607157f4e389b930a08620f0b6/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/18867c40212d8ee35973c6313f5e666092aa24607157f4e389b930a08620f0b6/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/18867c40212d8ee35973c6313f5e666092aa24607157f4e389b930a08620f0b6/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 18867c40212d8ee35973c6313f5e666092aa24607157f4e389b930a08620f0b6
+2025-10-10T09:08:17.1439767Z              ├─ 736 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/FFLO52PI3IFXNOKCMJA2ROXKJB:/root/.local/share/containers/storage/overlay/l/EMJWZDU6JD5S3QLW7GSGHDOUCG:/root/.local/share/containers/storage/overlay/l/TD5LED7RRRNNUG3U66NHDTNJJL:/root/.local/share/containers/storage/overlay/l/YL7IGF5CFAVOHSHCJMBO2CKVD2:/root/.local/share/containers/storage/overlay/l/HTPBGOV5RICDCLDN4MWWHKGLJY:/root/.local/share/containers/storage/overlay/l/DE3EV2SZ6R6RAEUME5W4GNKCQN:/root/.local/share/containers/storage/overlay/l/DGULT4YO7EMGKRJY5LCKNZOKHS:/root/.local/share/containers/storage/overlay/l/ALZK3TQNU7BYJY35OAQ5ZTPVPV:/root/.local/share/containers/storage/overlay/l/ZYK2X5I6GOR3SWSDMVBIMKELJJ:/root/.local/share/containers/storage/overlay/l/I7BJXYCQWEEJWHYSB7MFZQN57A:/root/.local/share/containers/storage/overlay/l/TNDQYEEWETPPGU5OEHSRR6KXCA:/root/.local/share/containers/storage/overlay/l/TG4OGWFX37EVVXFLI4NFCFAUUV:/root/.local/share/containers/storage/overlay/l/DFYRNPVY6K77ZPAU5AY2CLTWAT:/root/.local/share/containers/storage/overlay/l/RIRTNIIM4OKEDS6ZB6SKVQ57KF,upperdir=/root/.local/share/containers/storage/overlay/2fd2f2dd5c2a47ed90b09f6083aa2df1aa321d87da111b97a5507d60101db73c/diff,workdir=/root/.local/share/containers/storage/overlay/2fd2f2dd5c2a47ed90b09f6083aa2df1aa321d87da111b97a5507d60101db73c/work,volatile /root/.local/share/containers/storage/overlay/2fd2f2dd5c2a47ed90b09f6083aa2df1aa321d87da111b97a5507d60101db73c/merged
+2025-10-10T09:08:17.1463755Z              ├─ 738 /usr/bin/conmon -b /tmp/containers/overlay-containers/eabd1fb7b2ac60597631161b6f3ee8a1f7396567ab2d642e3aefe9cbbe7c817d/userdata -c eabd1fb7b2ac60597631161b6f3ee8a1f7396567ab2d642e3aefe9cbbe7c817d --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_kube-controller-manager-kinc-control-plane_02ab0148790b09c2ce7263fc4575ffd2/kube-controller-manager/0.log --log-level info -n k8s_kube-controller-manager_kube-controller-manager-kinc-control-plane_kube-system_02ab0148790b09c2ce7263fc4575ffd2_0 -P /tmp/containers/overlay-containers/eabd1fb7b2ac60597631161b6f3ee8a1f7396567ab2d642e3aefe9cbbe7c817d/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/eabd1fb7b2ac60597631161b6f3ee8a1f7396567ab2d642e3aefe9cbbe7c817d/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/eabd1fb7b2ac60597631161b6f3ee8a1f7396567ab2d642e3aefe9cbbe7c817d/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u eabd1fb7b2ac60597631161b6f3ee8a1f7396567ab2d642e3aefe9cbbe7c817d
+2025-10-10T09:08:17.1487940Z              ├─ 786 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/VD4BYMJTCHEEWDHUJCQMX4NCIP:/root/.local/share/containers/storage/overlay/l/EMJWZDU6JD5S3QLW7GSGHDOUCG:/root/.local/share/containers/storage/overlay/l/TD5LED7RRRNNUG3U66NHDTNJJL:/root/.local/share/containers/storage/overlay/l/YL7IGF5CFAVOHSHCJMBO2CKVD2:/root/.local/share/containers/storage/overlay/l/HTPBGOV5RICDCLDN4MWWHKGLJY:/root/.local/share/containers/storage/overlay/l/DE3EV2SZ6R6RAEUME5W4GNKCQN:/root/.local/share/containers/storage/overlay/l/DGULT4YO7EMGKRJY5LCKNZOKHS:/root/.local/share/containers/storage/overlay/l/ALZK3TQNU7BYJY35OAQ5ZTPVPV:/root/.local/share/containers/storage/overlay/l/ZYK2X5I6GOR3SWSDMVBIMKELJJ:/root/.local/share/containers/storage/overlay/l/I7BJXYCQWEEJWHYSB7MFZQN57A:/root/.local/share/containers/storage/overlay/l/TNDQYEEWETPPGU5OEHSRR6KXCA:/root/.local/share/containers/storage/overlay/l/TG4OGWFX37EVVXFLI4NFCFAUUV:/root/.local/share/containers/storage/overlay/l/DFYRNPVY6K77ZPAU5AY2CLTWAT:/root/.local/share/containers/storage/overlay/l/RIRTNIIM4OKEDS6ZB6SKVQ57KF,upperdir=/root/.local/share/containers/storage/overlay/d1dd0f6a90c4c1756ac137ad5cec51f8c0365ecf505a0cad1177097dd290c0a6/diff,workdir=/root/.local/share/containers/storage/overlay/d1dd0f6a90c4c1756ac137ad5cec51f8c0365ecf505a0cad1177097dd290c0a6/work,volatile /root/.local/share/containers/storage/overlay/d1dd0f6a90c4c1756ac137ad5cec51f8c0365ecf505a0cad1177097dd290c0a6/merged
+2025-10-10T09:08:17.1511113Z              ├─ 788 /usr/bin/conmon -b /tmp/containers/overlay-containers/873bd6699b1c469a3d3afba8d57b784624adc38174f4ad41a1197007b17176c8/userdata -c 873bd6699b1c469a3d3afba8d57b784624adc38174f4ad41a1197007b17176c8 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_kube-apiserver-kinc-control-plane_8b13cfa3d4fca03ad76b15222d6b184a/kube-apiserver/0.log --log-level info -n k8s_kube-apiserver_kube-apiserver-kinc-control-plane_kube-system_8b13cfa3d4fca03ad76b15222d6b184a_0 -P /tmp/containers/overlay-containers/873bd6699b1c469a3d3afba8d57b784624adc38174f4ad41a1197007b17176c8/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/873bd6699b1c469a3d3afba8d57b784624adc38174f4ad41a1197007b17176c8/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/873bd6699b1c469a3d3afba8d57b784624adc38174f4ad41a1197007b17176c8/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 873bd6699b1c469a3d3afba8d57b784624adc38174f4ad41a1197007b17176c8
+2025-10-10T09:08:17.1523696Z              ├─ 957 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/313dbce7be748ae3d4b1a4c676b89516eec05dfb501cf8536c345d4022dd3d26/diff,workdir=/root/.local/share/containers/storage/overlay/313dbce7be748ae3d4b1a4c676b89516eec05dfb501cf8536c345d4022dd3d26/work,volatile /root/.local/share/containers/storage/overlay/313dbce7be748ae3d4b1a4c676b89516eec05dfb501cf8536c345d4022dd3d26/merged
+2025-10-10T09:08:17.1529967Z              ├─ 959 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/6728121a643f07dba95534fc3fadd3c8446d963387e0167d92144e635fb9bec6/diff,workdir=/root/.local/share/containers/storage/overlay/6728121a643f07dba95534fc3fadd3c8446d963387e0167d92144e635fb9bec6/work,volatile /root/.local/share/containers/storage/overlay/6728121a643f07dba95534fc3fadd3c8446d963387e0167d92144e635fb9bec6/merged
+2025-10-10T09:08:17.1537555Z              ├─1071 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/ae5a2219bf2433ab637bb75086723782f64cfb21782831a0bd8d7c225e732ef2/diff,workdir=/root/.local/share/containers/storage/overlay/ae5a2219bf2433ab637bb75086723782f64cfb21782831a0bd8d7c225e732ef2/work,volatile /root/.local/share/containers/storage/overlay/ae5a2219bf2433ab637bb75086723782f64cfb21782831a0bd8d7c225e732ef2/merged
+2025-10-10T09:08:17.1544045Z              ├─1073 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/c8c958499949696a2ae9034695fb64406c0171520ba59f7b5f2373f57d8a7426/diff,workdir=/root/.local/share/containers/storage/overlay/c8c958499949696a2ae9034695fb64406c0171520ba59f7b5f2373f57d8a7426/work,volatile /root/.local/share/containers/storage/overlay/c8c958499949696a2ae9034695fb64406c0171520ba59f7b5f2373f57d8a7426/merged
+2025-10-10T09:08:17.1551173Z              ├─1142 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/FPJ72JS4ICHMZ334PA4RX2QTEL:/root/.local/share/containers/storage/overlay/l/OL4AKPDSIRUQC4GFHAR6UDLZCS:/root/.local/share/containers/storage/overlay/l/QOFXNPGS67DIFT6T6FX72WYJ75:/root/.local/share/containers/storage/overlay/l/P6BTKTN45TOAWZ4XHUSH3EHUZW,upperdir=/root/.local/share/containers/storage/overlay/557b11060f9675dab0169df77beb93c018b8d227d3d78c8338042b58ab0eead7/diff,workdir=/root/.local/share/containers/storage/overlay/557b11060f9675dab0169df77beb93c018b8d227d3d78c8338042b58ab0eead7/work,volatile /root/.local/share/containers/storage/overlay/557b11060f9675dab0169df77beb93c018b8d227d3d78c8338042b58ab0eead7/merged
+2025-10-10T09:08:17.1560864Z              ├─1144 /usr/bin/conmon -b /tmp/containers/overlay-containers/15ce6f1ad081caa6ca470919c7f273e3ff1c1876047b0f20e72d4ec9f06a6524/userdata -c 15ce6f1ad081caa6ca470919c7f273e3ff1c1876047b0f20e72d4ec9f06a6524 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_kincnet-tk8dk_c6e4ddc1-8629-461a-95f0-045b0fe3cc2d/kincnet-cni/0.log --log-level info -n k8s_kincnet-cni_kincnet-tk8dk_kube-system_c6e4ddc1-8629-461a-95f0-045b0fe3cc2d_0 -P /tmp/containers/overlay-containers/15ce6f1ad081caa6ca470919c7f273e3ff1c1876047b0f20e72d4ec9f06a6524/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/15ce6f1ad081caa6ca470919c7f273e3ff1c1876047b0f20e72d4ec9f06a6524/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/15ce6f1ad081caa6ca470919c7f273e3ff1c1876047b0f20e72d4ec9f06a6524/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 15ce6f1ad081caa6ca470919c7f273e3ff1c1876047b0f20e72d4ec9f06a6524
+2025-10-10T09:08:17.1574772Z              ├─1788 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/7WROVYZMKZ7YZLVV2PYHXATM72:/root/.local/share/containers/storage/overlay/l/J54NQL45HQ4LBP5H5I6N3OUA5B:/root/.local/share/containers/storage/overlay/l/WYIXKWDHOXYMEZV2ZBPLUOZLTV:/root/.local/share/containers/storage/overlay/l/IQD4JWMBBUALNCIFARZ6IZ7KBA:/root/.local/share/containers/storage/overlay/l/HA7RJHCFHN44VVNL3KMKSB62SK:/root/.local/share/containers/storage/overlay/l/YIP5BOGZE34NSFDIF55JQXXC4F:/root/.local/share/containers/storage/overlay/l/DV3KNYJHDSVXJAX6NYUOY5AXFF:/root/.local/share/containers/storage/overlay/l/FKAEDKISJ72H7JLJXM2NWYH45H:/root/.local/share/containers/storage/overlay/l/WKEGDVGNAILTYMVUFMECPBIKD2:/root/.local/share/containers/storage/overlay/l/IBJUR2WWHG6622QDAQHTFZ42RS:/root/.local/share/containers/storage/overlay/l/I67XZ4TWHS6JA3NOQTIAU34MDX:/root/.local/share/containers/storage/overlay/l/TB7FMRDULRSQVHDHWEITEAKLAO:/root/.local/share/containers/storage/overlay/l/4WA46KOQ4CMLE5ZUI55XGZTUSI,upperdir=/root/.local/share/containers/storage/overlay/fe065af073e22d297e74f9307de0e73526ce8e42f5ab7e9323ddf278531fde81/diff,workdir=/root/.local/share/containers/storage/overlay/fe065af073e22d297e74f9307de0e73526ce8e42f5ab7e9323ddf278531fde81/work,volatile /root/.local/share/containers/storage/overlay/fe065af073e22d297e74f9307de0e73526ce8e42f5ab7e9323ddf278531fde81/merged
+2025-10-10T09:08:17.1597635Z              ├─1793 /usr/bin/conmon -b /tmp/containers/overlay-containers/e9a81d813888c3aead1c35720efac444f2c46641111f26e7b92c8d770a66b7a2/userdata -c e9a81d813888c3aead1c35720efac444f2c46641111f26e7b92c8d770a66b7a2 --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_coredns-674b8bbfcf-gx8f7_03554def-5255-494b-927c-0e05d198d238/coredns/0.log --log-level info -n k8s_coredns_coredns-674b8bbfcf-gx8f7_kube-system_03554def-5255-494b-927c-0e05d198d238_0 -P /tmp/containers/overlay-containers/e9a81d813888c3aead1c35720efac444f2c46641111f26e7b92c8d770a66b7a2/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/e9a81d813888c3aead1c35720efac444f2c46641111f26e7b92c8d770a66b7a2/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/e9a81d813888c3aead1c35720efac444f2c46641111f26e7b92c8d770a66b7a2/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u e9a81d813888c3aead1c35720efac444f2c46641111f26e7b92c8d770a66b7a2
+2025-10-10T09:08:17.1617480Z              ├─1854 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/7WROVYZMKZ7YZLVV2PYHXATM72:/root/.local/share/containers/storage/overlay/l/J54NQL45HQ4LBP5H5I6N3OUA5B:/root/.local/share/containers/storage/overlay/l/WYIXKWDHOXYMEZV2ZBPLUOZLTV:/root/.local/share/containers/storage/overlay/l/IQD4JWMBBUALNCIFARZ6IZ7KBA:/root/.local/share/containers/storage/overlay/l/HA7RJHCFHN44VVNL3KMKSB62SK:/root/.local/share/containers/storage/overlay/l/YIP5BOGZE34NSFDIF55JQXXC4F:/root/.local/share/containers/storage/overlay/l/DV3KNYJHDSVXJAX6NYUOY5AXFF:/root/.local/share/containers/storage/overlay/l/FKAEDKISJ72H7JLJXM2NWYH45H:/root/.local/share/containers/storage/overlay/l/WKEGDVGNAILTYMVUFMECPBIKD2:/root/.local/share/containers/storage/overlay/l/IBJUR2WWHG6622QDAQHTFZ42RS:/root/.local/share/containers/storage/overlay/l/I67XZ4TWHS6JA3NOQTIAU34MDX:/root/.local/share/containers/storage/overlay/l/TB7FMRDULRSQVHDHWEITEAKLAO:/root/.local/share/containers/storage/overlay/l/4WA46KOQ4CMLE5ZUI55XGZTUSI,upperdir=/root/.local/share/containers/storage/overlay/5a3ca96b9d0c81c4ef5448a45dbaa4f7e6619a13b0903fc7f33990221bf5334d/diff,workdir=/root/.local/share/containers/storage/overlay/5a3ca96b9d0c81c4ef5448a45dbaa4f7e6619a13b0903fc7f33990221bf5334d/work,volatile /root/.local/share/containers/storage/overlay/5a3ca96b9d0c81c4ef5448a45dbaa4f7e6619a13b0903fc7f33990221bf5334d/merged
+2025-10-10T09:08:17.1629905Z              ├─1856 /usr/bin/conmon -b /tmp/containers/overlay-containers/0243ceb7d29c4479f91aad3ce33827e90f409caa8574015a9c68e35b83d6ad3b/userdata -c 0243ceb7d29c4479f91aad3ce33827e90f409caa8574015a9c68e35b83d6ad3b --exit-dir /var/run/crio/exits -l /var/log/pods/kube-system_coredns-674b8bbfcf-k9qdt_346e0ffe-9cbb-4d30-84a6-f899e5c67689/coredns/0.log --log-level info -n k8s_coredns_coredns-674b8bbfcf-k9qdt_kube-system_346e0ffe-9cbb-4d30-84a6-f899e5c67689_0 -P /tmp/containers/overlay-containers/0243ceb7d29c4479f91aad3ce33827e90f409caa8574015a9c68e35b83d6ad3b/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/0243ceb7d29c4479f91aad3ce33827e90f409caa8574015a9c68e35b83d6ad3b/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/0243ceb7d29c4479f91aad3ce33827e90f409caa8574015a9c68e35b83d6ad3b/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u 0243ceb7d29c4479f91aad3ce33827e90f409caa8574015a9c68e35b83d6ad3b
+2025-10-10T09:08:17.1637205Z              ├─1999 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/4FL5AELVBCK577X5FMD3LMTLNZ,upperdir=/root/.local/share/containers/storage/overlay/a79deb9ec9fd68df5daf976d0785dd18434096c758b93c4d9161e5bb809b06f7/diff,workdir=/root/.local/share/containers/storage/overlay/a79deb9ec9fd68df5daf976d0785dd18434096c758b93c4d9161e5bb809b06f7/work,volatile /root/.local/share/containers/storage/overlay/a79deb9ec9fd68df5daf976d0785dd18434096c758b93c4d9161e5bb809b06f7/merged
+2025-10-10T09:08:17.1650868Z              ├─2679 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/7VDWUPBDLETSGGX63SC74G5UAM:/root/.local/share/containers/storage/overlay/l/W46UYVIMCFXBYJERCGU3DTQOCV:/root/.local/share/containers/storage/overlay/l/HWSEAQWLQEF57OIMLP37BZHLLU:/root/.local/share/containers/storage/overlay/l/4XGYALH4NQVZYJGE4LLP3GLHT4:/root/.local/share/containers/storage/overlay/l/BTPYAB4JUG7OA5PRHL2AR6UCOW:/root/.local/share/containers/storage/overlay/l/3ML4XYDGO6JN7G34KFNOCPN6QN:/root/.local/share/containers/storage/overlay/l/YLCY2BWTAM72GPII4I4ROLSDOG:/root/.local/share/containers/storage/overlay/l/4CETACJBBQFTD4D5GL22LSRD37:/root/.local/share/containers/storage/overlay/l/6RPB7OPINPWIBYSLOUBEFG6CUA:/root/.local/share/containers/storage/overlay/l/KSE4CPZTCL2JXZ66DUF5XBQP7U:/root/.local/share/containers/storage/overlay/l/DF6KDJCLFCKDFJZKFKW2K5JVDQ:/root/.local/share/containers/storage/overlay/l/X6CA5E3KWUOKH6IZ67R53A46XP:/root/.local/share/containers/storage/overlay/l/25JN5GQ5U5EIXTNN5Q5GZGG5HL:/root/.local/share/containers/storage/overlay/l/FVEGSL3WEFWQOYYNXKCQAJNZDD:/root/.local/share/containers/storage/overlay/l/VBHVCMPMCDDXKXDKC4P2MRCAQO,upperdir=/root/.local/share/containers/storage/overlay/dd5e7ac48ed40b6b99ac0b3fc80c0fbd4c29026f25c92d2e929b0c48726eac2f/diff,workdir=/root/.local/share/containers/storage/overlay/dd5e7ac48ed40b6b99ac0b3fc80c0fbd4c29026f25c92d2e929b0c48726eac2f/work,volatile /root/.local/share/containers/storage/overlay/dd5e7ac48ed40b6b99ac0b3fc80c0fbd4c29026f25c92d2e929b0c48726eac2f/merged
+2025-10-10T09:08:17.1662439Z              ├─2752 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/JHUIEIDJ6DP6OGKKP3B3R2YYMP:/root/.local/share/containers/storage/overlay/l/XYCFY6G3E7YIR4VRTB4BY4A5QD,upperdir=/root/.local/share/containers/storage/overlay/188ef13d0ef37b0a2507b365535dee5841ac4fcef5eab2d28103e144d0b6b2f8/diff,workdir=/root/.local/share/containers/storage/overlay/188ef13d0ef37b0a2507b365535dee5841ac4fcef5eab2d28103e144d0b6b2f8/work,volatile /root/.local/share/containers/storage/overlay/188ef13d0ef37b0a2507b365535dee5841ac4fcef5eab2d28103e144d0b6b2f8/merged
+2025-10-10T09:08:17.1677608Z              ├─2943 /usr/bin/fuse-overlayfs -o lowerdir=/root/.local/share/containers/storage/overlay/l/7VDWUPBDLETSGGX63SC74G5UAM:/root/.local/share/containers/storage/overlay/l/W46UYVIMCFXBYJERCGU3DTQOCV:/root/.local/share/containers/storage/overlay/l/HWSEAQWLQEF57OIMLP37BZHLLU:/root/.local/share/containers/storage/overlay/l/4XGYALH4NQVZYJGE4LLP3GLHT4:/root/.local/share/containers/storage/overlay/l/BTPYAB4JUG7OA5PRHL2AR6UCOW:/root/.local/share/containers/storage/overlay/l/3ML4XYDGO6JN7G34KFNOCPN6QN:/root/.local/share/containers/storage/overlay/l/YLCY2BWTAM72GPII4I4ROLSDOG:/root/.local/share/containers/storage/overlay/l/4CETACJBBQFTD4D5GL22LSRD37:/root/.local/share/containers/storage/overlay/l/6RPB7OPINPWIBYSLOUBEFG6CUA:/root/.local/share/containers/storage/overlay/l/KSE4CPZTCL2JXZ66DUF5XBQP7U:/root/.local/share/containers/storage/overlay/l/DF6KDJCLFCKDFJZKFKW2K5JVDQ:/root/.local/share/containers/storage/overlay/l/X6CA5E3KWUOKH6IZ67R53A46XP:/root/.local/share/containers/storage/overlay/l/25JN5GQ5U5EIXTNN5Q5GZGG5HL:/root/.local/share/containers/storage/overlay/l/FVEGSL3WEFWQOYYNXKCQAJNZDD:/root/.local/share/containers/storage/overlay/l/VBHVCMPMCDDXKXDKC4P2MRCAQO,upperdir=/root/.local/share/containers/storage/overlay/482d4964831bcf668ca3801078b07e46a4071cf90edfea19654fc271eea4829b/diff,workdir=/root/.local/share/containers/storage/overlay/482d4964831bcf668ca3801078b07e46a4071cf90edfea19654fc271eea4829b/work,volatile /root/.local/share/containers/storage/overlay/482d4964831bcf668ca3801078b07e46a4071cf90edfea19654fc271eea4829b/merged
+2025-10-10T09:08:17.1692859Z              └─2945 /usr/bin/conmon -b /tmp/containers/overlay-containers/b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3/userdata -c b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3 --exit-dir /var/run/crio/exits -l /var/log/pods/local-path-storage_local-path-provisioner-59f7658548-xprdf_08e96864-949c-4333-aeeb-7313002027f7/local-path-provisioner/2.log --log-level info -n k8s_local-path-provisioner_local-path-provisioner-59f7658548-xprdf_local-path-storage_08e96864-949c-4333-aeeb-7313002027f7_2 -P /tmp/containers/overlay-containers/b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3/userdata/conmon-pidfile -p /tmp/containers/overlay-containers/b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3/userdata/pidfile --persist-dir /root/.local/share/containers/storage/overlay-containers/b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3/userdata -r /usr/bin/crun --runtime-arg --root=/run/crun --socket-dir-path /var/run/crio --syslog -u b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3
+2025-10-10T09:08:17.1696996Z 
+2025-10-10T09:08:17.1697979Z Oct 10 09:08:09 kinc-control-plane crio[76]: time="2025-10-10T09:08:09.184782159Z" level=info msg="Removed container beae20e9456f58fb0140ed5464e714e99e5ea37cf58efc269aab1697ff5ed720: kube-system/kube-proxy-ld6dk/kube-proxy" id=75011042-7aa0-4a58-a692-d862ff5351a2 name=/runtime.v1.RuntimeService/RemoveContainer
+2025-10-10T09:08:17.1699772Z Oct 10 09:08:10 kinc-control-plane crio[76]: time="2025-10-10T09:08:10.96406913Z" level=info msg="Checking image status: docker.io/kindest/local-path-provisioner:v20240202-8f1494ea" id=7580fbfc-7d95-4a16-a953-d6d52c8b48f0 name=/runtime.v1.ImageService/ImageStatus
+2025-10-10T09:08:17.1701319Z Oct 10 09:08:10 kinc-control-plane crio[76]: time="2025-10-10T09:08:10.965105359Z" level=info msg="Checking image status: docker.io/kindest/local-path-provisioner:v20240202-8f1494ea" id=65502e3f-2867-48e7-ad10-e9d462173fbf name=/runtime.v1.ImageService/ImageStatus
+2025-10-10T09:08:17.1703091Z Oct 10 09:08:10 kinc-control-plane crio[76]: time="2025-10-10T09:08:10.965874206Z" level=info msg="Creating container: local-path-storage/local-path-provisioner-59f7658548-xprdf/local-path-provisioner" id=527484a5-e1c7-43a6-b19c-af96e6b8af11 name=/runtime.v1.RuntimeService/CreateContainer
+2025-10-10T09:08:17.1704393Z Oct 10 09:08:10 kinc-control-plane crio[76]: time="2025-10-10T09:08:10.966081411Z" level=info msg="Allowed annotations are specified for workload []"
+2025-10-10T09:08:17.1705191Z Oct 10 09:08:10 kinc-control-plane crio[76]: time="2025-10-10T09:08:10.976495224Z" level=info msg="Allowed annotations are specified for workload []"
+2025-10-10T09:08:17.1705978Z Oct 10 09:08:10 kinc-control-plane crio[76]: time="2025-10-10T09:08:10.97897264Z" level=info msg="Allowed annotations are specified for workload []"
+2025-10-10T09:08:17.1707731Z Oct 10 09:08:11 kinc-control-plane crio[76]: time="2025-10-10T09:08:11.025439117Z" level=info msg="Created container b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3: local-path-storage/local-path-provisioner-59f7658548-xprdf/local-path-provisioner" id=527484a5-e1c7-43a6-b19c-af96e6b8af11 name=/runtime.v1.RuntimeService/CreateContainer
+2025-10-10T09:08:17.1709673Z Oct 10 09:08:11 kinc-control-plane crio[76]: time="2025-10-10T09:08:11.025952094Z" level=info msg="Starting container: b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3" id=ff5befc0-e112-4f3a-8c54-26b366bf7e0b name=/runtime.v1.RuntimeService/StartContainer
+2025-10-10T09:08:17.1712149Z Oct 10 09:08:11 kinc-control-plane crio[76]: time="2025-10-10T09:08:11.031415539Z" level=info msg="Started container" PID=2967 containerID=b7ca3c2595e049e74f3450b0481a4fff46756636df8217b567861eb5ba37e0e3 description=local-path-storage/local-path-provisioner-59f7658548-xprdf/local-path-provisioner id=ff5befc0-e112-4f3a-8c54-26b366bf7e0b name=/runtime.v1.RuntimeService/StartContainer sandboxID=68c62fc030a4c85224a12820bf5c67df42815655e87f4be295ff638d865af77f
+2025-10-10T09:08:17.1713625Z 
+2025-10-10T09:08:17.1713849Z ● kubelet.service - kubelet: The Kubernetes Node Agent
+2025-10-10T09:08:17.1714379Z      Loaded: loaded (/etc/systemd/system/kubelet.service; enabled; preset: disabled)
+2025-10-10T09:08:17.1714842Z     Drop-In: /etc/systemd/system/kubelet.service.d
+2025-10-10T09:08:17.1715236Z              └─10-kubeadm.conf
+2025-10-10T09:08:17.1715589Z              /usr/lib/systemd/system/service.d
+2025-10-10T09:08:17.1716107Z              └─10-timeout-abort.conf
+2025-10-10T09:08:17.1716660Z              /etc/systemd/system/kubelet.service.d
+2025-10-10T09:08:17.1717184Z              └─11-cgroups.conf
+2025-10-10T09:08:17.1717581Z      Active: active (running) since Fri 2025-10-10 09:06:39 UTC; 1min 37s ago
+2025-10-10T09:08:17.1717959Z  Invocation: c4976caaf05c4c02b4744678d158b9de
+2025-10-10T09:08:17.1718315Z        Docs: http://kubernetes.io/docs/
+2025-10-10T09:08:17.1718591Z    Main PID: 854 (kubelet)
+2025-10-10T09:08:17.1718834Z       Tasks: 12 (limit: 307)
+2025-10-10T09:08:17.1719092Z      Memory: 44.4M (peak: 45.2M)
+2025-10-10T09:08:17.1719340Z         CPU: 1.910s
+2025-10-10T09:08:17.1719603Z      CGroup: /kubelet.slice/kubelet.service
+2025-10-10T09:08:17.1722796Z              └─854 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --config=/var/lib/kubelet/config.yaml --container-runtime-endpoint=unix:///var/run/crio/crio.sock --node-ip=10.0.2.100 --node-labels= --pod-infra-container-image=registry.k8s.io/pause:3.10 --provider-id=kind://podman/kinc/kinc-control-plane --feature-gates=KubeletInUserNamespace=true
+2025-10-10T09:08:17.1724170Z 
+2025-10-10T09:08:17.1724840Z Oct 10 09:07:54 kinc-control-plane kubelet[854]: I1010 09:07:54.962770     854 scope.go:117] "RemoveContainer" containerID="beae20e9456f58fb0140ed5464e714e99e5ea37cf58efc269aab1697ff5ed720"
+2025-10-10T09:08:17.1726963Z Oct 10 09:07:54 kinc-control-plane kubelet[854]: E1010 09:07:54.962898     854 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"StartContainer\" for \"kube-proxy\" with CrashLoopBackOff: \"back-off 40s restarting failed container=kube-proxy pod=kube-proxy-ld6dk_kube-system(acaad905-24e5-466f-9a50-3208a22ced5d)\"" pod="kube-system/kube-proxy-ld6dk" podUID="acaad905-24e5-466f-9a50-3208a22ced5d"
+2025-10-10T09:08:17.1729040Z Oct 10 09:07:59 kinc-control-plane kubelet[854]: I1010 09:07:59.140581     854 scope.go:117] "RemoveContainer" containerID="be960276df7caf8156d514d97c9f7f6735817c655d524959af0e6d0f52f7f3d0"
+2025-10-10T09:08:17.1730094Z Oct 10 09:07:59 kinc-control-plane kubelet[854]: I1010 09:07:59.140893     854 scope.go:117] "RemoveContainer" containerID="6d42f0a46c69a54802c0ee18e246129844194457cd0ce378452548f18eda1bd5"
+2025-10-10T09:08:17.1732178Z Oct 10 09:07:59 kinc-control-plane kubelet[854]: E1010 09:07:59.141031     854 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"StartContainer\" for \"local-path-provisioner\" with CrashLoopBackOff: \"back-off 10s restarting failed container=local-path-provisioner pod=local-path-provisioner-59f7658548-xprdf_local-path-storage(08e96864-949c-4333-aeeb-7313002027f7)\"" pod="local-path-storage/local-path-provisioner-59f7658548-xprdf" podUID="08e96864-949c-4333-aeeb-7313002027f7"
+2025-10-10T09:08:17.1734196Z Oct 10 09:08:07 kinc-control-plane kubelet[854]: I1010 09:08:07.963415     854 scope.go:117] "RemoveContainer" containerID="beae20e9456f58fb0140ed5464e714e99e5ea37cf58efc269aab1697ff5ed720"
+2025-10-10T09:08:17.1735413Z Oct 10 09:08:09 kinc-control-plane kubelet[854]: I1010 09:08:09.159718     854 scope.go:117] "RemoveContainer" containerID="beae20e9456f58fb0140ed5464e714e99e5ea37cf58efc269aab1697ff5ed720"
+2025-10-10T09:08:17.1736477Z Oct 10 09:08:09 kinc-control-plane kubelet[854]: I1010 09:08:09.159957     854 scope.go:117] "RemoveContainer" containerID="30e8df1db67c4e7621a3588aaa999b1d8b7c0ec4a329cc6c1e733d1212feffc3"
+2025-10-10T09:08:17.1738368Z Oct 10 09:08:09 kinc-control-plane kubelet[854]: E1010 09:08:09.160105     854 pod_workers.go:1301] "Error syncing pod, skipping" err="failed to \"StartContainer\" for \"kube-proxy\" with CrashLoopBackOff: \"back-off 1m20s restarting failed container=kube-proxy pod=kube-proxy-ld6dk_kube-system(acaad905-24e5-466f-9a50-3208a22ced5d)\"" pod="kube-system/kube-proxy-ld6dk" podUID="acaad905-24e5-466f-9a50-3208a22ced5d"
+2025-10-10T09:08:17.1740187Z Oct 10 09:08:10 kinc-control-plane kubelet[854]: I1010 09:08:10.963582     854 scope.go:117] "RemoveContainer" containerID="6d42f0a46c69a54802c0ee18e246129844194457cd0ce378452548f18eda1bd5"
+2025-10-10T09:08:17.1987765Z 
+2025-10-10T09:08:17.1988316Z === Checking Pod Status ===
+2025-10-10T09:08:17.3063612Z NAMESPACE            NAME                                         READY   STATUS    RESTARTS      AGE   IP           NODE                 NOMINATED NODE   READINESS GATES
+2025-10-10T09:08:17.3064974Z kube-system          coredns-674b8bbfcf-gx8f7                     0/1     Running   0             94s   10.85.0.2    kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3066240Z kube-system          coredns-674b8bbfcf-k9qdt                     0/1     Running   0             94s   10.85.0.3    kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3067693Z kube-system          etcd-kinc-control-plane                      1/1     Running   0             98s   10.0.2.100   kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3068805Z kube-system          kincnet-tk8dk                                1/1     Running   0             94s   10.0.2.100   kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3070025Z kube-system          kube-apiserver-kinc-control-plane            1/1     Running   0             98s   10.0.2.100   kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3071440Z kube-system          kube-controller-manager-kinc-control-plane   1/1     Running   0             98s   10.0.2.100   kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3072757Z kube-system          kube-proxy-ld6dk                             0/1     Error     4 (50s ago)   94s   10.0.2.100   kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3074018Z kube-system          kube-scheduler-kinc-control-plane            1/1     Running   0             98s   10.0.2.100   kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3075492Z local-path-storage   local-path-provisioner-59f7658548-xprdf      1/1     Running   2 (19s ago)   82s   10.85.0.4    kinc-control-plane   <none>           <none>
+2025-10-10T09:08:17.3168927Z 
+2025-10-10T09:08:17.3170842Z === Pod Logs (kube-proxy) ===
+2025-10-10T09:08:17.4324172Z time="2025-10-10T09:08:08Z" level=warning msg="Running modprobe ip_vs failed with message: `modprobe: WARNING: Module ip_vs not found in directory /lib/modules/6.11.0-1018-azure`, error: exit status 1"
+2025-10-10T09:08:17.4325443Z E1010 09:08:08.174417       1 proxier.go:703] "Error flushing ipvs rules" err="operation not permitted"
+2025-10-10T09:08:17.4326056Z E1010 09:08:08.284110       1 proxier.go:703] "Error flushing ipvs rules" err="operation not permitted"
+2025-10-10T09:08:17.4326605Z I1010 09:08:08.370241       1 server.go:715] "Successfully retrieved node IP(s)" IPs=["10.0.2.100"]
+2025-10-10T09:08:17.4327621Z I1010 09:08:08.370375       1 conntrack.go:121] "Set sysctl" entry="net/netfilter/nf_conntrack_tcp_timeout_close_wait" value=3600
+2025-10-10T09:08:17.4328784Z E1010 09:08:08.370398       1 server.go:136] "Error running ProxyServer" err="open /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_close_wait: read-only file system"
+2025-10-10T09:08:17.4329667Z E1010 09:08:08.370487       1 run.go:72] "command failed" err="open /proc/sys/net/netfilter/nf_conntrack_tcp_timeout_close_wait: read-only file system"
+2025-10-10T09:08:17.4422832Z 
+2025-10-10T09:08:17.4423502Z === Pod Logs (local-path-provisioner) ===
+2025-10-10T09:08:17.5682630Z ##[error]Process completed with exit code 1.
+2025-10-10T09:08:17.5793790Z ##[group]Run actions/upload-artifact@v4
+2025-10-10T09:08:17.5794095Z with:
+2025-10-10T09:08:17.5794282Z   name: test-logs-22
+2025-10-10T09:08:17.5794691Z   path: work/
 tests/**/*.log
 tests/**/*.json
 **/*.log
 **/*.json
 
-2025-10-10T09:01:40.9039063Z   retention-days: 30
-2025-10-10T09:01:40.9039254Z   if-no-files-found: warn
-2025-10-10T09:01:40.9039453Z   compression-level: 6
-2025-10-10T09:01:40.9039637Z   overwrite: false
-2025-10-10T09:01:40.9039823Z   include-hidden-files: false
-2025-10-10T09:01:40.9040025Z ##[endgroup]
-2025-10-10T09:01:41.1199601Z ##[warning]No files were found with the provided path: work/
+2025-10-10T09:08:17.5795057Z   retention-days: 30
+2025-10-10T09:08:17.5795271Z   if-no-files-found: warn
+2025-10-10T09:08:17.5795483Z   compression-level: 6
+2025-10-10T09:08:17.5795706Z   overwrite: false
+2025-10-10T09:08:17.5795908Z   include-hidden-files: false
+2025-10-10T09:08:17.5796129Z ##[endgroup]
+2025-10-10T09:08:17.8163271Z ##[warning]No files were found with the provided path: work/
 tests/**/*.log
 tests/**/*.json
 **/*.log
 **/*.json. No artifacts will be uploaded.
-2025-10-10T09:01:41.1256483Z ##[group]Run podman rm -f kinc-cluster || true
-2025-10-10T09:01:41.1256807Z [36;1mpodman rm -f kinc-cluster || true[0m
-2025-10-10T09:01:41.1275846Z shell: /usr/bin/bash -e {0}
-2025-10-10T09:01:41.1276075Z ##[endgroup]
-2025-10-10T09:01:51.1795616Z time="2025-10-10T09:01:51Z" level=warning msg="StopSignal (37) failed to stop container kinc-cluster in 10 seconds, resorting to SIGKILL"
-2025-10-10T09:01:51.4624800Z kinc-cluster
-2025-10-10T09:01:51.4716832Z Post job cleanup.
-2025-10-10T09:01:51.5592157Z [command]/usr/bin/git version
-2025-10-10T09:01:51.5623350Z git version 2.51.0
-2025-10-10T09:01:51.5668260Z Temporarily overriding HOME='/home/runner/work/_temp/c1f8fa69-efeb-41b3-919d-167dc56d60b1' before making global git config changes
-2025-10-10T09:01:51.5669454Z Adding repository directory to the temporary git global config as a safe directory
-2025-10-10T09:01:51.5673951Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
-2025-10-10T09:01:51.5703722Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
-2025-10-10T09:01:51.5730553Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
-2025-10-10T09:01:51.5897674Z fatal: No url found for submodule path 'kinc' in .gitmodules
-2025-10-10T09:01:51.5919983Z ##[warning]The process '/usr/bin/git' failed with exit code 128
-2025-10-10T09:01:51.5996189Z Cleaning up orphan processes
-2025-10-10T09:01:51.6241782Z Terminate orphan process: pid (2168) (catatonit)
+2025-10-10T09:08:17.8241599Z ##[group]Run podman rm -f kinc-cluster || true
+2025-10-10T09:08:17.8241954Z [36;1mpodman rm -f kinc-cluster || true[0m
+2025-10-10T09:08:17.8274286Z shell: /usr/bin/bash -e {0}
+2025-10-10T09:08:17.8274520Z ##[endgroup]
+2025-10-10T09:08:27.8880274Z time="2025-10-10T09:08:27Z" level=warning msg="StopSignal (37) failed to stop container kinc-cluster in 10 seconds, resorting to SIGKILL"
+2025-10-10T09:08:28.3744408Z kinc-cluster
+2025-10-10T09:08:28.3839106Z Post job cleanup.
+2025-10-10T09:08:28.4914385Z [command]/usr/bin/git version
+2025-10-10T09:08:28.4952062Z git version 2.51.0
+2025-10-10T09:08:28.4997765Z Temporarily overriding HOME='/home/runner/work/_temp/3c13cdee-4fb2-4a01-a7ba-773f7db1b5cc' before making global git config changes
+2025-10-10T09:08:28.4999110Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-10T09:08:28.5011866Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
+2025-10-10T09:08:28.5047410Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-10T09:08:28.5079576Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-10T09:08:28.5305006Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-10T09:08:28.5327073Z http.https://github.com/.extraheader
+2025-10-10T09:08:28.5339654Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-10-10T09:08:28.5370932Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-10T09:08:28.5697482Z Cleaning up orphan processes
+2025-10-10T09:08:28.6002875Z Terminate orphan process: pid (2132) (catatonit)

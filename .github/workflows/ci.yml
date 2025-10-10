@@ -127,6 +127,8 @@ jobs:
             --sysctl net.ipv6.conf.default.keep_addr_on_down=1 \
             --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \
             --sysctl net.netfilter.nf_conntrack_tcp_timeout_established=86400 \
+            --sysctl net.netfilter.nf_conntrack_tcp_timeout_close_wait=3600 \
+            --sysctl net.netfilter.nf_conntrack_max=131072 \
             --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \
             --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \
             --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \
