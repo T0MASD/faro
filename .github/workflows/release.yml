@@ -144,10 +144,12 @@ jobs:
           timeout 30 bash -c 'until podman exec kinc-cluster echo ok >/dev/null 2>&1; do sleep 2; done'
           echo "✅ Container responding"
           
-          # Wait for systemd inside container (accept 'running' or 'degraded')
-          # 'degraded' is OK - it means some non-critical services failed (e.g., kernel debug mounts)
+          # Mask kernel debug mounts that fail in GitHub Actions (not available)
+          podman exec kinc-cluster systemctl mask sys-kernel-config.mount sys-kernel-debug.mount sys-kernel-tracing.mount
+          
+          # Wait for systemd inside container
           echo "⏳ Waiting for systemd..."
-          if ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running 2>&1 | grep -qE "running|degraded"; do echo -n "."; sleep 2; done'; then
+          if ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running 2>&1 | grep -q "running"; do echo -n "."; sleep 2; done'; then
             echo ""
             SYSTEMD_STATE=$(podman exec kinc-cluster systemctl is-system-running 2>&1 || true)
             echo "❌ Systemd not running (state: $SYSTEMD_STATE)"
