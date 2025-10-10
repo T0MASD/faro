@@ -26,25 +26,74 @@ jobs:
       # Deploy kinc cluster for Kubernetes testing
       - name: Deploy kinc cluster
         run: |
-          # Enable IP forwarding
+          # Enable IP forwarding (required for kinc networking)
           echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
           
-          # Start kinc cluster (unprivileged - no --privileged needed)
-          podman run -d --name kinc-cluster \
-            --publish 6443:6443 \
+          # Start kinc cluster (systemd-based Kubernetes container)
+          # Based on kinc/runtime/quadlet/kinc-control-plane.container
+          podman run -d \
+            --name kinc-cluster \
+            --hostname kinc-control-plane \
+            --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \
+            --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \
+            --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \
+            --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \
+            --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \
+            --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \
+            --device /dev/fuse \
+            --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+            --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \
+            --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --publish 127.0.0.1:6443:6443/tcp \
+            -e container=podman \
+            -e KUBECONFIG=/etc/kubernetes/admin.conf \
             ghcr.io/t0masd/kinc:v0-1
           
-          # Wait for cluster ready
-          timeout 300 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null; do sleep 2; done'
+          echo "⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)..."
+          echo "   This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,"
+          echo "   API server, CNI, storage provisioner, and CoreDNS"
+          
+          # Wait for container to respond
+          timeout 30 bash -c 'until podman exec kinc-cluster echo ok >/dev/null 2>&1; do sleep 2; done'
+          echo "✅ Container responding"
+          
+          # Wait for systemd inside container
+          timeout 60 bash -c 'until podman exec kinc-cluster systemctl is-system-running --wait >/dev/null 2>&1; do sleep 2; done'
+          echo "✅ Systemd operational"
+          
+          # Wait for CRI-O
+          timeout 60 bash -c 'until podman exec kinc-cluster systemctl is-active crio.service >/dev/null 2>&1; do sleep 2; done'
+          echo "✅ CRI-O active"
+          
+          # Wait for cluster initialization
+          timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do sleep 5; done'
+          echo "✅ Cluster initialization started"
+          
+          # Wait for API server (from host)
+          timeout 120 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null 2>&1; do sleep 2; done'
+          echo "✅ API server responding"
+          
+          # Wait for node ready
+          timeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=10s >/dev/null 2>&1; do sleep 5; done'
+          echo "✅ Node ready"
+          
+          # Wait for CoreDNS (critical for Faro tests)
+          timeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pod -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running >/dev/null 2>&1; do sleep 5; done'
+          echo "✅ CoreDNS running"
           
           # Extract kubeconfig
           mkdir -p ~/.kube
           podman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config
           sed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config
           
-          # Verify cluster is working
+          # Verify cluster
+          echo ""
+          echo "📊 Cluster Status:"
+          kubectl get nodes -o wide
+          kubectl get pods -A
           kubectl cluster-info
-          kubectl get nodes
 
       # Run comprehensive test suite (unit + e2e + integration)
       - name: Run full test suite
