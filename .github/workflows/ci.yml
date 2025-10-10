@@ -148,6 +148,9 @@ jobs:
           # Mask kernel debug mounts that fail in GitHub Actions (not available)
           podman exec kinc-cluster systemctl mask sys-kernel-config.mount sys-kernel-debug.mount sys-kernel-tracing.mount
           
+          # Reset failed state after masking
+          podman exec kinc-cluster systemctl reset-failed
+          
           # Wait for systemd inside container
           echo "⏳ Waiting for systemd..."
           if ! timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-system-running 2>&1 | grep -q "running"; do echo -n "."; sleep 2; done'; then
