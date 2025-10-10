@@ -1,0 +1,346 @@
+﻿2025-10-10T07:16:04.1580000Z Current runner version: '2.328.0'
+2025-10-10T07:16:04.1604215Z ##[group]Runner Image Provisioner
+2025-10-10T07:16:04.1605063Z Hosted Compute Agent
+2025-10-10T07:16:04.1605689Z Version: 20250912.392
+2025-10-10T07:16:04.1606318Z Commit: d921fda672a98b64f4f82364647e2f10b2267d0b
+2025-10-10T07:16:04.1607037Z Build Date: 2025-09-12T15:23:14Z
+2025-10-10T07:16:04.1608115Z ##[endgroup]
+2025-10-10T07:16:04.1608672Z ##[group]Operating System
+2025-10-10T07:16:04.1609289Z Ubuntu
+2025-10-10T07:16:04.1609829Z 24.04.3
+2025-10-10T07:16:04.1610294Z LTS
+2025-10-10T07:16:04.1610759Z ##[endgroup]
+2025-10-10T07:16:04.1611211Z ##[group]Runner Image
+2025-10-10T07:16:04.1611882Z Image: ubuntu-24.04
+2025-10-10T07:16:04.1612363Z Version: 20250929.60.1
+2025-10-10T07:16:04.1613359Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20250929.60/images/ubuntu/Ubuntu2404-Readme.md
+2025-10-10T07:16:04.1614964Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20250929.60
+2025-10-10T07:16:04.1616008Z ##[endgroup]
+2025-10-10T07:16:04.1617033Z ##[group]GITHUB_TOKEN Permissions
+2025-10-10T07:16:04.1619245Z Contents: read
+2025-10-10T07:16:04.1619920Z Metadata: read
+2025-10-10T07:16:04.1620398Z ##[endgroup]
+2025-10-10T07:16:04.1622428Z Secret source: Actions
+2025-10-10T07:16:04.1623236Z Prepare workflow directory
+2025-10-10T07:16:04.1940297Z Prepare all required actions
+2025-10-10T07:16:04.1978847Z Getting action download info
+2025-10-10T07:16:04.7178167Z Download action repository 'actions/checkout@v4' (SHA:08eba0b27e820071cde6df949e0beb9ba4906955)
+2025-10-10T07:16:04.8921255Z Download action repository 'actions/setup-go@v5' (SHA:d35c59abb061a4a6fb18e82ac0862c26744d6ab5)
+2025-10-10T07:16:05.4376787Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2025-10-10T07:16:05.6234205Z Complete job name: test
+2025-10-10T07:16:05.6933426Z ##[group]Run actions/checkout@v4
+2025-10-10T07:16:05.6934264Z with:
+2025-10-10T07:16:05.6934644Z   fetch-depth: 0
+2025-10-10T07:16:05.6935079Z   repository: T0MASD/faro
+2025-10-10T07:16:05.6935691Z   token: ***
+2025-10-10T07:16:05.6936080Z   ssh-strict: true
+2025-10-10T07:16:05.6936463Z   ssh-user: git
+2025-10-10T07:16:05.6936868Z   persist-credentials: true
+2025-10-10T07:16:05.6937319Z   clean: true
+2025-10-10T07:16:05.6937962Z   sparse-checkout-cone-mode: true
+2025-10-10T07:16:05.6938448Z   fetch-tags: false
+2025-10-10T07:16:05.6938850Z   show-progress: true
+2025-10-10T07:16:05.6939247Z   lfs: false
+2025-10-10T07:16:05.6939611Z   submodules: false
+2025-10-10T07:16:05.6940013Z   set-safe-directory: true
+2025-10-10T07:16:05.6940711Z ##[endgroup]
+2025-10-10T07:16:05.8019867Z Syncing repository: T0MASD/faro
+2025-10-10T07:16:05.8021635Z ##[group]Getting Git version info
+2025-10-10T07:16:05.8022677Z Working directory is '/home/runner/work/faro/faro'
+2025-10-10T07:16:05.8024317Z [command]/usr/bin/git version
+2025-10-10T07:16:05.8110596Z git version 2.51.0
+2025-10-10T07:16:05.8137801Z ##[endgroup]
+2025-10-10T07:16:05.8153987Z Temporarily overriding HOME='/home/runner/work/_temp/044afdcd-20b6-43d3-9774-8c95c6e2b622' before making global git config changes
+2025-10-10T07:16:05.8156383Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-10T07:16:05.8160601Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
+2025-10-10T07:16:05.8199748Z Deleting the contents of '/home/runner/work/faro/faro'
+2025-10-10T07:16:05.8203785Z ##[group]Initializing the repository
+2025-10-10T07:16:05.8208446Z [command]/usr/bin/git init /home/runner/work/faro/faro
+2025-10-10T07:16:05.8326860Z hint: Using 'master' as the name for the initial branch. This default branch name
+2025-10-10T07:16:05.8328389Z hint: is subject to change. To configure the initial branch name to use in all
+2025-10-10T07:16:05.8329413Z hint: of your new repositories, which will suppress this warning, call:
+2025-10-10T07:16:05.8330451Z hint:
+2025-10-10T07:16:05.8331244Z hint: 	git config --global init.defaultBranch <name>
+2025-10-10T07:16:05.8332347Z hint:
+2025-10-10T07:16:05.8333301Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2025-10-10T07:16:05.8334897Z hint: 'development'. The just-created branch can be renamed via this command:
+2025-10-10T07:16:05.8336149Z hint:
+2025-10-10T07:16:05.8336844Z hint: 	git branch -m <name>
+2025-10-10T07:16:05.8337905Z hint:
+2025-10-10T07:16:05.8338952Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2025-10-10T07:16:05.8340565Z Initialized empty Git repository in /home/runner/work/faro/faro/.git/
+2025-10-10T07:16:05.8345592Z [command]/usr/bin/git remote add origin https://github.com/T0MASD/faro
+2025-10-10T07:16:05.8388176Z ##[endgroup]
+2025-10-10T07:16:05.8389442Z ##[group]Disabling automatic garbage collection
+2025-10-10T07:16:05.8393331Z [command]/usr/bin/git config --local gc.auto 0
+2025-10-10T07:16:05.8423239Z ##[endgroup]
+2025-10-10T07:16:05.8424519Z ##[group]Setting up auth
+2025-10-10T07:16:05.8431227Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-10T07:16:05.8462787Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-10T07:16:05.8861311Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-10T07:16:05.8893633Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-10T07:16:05.9126592Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2025-10-10T07:16:05.9164971Z ##[endgroup]
+2025-10-10T07:16:05.9166205Z ##[group]Fetching the repository
+2025-10-10T07:16:05.9175210Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +54d54182dcf1c11f4da76ce1a1b3133ac6750442:refs/remotes/pull/6/merge
+2025-10-10T07:16:06.5212803Z From https://github.com/T0MASD/faro
+2025-10-10T07:16:06.5214161Z  * [new branch]      ci                                       -> origin/ci
+2025-10-10T07:16:06.5215258Z  * [new branch]      main                                     -> origin/main
+2025-10-10T07:16:06.5216412Z  * [new branch]      middleware                               -> origin/middleware
+2025-10-10T07:16:06.5217823Z  * [new tag]         v1.0.0                                   -> v1.0.0
+2025-10-10T07:16:06.5218883Z  * [new tag]         v1.1.0                                   -> v1.1.0
+2025-10-10T07:16:06.5219900Z  * [new tag]         v1.2.0                                   -> v1.2.0
+2025-10-10T07:16:06.5220959Z  * [new tag]         v1.2.1                                   -> v1.2.1
+2025-10-10T07:16:06.5221948Z  * [new tag]         v1.3.0                                   -> v1.3.0
+2025-10-10T07:16:06.5223070Z  * [new ref]         54d54182dcf1c11f4da76ce1a1b3133ac6750442 -> pull/6/merge
+2025-10-10T07:16:06.5254815Z ##[endgroup]
+2025-10-10T07:16:06.5256767Z ##[group]Determining the checkout info
+2025-10-10T07:16:06.5259021Z ##[endgroup]
+2025-10-10T07:16:06.5262591Z [command]/usr/bin/git sparse-checkout disable
+2025-10-10T07:16:06.5328527Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2025-10-10T07:16:06.5356118Z ##[group]Checking out the ref
+2025-10-10T07:16:06.5359140Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/6/merge
+2025-10-10T07:16:06.5445702Z Note: switching to 'refs/remotes/pull/6/merge'.
+2025-10-10T07:16:06.5446945Z 
+2025-10-10T07:16:06.5448161Z You are in 'detached HEAD' state. You can look around, make experimental
+2025-10-10T07:16:06.5450796Z changes and commit them, and you can discard any commits you make in this
+2025-10-10T07:16:06.5452531Z state without impacting any branches by switching back to a branch.
+2025-10-10T07:16:06.5453859Z 
+2025-10-10T07:16:06.5455057Z If you want to create a new branch to retain commits you create, you may
+2025-10-10T07:16:06.5456863Z do so (now or later) by using -c with the switch command. Example:
+2025-10-10T07:16:06.5458282Z 
+2025-10-10T07:16:06.5458774Z   git switch -c <new-branch-name>
+2025-10-10T07:16:06.5459530Z 
+2025-10-10T07:16:06.5460008Z Or undo this operation with:
+2025-10-10T07:16:06.5460749Z 
+2025-10-10T07:16:06.5461188Z   git switch -
+2025-10-10T07:16:06.5461746Z 
+2025-10-10T07:16:06.5462657Z Turn off this advice by setting config variable advice.detachedHead to false
+2025-10-10T07:16:06.5464004Z 
+2025-10-10T07:16:06.5465497Z HEAD is now at 54d5418 Merge 5e25ff06d43f9a56cbe5776cab231be9db6b125d into c656f2d0e66497e6470f15704d8124941629b0bc
+2025-10-10T07:16:06.5470602Z ##[endgroup]
+2025-10-10T07:16:06.5491665Z [command]/usr/bin/git log -1 --format=%H
+2025-10-10T07:16:06.5513342Z 54d54182dcf1c11f4da76ce1a1b3133ac6750442
+2025-10-10T07:16:06.5798348Z ##[group]Run actions/setup-go@v5
+2025-10-10T07:16:06.5799537Z with:
+2025-10-10T07:16:06.5800498Z   go-version: 1.24
+2025-10-10T07:16:06.5801419Z   check-latest: false
+2025-10-10T07:16:06.5802673Z   token: ***
+2025-10-10T07:16:06.5803496Z   cache: true
+2025-10-10T07:16:06.5804351Z ##[endgroup]
+2025-10-10T07:16:06.7442849Z Setup go version spec 1.24
+2025-10-10T07:16:06.7760003Z Found in cache @ /opt/hostedtoolcache/go/1.24.7/x64
+2025-10-10T07:16:06.7764330Z Added go to the path
+2025-10-10T07:16:06.7768064Z Successfully set up Go version 1.24
+2025-10-10T07:16:07.4963251Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOMODCACHE
+2025-10-10T07:16:07.4995145Z [command]/opt/hostedtoolcache/go/1.24.7/x64/bin/go env GOCACHE
+2025-10-10T07:16:07.5018818Z /home/runner/go/pkg/mod
+2025-10-10T07:16:07.5048034Z /home/runner/.cache/go-build
+2025-10-10T07:16:07.7874777Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
+2025-10-10T07:16:09.0688933Z Received 4194304 of 549431188 (0.8%), 4.0 MBs/sec
+2025-10-10T07:16:10.0700946Z Received 125829120 of 549431188 (22.9%), 60.0 MBs/sec
+2025-10-10T07:16:11.0764951Z Received 247463936 of 549431188 (45.0%), 78.6 MBs/sec
+2025-10-10T07:16:12.0759568Z Received 381681664 of 549431188 (69.5%), 90.8 MBs/sec
+2025-10-10T07:16:13.0769461Z Received 507510784 of 549431188 (92.4%), 96.6 MBs/sec
+2025-10-10T07:16:13.6940247Z Received 549431188 of 549431188 (100.0%), 93.2 MBs/sec
+2025-10-10T07:16:13.6941515Z Cache Size: ~524 MB (549431188 B)
+2025-10-10T07:16:13.6981594Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ba4626be-dd13-438b-b3bc-2aea0d43dc66/cache.tzst -P -C /home/runner/work/faro/faro --use-compress-program unzstd
+2025-10-10T07:16:17.4697972Z Cache restored successfully
+2025-10-10T07:16:17.5703352Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.24.7-474e8ac15a5a2ec26e66c9ced0bd0f13388e3d562d9c3dbfe1ba976e3d26c053
+2025-10-10T07:16:17.5726278Z go version go1.24.7 linux/amd64
+2025-10-10T07:16:17.5726515Z 
+2025-10-10T07:16:17.5726794Z ##[group]go env
+2025-10-10T07:16:17.7006897Z AR='ar'
+2025-10-10T07:16:17.7007302Z CC='gcc'
+2025-10-10T07:16:17.7007794Z CGO_CFLAGS='-O2 -g'
+2025-10-10T07:16:17.7008031Z CGO_CPPFLAGS=''
+2025-10-10T07:16:17.7008234Z CGO_CXXFLAGS='-O2 -g'
+2025-10-10T07:16:17.7008448Z CGO_ENABLED='1'
+2025-10-10T07:16:17.7073464Z CGO_FFLAGS='-O2 -g'
+2025-10-10T07:16:17.7073801Z CGO_LDFLAGS='-O2 -g'
+2025-10-10T07:16:17.7074014Z CXX='g++'
+2025-10-10T07:16:17.7074248Z GCCGO='gccgo'
+2025-10-10T07:16:17.7074431Z GO111MODULE=''
+2025-10-10T07:16:17.7074689Z GOAMD64='v1'
+2025-10-10T07:16:17.7074908Z GOARCH='amd64'
+2025-10-10T07:16:17.7075149Z GOAUTH='netrc'
+2025-10-10T07:16:17.7075338Z GOBIN=''
+2025-10-10T07:16:17.7075578Z GOCACHE='/home/runner/.cache/go-build'
+2025-10-10T07:16:17.7075838Z GOCACHEPROG=''
+2025-10-10T07:16:17.7076026Z GODEBUG=''
+2025-10-10T07:16:17.7076226Z GOENV='/home/runner/.config/go/env'
+2025-10-10T07:16:17.7076465Z GOEXE=''
+2025-10-10T07:16:17.7076660Z GOEXPERIMENT=''
+2025-10-10T07:16:17.7076864Z GOFIPS140='off'
+2025-10-10T07:16:17.7077046Z GOFLAGS=''
+2025-10-10T07:16:17.7078278Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build987559398=/tmp/go-build -gno-record-gcc-switches'
+2025-10-10T07:16:17.7078896Z GOHOSTARCH='amd64'
+2025-10-10T07:16:17.7079101Z GOHOSTOS='linux'
+2025-10-10T07:16:17.7079287Z GOINSECURE=''
+2025-10-10T07:16:17.7079551Z GOMOD='/home/runner/work/faro/faro/go.mod'
+2025-10-10T07:16:17.7079837Z GOMODCACHE='/home/runner/go/pkg/mod'
+2025-10-10T07:16:17.7080084Z GONOPROXY=''
+2025-10-10T07:16:17.7080267Z GONOSUMDB=''
+2025-10-10T07:16:17.7080443Z GOOS='linux'
+2025-10-10T07:16:17.7080633Z GOPATH='/home/runner/go'
+2025-10-10T07:16:17.7080837Z GOPRIVATE=''
+2025-10-10T07:16:17.7081123Z GOPROXY='https://proxy.golang.org,direct'
+2025-10-10T07:16:17.7081560Z GOROOT='/opt/hostedtoolcache/go/1.24.7/x64'
+2025-10-10T07:16:17.7082023Z GOSUMDB='sum.golang.org'
+2025-10-10T07:16:17.7082391Z GOTELEMETRY='local'
+2025-10-10T07:16:17.7083133Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2025-10-10T07:16:17.7083676Z GOTMPDIR=''
+2025-10-10T07:16:17.7084017Z GOTOOLCHAIN='auto'
+2025-10-10T07:16:17.7084364Z GOTOOLDIR='/opt/hostedtoolcache/go/1.24.7/x64/pkg/tool/linux_amd64'
+2025-10-10T07:16:17.7084697Z GOVCS=''
+2025-10-10T07:16:17.7084879Z GOVERSION='go1.24.7'
+2025-10-10T07:16:17.7085078Z GOWORK=''
+2025-10-10T07:16:17.7085269Z PKG_CONFIG='pkg-config'
+2025-10-10T07:16:17.7085410Z 
+2025-10-10T07:16:17.7085708Z ##[endgroup]
+2025-10-10T07:16:17.7202562Z ##[group]Run # Enable IP forwarding (required for kinc networking)
+2025-10-10T07:16:17.7203118Z [36;1m# Enable IP forwarding (required for kinc networking)[0m
+2025-10-10T07:16:17.7203505Z [36;1mecho 1 | sudo tee /proc/sys/net/ipv4/ip_forward[0m
+2025-10-10T07:16:17.7203804Z [36;1m[0m
+2025-10-10T07:16:17.7204066Z [36;1m# Start kinc cluster (systemd-based Kubernetes container)[0m
+2025-10-10T07:16:17.7204487Z [36;1m# Based on kinc/runtime/quadlet/kinc-control-plane.container[0m
+2025-10-10T07:16:17.7204826Z [36;1mpodman run -d \[0m
+2025-10-10T07:16:17.7205079Z [36;1m  --name kinc-cluster \[0m
+2025-10-10T07:16:17.7205360Z [36;1m  --hostname kinc-control-plane \[0m
+2025-10-10T07:16:17.7205713Z [36;1m  --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \[0m
+2025-10-10T07:16:17.7206123Z [36;1m  --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \[0m
+2025-10-10T07:16:17.7206507Z [36;1m  --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \[0m
+2025-10-10T07:16:17.7206950Z [36;1m  --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \[0m
+2025-10-10T07:16:17.7207521Z [36;1m  --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \[0m
+2025-10-10T07:16:17.7207937Z [36;1m  --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \[0m
+2025-10-10T07:16:17.7208238Z [36;1m  --device /dev/fuse \[0m
+2025-10-10T07:16:17.7208538Z [36;1m  --sysctl net.ipv6.conf.all.disable_ipv6=0 \[0m
+2025-10-10T07:16:17.7208912Z [36;1m  --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \[0m
+2025-10-10T07:16:17.7209255Z [36;1m  --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T07:16:17.7209613Z [36;1m  --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T07:16:17.7209995Z [36;1m  --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \[0m
+2025-10-10T07:16:17.7210330Z [36;1m  --publish 127.0.0.1:6443:6443/tcp \[0m
+2025-10-10T07:16:17.7210609Z [36;1m  -e container=podman \[0m
+2025-10-10T07:16:17.7210883Z [36;1m  -e KUBECONFIG=/etc/kubernetes/admin.conf \[0m
+2025-10-10T07:16:17.7211166Z [36;1m  ghcr.io/t0masd/kinc:v0-1[0m
+2025-10-10T07:16:17.7211391Z [36;1m[0m
+2025-10-10T07:16:17.7211708Z [36;1mecho "⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)..."[0m
+2025-10-10T07:16:17.7212216Z [36;1mecho "   This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,"[0m
+2025-10-10T07:16:17.7212648Z [36;1mecho "   API server, CNI, storage provisioner, and CoreDNS"[0m
+2025-10-10T07:16:17.7212947Z [36;1m[0m
+2025-10-10T07:16:17.7213135Z [36;1m# Wait for container to respond[0m
+2025-10-10T07:16:17.7213756Z [36;1mtimeout 30 bash -c 'until podman exec kinc-cluster echo ok >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T07:16:17.7214169Z [36;1mecho "✅ Container responding"[0m
+2025-10-10T07:16:17.7214405Z [36;1m[0m
+2025-10-10T07:16:17.7214598Z [36;1m# Wait for systemd inside container[0m
+2025-10-10T07:16:17.7215111Z [36;1mtimeout 60 bash -c 'until podman exec kinc-cluster systemctl is-system-running --wait >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T07:16:17.7215618Z [36;1mecho "✅ Systemd operational"[0m
+2025-10-10T07:16:17.7215854Z [36;1m[0m
+2025-10-10T07:16:17.7216026Z [36;1m# Wait for CRI-O[0m
+2025-10-10T07:16:17.7216482Z [36;1mtimeout 60 bash -c 'until podman exec kinc-cluster systemctl is-active crio.service >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T07:16:17.7216975Z [36;1mecho "✅ CRI-O active"[0m
+2025-10-10T07:16:17.7217191Z [36;1m[0m
+2025-10-10T07:16:17.7217530Z [36;1m# Wait for cluster initialization[0m
+2025-10-10T07:16:17.7218219Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do sleep 5; done'[0m
+2025-10-10T07:16:17.7218776Z [36;1mecho "✅ Cluster initialization started"[0m
+2025-10-10T07:16:17.7219036Z [36;1m[0m
+2025-10-10T07:16:17.7219218Z [36;1m# Wait for API server (from host)[0m
+2025-10-10T07:16:17.7219845Z [36;1mtimeout 120 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null 2>&1; do sleep 2; done'[0m
+2025-10-10T07:16:17.7220310Z [36;1mecho "✅ API server responding"[0m
+2025-10-10T07:16:17.7220544Z [36;1m[0m
+2025-10-10T07:16:17.7220719Z [36;1m# Wait for node ready[0m
+2025-10-10T07:16:17.7221405Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf wait --for=condition=Ready nodes --all --timeout=10s >/dev/null 2>&1; do sleep 5; done'[0m
+2025-10-10T07:16:17.7222092Z [36;1mecho "✅ Node ready"[0m
+2025-10-10T07:16:17.7222294Z [36;1m[0m
+2025-10-10T07:16:17.7222501Z [36;1m# Wait for CoreDNS (critical for Faro tests)[0m
+2025-10-10T07:16:17.7223326Z [36;1mtimeout 120 bash -c 'until podman exec kinc-cluster kubectl --kubeconfig=/etc/kubernetes/admin.conf get pod -n kube-system -l k8s-app=kube-dns --field-selector=status.phase=Running >/dev/null 2>&1; do sleep 5; done'[0m
+2025-10-10T07:16:17.7224112Z [36;1mecho "✅ CoreDNS running"[0m
+2025-10-10T07:16:17.7224328Z [36;1m[0m
+2025-10-10T07:16:17.7224504Z [36;1m# Extract kubeconfig[0m
+2025-10-10T07:16:17.7224733Z [36;1mmkdir -p ~/.kube[0m
+2025-10-10T07:16:17.7225042Z [36;1mpodman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config[0m
+2025-10-10T07:16:17.7225522Z [36;1msed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config[0m
+2025-10-10T07:16:17.7225882Z [36;1m[0m
+2025-10-10T07:16:17.7226052Z [36;1m# Verify cluster[0m
+2025-10-10T07:16:17.7226246Z [36;1mecho ""[0m
+2025-10-10T07:16:17.7226442Z [36;1mecho "📊 Cluster Status:"[0m
+2025-10-10T07:16:17.7226683Z [36;1mkubectl get nodes -o wide[0m
+2025-10-10T07:16:17.7226921Z [36;1mkubectl get pods -A[0m
+2025-10-10T07:16:17.7227151Z [36;1mkubectl cluster-info[0m
+2025-10-10T07:16:17.7265632Z shell: /usr/bin/bash -e {0}
+2025-10-10T07:16:17.7265907Z ##[endgroup]
+2025-10-10T07:16:17.7405444Z 1
+2025-10-10T07:16:21.1591801Z Trying to pull ghcr.io/t0masd/kinc:v0-1...
+2025-10-10T07:16:21.8575505Z Getting image source signatures
+2025-10-10T07:16:21.8579876Z Copying blob sha256:1c3165eadf68bc96ed33f2878fbea0730fd3210acb1787a1be2cabc1205e508f
+2025-10-10T07:16:21.8580838Z Copying blob sha256:f4ebc8a2ad80e5c68607f77352fa9cd013853438ebb46fba1fcd8d32cd2ed294
+2025-10-10T07:16:21.8581442Z Copying blob sha256:79fbaf31284b97b3d3859ef109d5ee5097b2ecf41ef7a98d486f6e72b77f5e13
+2025-10-10T07:16:21.8582018Z Copying blob sha256:926690fefe603d28f0c526549e910212a929b903937a9470a40078bc6e4143b9
+2025-10-10T07:16:21.8582566Z Copying blob sha256:bfa0c27a39a64631c3172367295c01c6767ddd14f09589b80eb8ef1d297b794c
+2025-10-10T07:16:21.8583127Z Copying blob sha256:a36872a969c8ec4cc257c3d32629bb9ab0a5391564e8e589ebcdfdf345c0a2c8
+2025-10-10T07:16:22.0800253Z Copying blob sha256:ec151b0a58e825b197e33a8f26b6e250df1db60c61e46d46accbf5851042727e
+2025-10-10T07:16:22.0892410Z Copying blob sha256:3fdc23ae00c4c88b0648d79ab063f55f36f6a1b865dc2e0066722d59e746f326
+2025-10-10T07:16:22.1493447Z Copying blob sha256:fa20e998b13a4939ef513c13aad60100b9dddc37bbf22f93e6f938dba86c04c2
+2025-10-10T07:16:22.2491897Z Copying blob sha256:576943d1883f80ec0e6bbe3d414f2dc57c6b96a446af173d4a59f761bd7f24fe
+2025-10-10T07:16:22.2588580Z Copying blob sha256:63b040a831cd876cf9ee413b2347abbd1222f3e63c80fccd0f69992962e9d7e3
+2025-10-10T07:16:22.3483460Z Copying blob sha256:4170f55c66b53d10494a06b56259a3aa8b9915aa32e48e76d804fa3d8858b14a
+2025-10-10T07:16:22.4191533Z Copying blob sha256:c88c43a15383088c1dd388082857c094ad3334ae84a0c6d546d4f06eee6a721b
+2025-10-10T07:16:22.4458539Z Copying blob sha256:254235fa8067245719789a898197f59816a43b841a30f1414dfc8fa4ffdfb0a5
+2025-10-10T07:16:22.5181962Z Copying blob sha256:e91edddee38fd04236c59a7aed0f04ee408de8c7d076e91ade416118a318387b
+2025-10-10T07:16:22.5589708Z Copying blob sha256:409e36ae34c13b90b2aba1797b40eb54a3d914764e272b9c2ae065480b05e3ca
+2025-10-10T07:16:22.5859882Z Copying blob sha256:d753a5d66fb17f1b74a5c4312ece3584dcf697c1c35961f0c995c159e634b34f
+2025-10-10T07:16:22.6739209Z Copying blob sha256:157ded773e7a92a3763dbec098ff0581bda48aedd72b49d31a8b5d65a076a129
+2025-10-10T07:16:22.7908010Z Copying blob sha256:5b856357623aecf5fd02d603bb11298d6329d05db7e420f830dcbe0ba40307db
+2025-10-10T07:16:22.8259356Z Copying blob sha256:63d1b9582fbfdee5701cfc52173c8d4f54325311f5bfe28fe6eae1e6de38f8b1
+2025-10-10T07:16:22.8506806Z Copying blob sha256:d5fd4473dae776355a9cd12ee9227d79dd9fe987d99a7eaef3284152c86c1db6
+2025-10-10T07:16:22.9951215Z Copying blob sha256:01fbea8862c218217b1275df2045bcec65dfc5cc9a04a5f93f2963630cd4aee8
+2025-10-10T07:16:23.0765572Z Copying blob sha256:8f14a422129bc16f7850793a8c055a90dcc9810a4008c27345d464e842cbe769
+2025-10-10T07:16:31.9806538Z Copying config sha256:39da5bbd7c3eab0f00cea6560b1f5211d1dae7b89da7e75f8aa1a29e414eead3
+2025-10-10T07:16:31.9836876Z Writing manifest to image destination
+2025-10-10T07:16:32.6459438Z e58a7ea6be9267ccc4ad9dfdd882fbf780b86b30fad1687c32957fd045d66270
+2025-10-10T07:16:32.6644606Z ⏳ Waiting for kinc initialization (300s timeout, 14 validation steps)...
+2025-10-10T07:16:32.6645709Z    This includes: systemd, cgroup setup, CRI-O, kubelet, kubeadm init,
+2025-10-10T07:16:32.6650313Z    API server, CNI, storage provisioner, and CoreDNS
+2025-10-10T07:16:32.7949773Z ✅ Container responding
+2025-10-10T07:16:33.0040740Z ✅ Systemd operational
+2025-10-10T07:16:33.0909468Z ✅ CRI-O active
+2025-10-10T07:18:33.0947075Z ##[error]Process completed with exit code 124.
+2025-10-10T07:18:33.1038870Z ##[group]Run actions/upload-artifact@v4
+2025-10-10T07:18:33.1039150Z with:
+2025-10-10T07:18:33.1039326Z   name: test-logs-15
+2025-10-10T07:18:33.1039582Z   path: work/
+tests/**/*.log
+tests/**/*.json
+**/*.log
+**/*.json
+
+2025-10-10T07:18:33.1039887Z   retention-days: 30
+2025-10-10T07:18:33.1040110Z   if-no-files-found: warn
+2025-10-10T07:18:33.1040314Z   compression-level: 6
+2025-10-10T07:18:33.1040507Z   overwrite: false
+2025-10-10T07:18:33.1040696Z   include-hidden-files: false
+2025-10-10T07:18:33.1040910Z ##[endgroup]
+2025-10-10T07:18:33.3375497Z ##[warning]No files were found with the provided path: work/
+tests/**/*.log
+tests/**/*.json
+**/*.log
+**/*.json. No artifacts will be uploaded.
+2025-10-10T07:18:33.3457206Z ##[group]Run podman rm -f kinc-cluster || true
+2025-10-10T07:18:33.3458713Z [36;1mpodman rm -f kinc-cluster || true[0m
+2025-10-10T07:18:33.3492445Z shell: /usr/bin/bash -e {0}
+2025-10-10T07:18:33.3492673Z ##[endgroup]
+2025-10-10T07:18:33.5147848Z kinc-cluster
+2025-10-10T07:18:33.5255941Z Post job cleanup.
+2025-10-10T07:18:33.6209389Z [command]/usr/bin/git version
+2025-10-10T07:18:33.6246639Z git version 2.51.0
+2025-10-10T07:18:33.6299971Z Temporarily overriding HOME='/home/runner/work/_temp/18aa8bd9-ae94-4dda-a30a-bb2d945d5409' before making global git config changes
+2025-10-10T07:18:33.6301345Z Adding repository directory to the temporary git global config as a safe directory
+2025-10-10T07:18:33.6305289Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/faro/faro
+2025-10-10T07:18:33.6341428Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2025-10-10T07:18:33.6373388Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2025-10-10T07:18:33.6599213Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2025-10-10T07:18:33.6621841Z http.https://github.com/.extraheader
+2025-10-10T07:18:33.6634260Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2025-10-10T07:18:33.6665314Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2025-10-10T07:18:33.7004080Z Cleaning up orphan processes
+2025-10-10T07:18:33.7364751Z Terminate orphan process: pid (2121) (catatonit)

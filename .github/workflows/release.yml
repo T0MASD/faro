@@ -67,9 +67,14 @@ jobs:
           timeout 60 bash -c 'until podman exec kinc-cluster systemctl is-active crio.service >/dev/null 2>&1; do sleep 2; done'
           echo "✅ CRI-O active"
           
-          # Wait for cluster initialization
-          timeout 120 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do sleep 5; done'
+          # Wait for cluster initialization (kinc-init.service runs kubeadm init)
+          # This can take 3-5 minutes, so use longer timeout
+          echo "⏳ Waiting for kinc-init.service (this runs kubeadm init, takes 3-5 min)..."
+          timeout 600 bash -c 'until podman exec kinc-cluster systemctl is-active kinc-init.service >/dev/null 2>&1; do sleep 10; done'
           echo "✅ Cluster initialization started"
+          
+          # Debug: Check if init completed successfully
+          podman exec kinc-cluster systemctl status kinc-init.service --no-pager || true
           
           # Wait for API server (from host)
           timeout 120 bash -c 'until curl -k -s https://127.0.0.1:6443/healthz >/dev/null 2>&1; do sleep 2; done'
