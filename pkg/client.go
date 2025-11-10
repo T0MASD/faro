@@ -19,11 +19,13 @@ type KubernetesClient struct {
 }
 
 // NewKubernetesClient creates a Kubernetes client
+// Automatically detects in-cluster config (when running as an operator)
+// and falls back to kubeconfig file for out-of-cluster usage
 func NewKubernetesClient() (*KubernetesClient, error) {
-	// Try in-cluster config first
+	// Try in-cluster config first (for operator deployments)
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		// Fallback to kubeconfig file
+		// Fallback to kubeconfig file (for CLI/local usage)
 		kubeconfigPath := os.Getenv("KUBECONFIG")
 		if kubeconfigPath == "" {
 			kubeconfigPath = filepath.Join(os.Getenv("HOME"), ".kube", "config")

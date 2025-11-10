@@ -1,0 +1,43 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: faro-operator-config
+  namespace: faro-system
+  labels:
+    app.kubernetes.io/name: faro-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/part-of: faro
+data:
+  config.yaml: |
+    # Faro Operator Configuration
+    
+    # Output directory for logs and events
+    output_dir: "/var/faro/events"
+    
+    # Logging configuration
+    log_level: "info"  # debug, info, warning, error, fatal
+    
+    # Auto-shutdown (0 = run indefinitely, perfect for operator mode)
+    auto_shutdown_sec: 0
+    
+    # Enable JSON event export
+    json_export: true
+    
+    # Prometheus metrics configuration
+    metrics:
+      enabled: true
+      port: 8080
+      path: "/metrics"
+      bind_addr: "0.0.0.0"
+    
+    # Namespace-centric configuration
+    namespaces:
+      - name_selector: "faro-test-validation"
+        resources:
+          "v1/pods": {}
+          "v1/services": {}
+          "apps/v1/deployments": {}
+          "batch/v1/jobs": {}
+          "v1/events": {}
+
