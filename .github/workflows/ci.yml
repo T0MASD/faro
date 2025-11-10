@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   test:
+    name: Library Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -93,11 +94,6 @@ jobs:
           go mod tidy
           make test
 
-      # Run operator deployment tests
-      - name: Run operator tests
-        run: |
-          make test-operator
-
       # Collect and upload test logs and events
       - name: Upload test logs and events
         if: always()
@@ -121,6 +117,108 @@ jobs:
           go mod tidy
           go build test_import.go
           rm test_import.go
+
+      # Cleanup kinc cluster
+      - name: Cleanup kinc cluster
+        if: always()
+        run: |
+          podman rm -f kinc-cluster || true
+          podman volume rm kinc-var-data || true
+
+  test-operator:
+    name: Operator Deployment Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      # Deploy kinc cluster for Kubernetes testing
+      - name: Deploy kinc cluster
+        run: |
+          # Enable IP forwarding (required for kinc networking)
+          echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+          
+          # Create volume for persistent data
+          podman volume create kinc-var-data
+          
+          # Start kinc cluster with baked-in configuration (zero-config deployment)
+          podman run -d --name kinc-cluster \
+            --hostname kinc-control-plane \
+            --cgroups=split \
+            --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \
+            --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \
+            --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \
+            --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \
+            --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \
+            --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \
+            --device /dev/fuse \
+            --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --volume kinc-var-data:/var:rw \
+            --volume $HOME/.local/share/containers/storage:/root/.local/share/containers/storage:rw \
+            --sysctl net.ipv6.conf.all.disable_ipv6=0 \
+            --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \
+            --sysctl net.netfilter.nf_conntrack_tcp_timeout_established=86400 \
+            --sysctl net.netfilter.nf_conntrack_tcp_timeout_close_wait=3600 \
+            -p 127.0.0.1:6443:6443/tcp \
+            --env container=podman \
+            ghcr.io/t0masd/kinc:latest
+          
+          echo "⏳ Waiting for kinc cluster initialization..."
+          echo "   First run: 2-5 minutes (downloads container images)"
+          echo "   Subsequent runs: ~40 seconds (images cached)"
+          
+          # Wait for API server to start and be ready (check for HTTP 200)
+          timeout 300 bash -c 'until curl -k -s -o /dev/null -w "%{http_code}" https://localhost:6443/healthz 2>/dev/null | grep -q "200"; do sleep 2; done'
+          echo "✅ API server responding"
+          
+          # Extract kubeconfig
+          mkdir -p ~/.kube
+          podman cp kinc-cluster:/etc/kubernetes/admin.conf ~/.kube/config
+          sed -i 's|server: https://.*:6443|server: https://127.0.0.1:6443|g' ~/.kube/config
+          
+          # Wait for all system pods to be ready
+          echo "⏳ Waiting for system pods to be ready..."
+          kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s
+          
+          # Wait for local-path-storage namespace and pods to exist (may take a moment to be created)
+          echo "⏳ Waiting for storage provisioner..."
+          timeout 60 bash -c 'until kubectl get namespace local-path-storage >/dev/null 2>&1; do sleep 2; done'
+          timeout 60 bash -c 'until kubectl get pods -n local-path-storage 2>/dev/null | grep -q local-path-provisioner; do sleep 2; done'
+          kubectl wait --for=condition=Ready pods --all -n local-path-storage --timeout=60s
+          
+          # Verify cluster
+          echo ""
+          echo "📊 Cluster Status:"
+          kubectl get nodes -o wide
+          kubectl get pods -A
+          kubectl cluster-info
+
+      # Run operator deployment tests
+      - name: Run operator tests
+        run: |
+          go mod tidy
+          make test-operator
+
+      # Collect and upload operator test logs
+      - name: Upload operator test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-test-logs-${{ github.run_number }}
+          path: |
+            tests/operator-ci/logs/*.log
+            tests/operator-ci/logs/*.json
+          retention-days: 30
+        continue-on-error: true
 
       # Cleanup kinc cluster
       - name: Cleanup kinc cluster
