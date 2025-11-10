@@ -1,0 +1,18 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: faro-operator
+  labels:
+    app.kubernetes.io/name: faro-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/part-of: faro
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: faro-operator
+subjects:
+  - kind: ServiceAccount
+    name: faro-operator
+    namespace: faro-system
+

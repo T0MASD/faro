@@ -50,7 +50,7 @@ func main() {
 	logger.Warning("main", "This is a warning message")
 	logger.Error("main", "This is an error message")
 	
-	// Create Kubernetes client
+	// Create Kubernetes client (auto-detects in-cluster vs kubeconfig)
 	k8sClient, err := faro.NewKubernetesClient()
 	if err != nil {
 		logger.Error("main", fmt.Sprintf("Failed to create Kubernetes client: %v", err))
