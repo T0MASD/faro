@@ -99,13 +99,44 @@ messages:
 
       Focus on actionable insights and highlight any deviations from expected Faro behavior.
 
-      Files to analyze: {{files}}
+      ## Files to Analyze:
+      
+      The following files from the latest CI run artifacts will be analyzed:
+      
+      {{files}}
+
+# This prompt is designed to be run automatically from GitHub's Models/Prompts feature
+# at: https://github.com/T0MASD/faro/models/prompts
+#
+# GitHub will automatically load files from the latest CI artifacts based on the
+# patterns defined below. The artifacts are uploaded by .github/workflows/ci.yml
+# with the name pattern: test-logs-{run-number}
+
+files:
+  # E2E test logs and events (from tests/e2e/logs/test*/logs/)
+  - pattern: "tests/e2e/logs/*/logs/*.log"
+    source: "artifact:test-logs-*"
+  - pattern: "tests/e2e/logs/*/logs/*.json"
+    source: "artifact:test-logs-*"
+  # Integration test logs and events (from tests/integration/logs/Test*/logs/)
+  - pattern: "tests/integration/logs/*/logs/*.log"
+    source: "artifact:test-logs-*"
+  - pattern: "tests/integration/logs/*/logs/*.json"
+    source: "artifact:test-logs-*"
+
 testData:
-  - files: |
-      ci/tests/e2e/logs/test1/logs/faro-20250915-194223.log
-      ci/tests/e2e/logs/test1/logs/events-20250915-194223.json
+  - description: "E2E Test 1 - Namespace-centric ConfigMap monitoring"
+    files: |
+      tests/e2e/logs/test1/logs/faro-*.log
+      tests/e2e/logs/test1/logs/events-*.json
     expected: |
       Should identify CONFIG log entries and matching JSON events with consistent data
+  - description: "Integration Test - Vanilla library usage"
+    files: |
+      tests/integration/logs/vanilla/logs/faro-*.log
+      tests/integration/logs/vanilla/logs/events-*.json
+    expected: |
+      Should validate workload annotations and event handler callbacks
 evaluators:
   - name: Report should contain Executive Summary
     string:
