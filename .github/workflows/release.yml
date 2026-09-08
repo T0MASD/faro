@@ -54,7 +54,7 @@ jobs:
             --sysctl net.netfilter.nf_conntrack_tcp_timeout_close_wait=3600 \
             -p 127.0.0.1:6443:6443/tcp \
             --env container=podman \
-            ghcr.io/t0masd/kinc:v0-5
+            ghcr.io/t0masd/kinc:latest
           
           echo "⏳ Waiting for kinc cluster initialization..."
           echo "   First run: 2-5 minutes (downloads container images)"
@@ -99,11 +99,8 @@ jobs:
         with:
           name: release-test-logs-${{ github.ref_name }}
           path: |
-            work/
             tests/**/*.log
             tests/**/*.json
-            **/*.log
-            **/*.json
           retention-days: 90
         continue-on-error: true
 
