@@ -100,11 +100,8 @@ jobs:
         with:
           name: test-logs-${{ github.run_number }}
           path: |
-            work/
             tests/**/*.log
             tests/**/*.json
-            **/*.log
-            **/*.json
           retention-days: 30
         continue-on-error: true
 
