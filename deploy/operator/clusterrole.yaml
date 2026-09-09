@@ -1,0 +1,93 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: faro-operator
+  labels:
+    app.kubernetes.io/name: faro-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/part-of: faro
+rules:
+  # READ-ONLY monitoring permissions - scoped to specific resources
+  # Following principle of least privilege
+  
+  # Core API resources - workload monitoring
+  - apiGroups: [""]
+    resources:
+      - pods
+      - services
+      - endpoints
+      - persistentvolumeclaims
+      - events
+      - configmaps
+      - namespaces
+    verbs: ["get", "list", "watch"]
+
+  # Core API - NO access to secrets (unless explicitly needed)
+  # - apiGroups: [""]
+  #   resources:
+  #     - secrets
+  #   verbs: ["get", "list", "watch"]
+
+  # Apps resources
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - daemonsets
+      - replicasets
+      - statefulsets
+    verbs: ["get", "list", "watch"]
+
+  # Batch resources
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+
+  # Networking resources
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
+
+  # Storage resources
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - storageclasses
+      - volumeattachments
+    verbs: ["get", "list", "watch"]
+
+  # Discovery API - needed for dynamic GVR discovery
+  - apiGroups: [""]
+    resources:
+      - "namespaces"
+      - "pods"
+      - "services"
+      - "endpoints"
+    verbs: ["get", "list"]
+  
+  # API discovery - server preferred resources
+  - nonResourceURLs:
+      - "/api"
+      - "/api/*"
+      - "/apis"
+      - "/apis/*"
+    verbs: ["get"]
+
+  # Custom Resource Definitions - for dynamic resource discovery
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources:
+      - customresourcedefinitions
+    verbs: ["get", "list", "watch"]
+
+  # NOTE: If you need to monitor custom resources, add specific API groups here
+  # Example for cert-manager:
+  # - apiGroups: ["cert-manager.io"]
+  #   resources:
+  #     - certificates
+  #     - certificaterequests
+  #   verbs: ["get", "list", "watch"]
+
+

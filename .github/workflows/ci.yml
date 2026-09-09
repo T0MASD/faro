@@ -93,6 +93,11 @@ jobs:
           go mod tidy
           make test
 
+      # Run operator deployment tests
+      - name: Run operator tests
+        run: |
+          make test-operator
+
       # Collect and upload test logs and events
       - name: Upload test logs and events
         if: always()

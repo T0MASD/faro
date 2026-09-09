@@ -1,6 +1,6 @@
 # Faro Makefile
 
-.PHONY: help build build-dev test test-ci test-unit test-e2e test-integration clean tag-patch tag-minor tag-major
+.PHONY: help build build-dev test test-ci test-unit test-e2e test-integration test-operator clean tag-patch tag-minor tag-major operator-image operator-image-load
 
 # Default target
 help:
@@ -14,10 +14,16 @@ help:
 	@echo "  test-unit        - Run unit tests only (no K8s required)"
 	@echo "  test-e2e         - Run E2E tests only (requires K8s cluster)"
 	@echo "  test-integration - Run integration tests only (requires K8s cluster)"
+	@echo "  test-operator    - Run operator deployment tests (requires kinc cluster)"
 	@echo "  clean            - Clean build artifacts and test logs"
 	@echo "  tag-patch        - Create patch version tag and trigger release"
 	@echo "  tag-minor        - Create minor version tag and trigger release"
 	@echo "  tag-major        - Create major version tag and trigger release"
+	@echo ""
+	@echo "Operator targets:"
+	@echo "  operator-image      - Build faro operator container image"
+	@echo "  operator-image-load - Load operator image into kinc cluster"
+	@echo ""
 	@echo "  help             - Show this help message"
 
 # Build the faro binary
@@ -54,6 +60,12 @@ test-integration:
 	@echo "Note: Requires access to a Kubernetes cluster"
 	cd tests/integration && go test -v -parallel 3 -timeout 5m
 
+# Run operator deployment tests
+test-operator:
+	@echo "Running operator deployment validation tests..."
+	@echo "Note: Requires kinc cluster running"
+	bash scripts/test-operator.sh
+
 # Clean build artifacts and test logs
 clean:
 	@echo "Cleaning up..."
@@ -73,3 +85,20 @@ tag-minor:
 tag-major:
 	@echo "Creating major version tag (triggers GitHub Actions release)..."
 	@./scripts/tag-version.sh major
+
+# Operator container image targets
+OPERATOR_IMAGE ?= localhost/faro-operator
+OPERATOR_TAG ?= latest
+
+operator-image:
+	@echo "Building faro operator container image..."
+	@echo "Image: $(OPERATOR_IMAGE):$(OPERATOR_TAG)"
+	podman build -f Dockerfile -t $(OPERATOR_IMAGE):$(OPERATOR_TAG) .
+	@echo "✅ Operator image built: $(OPERATOR_IMAGE):$(OPERATOR_TAG)"
+	@echo "Note: Image is available to kinc via shared container storage"
+
+operator-image-load:
+	@echo "Loading operator image into kinc cluster..."
+	@echo "Note: kinc uses shared container storage - image should be automatically available"
+	@echo "Verifying image exists..."
+	podman image exists $(OPERATOR_IMAGE):$(OPERATOR_TAG) && echo "✅ Image $(OPERATOR_IMAGE):$(OPERATOR_TAG) is available" || (echo "❌ Image not found. Run 'make operator-image' first" && exit 1)
