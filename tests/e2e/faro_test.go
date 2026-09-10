@@ -175,7 +175,58 @@ func generateExpectedEvents(configFile, createManifest, updateManifest string) (
 		}
 	}
 
+	// A config that matches nothing produces no expectations, and validateEvents
+	// iterates only over expectations -- so an empty set passes unconditionally.
+	// Treat it as a broken test rather than a green one.
+	if len(expectedEvents) == 0 {
+		return nil, fmt.Errorf("config %s and manifest %s produced 0 expected events: "+
+			"the config matches none of the manifest's resources, so any Faro behaviour "+
+			"would pass. Check that every top-level `resources` entry is a key Faro's "+
+			"schema defines and that each namespaced entry names its namespaces",
+			configFile, createManifest)
+	}
+
 	return expectedEvents, nil
+}
+
+// countLogLines returns how many lines in Faro's own log for this run contain needle.
+func countLogLines(logDir, needle string) (int, error) {
+	pattern := filepath.Join(logDir, "logs", "faro-*.log")
+	files, err := filepath.Glob(pattern)
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, f := range files {
+		content, err := os.ReadFile(f)
+		if err != nil {
+			return 0, err
+		}
+		total += strings.Count(string(content), needle)
+	}
+	return total, nil
+}
+
+// assertNoDroppedEvents fails the test if Faro queued events it could not process.
+//
+// reconcile() resolves a lister by "<gvr>@<object namespace>". An informer that
+// watches every namespace registers its lister as "<gvr>@", so the lookup misses
+// and every namespaced event is dropped and requeued. The watch, the queue and
+// the event counts all look healthy; only this log line reports it.
+func assertNoDroppedEvents(t *testing.T, logDir string) {
+	const needle = "No lister found for key"
+	n, err := countLogLines(logDir, needle)
+	if err != nil {
+		t.Logf("could not scan Faro log for dropped events: %v", err)
+		return
+	}
+	if n > 0 {
+		t.Errorf("Faro dropped %d queued events (%q in %s/logs/): an informer "+
+			"registered a lister under a key reconcile() does not look up, so the "+
+			"events were discarded and requeued rather than reported", n, needle, logDir)
+		return
+	}
+	t.Logf("✓ no dropped events in %s/logs/", logDir)
 }
 
 // parseConfig parses a Faro YAML config file
@@ -242,8 +293,18 @@ func shouldMonitorResource(config *FaroConfig, resource ManifestResource) bool {
 	// Check resource-based configs
 	for _, resConfig := range config.Resources {
 		if resConfig.GVR == gvr {
-			// Check namespace names
+			// Check namespace names.
+			//
+			// An entry with no namespace_names carries no namespace constraint.
+			// Faro derives scope from API discovery: for a cluster-scoped type it
+			// ignores namespace fields and watches cluster-wide, so such an entry
+			// matches a cluster-scoped object. For a namespaced type it iterates
+			// namespace_names and so builds no informer at all, which means it
+			// must not match a namespaced object here either.
 			namespaceMatches := false
+			if len(resConfig.NamespaceNames) == 0 {
+				namespaceMatches = resource.Metadata.Namespace == ""
+			}
 			for _, nsName := range resConfig.NamespaceNames {
 				if matchesName(nsName, resource.Metadata.Namespace) {
 					namespaceMatches = true
@@ -486,6 +547,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 	t.Log("")
 	t.Log("🔍 PHASE 5: Comparing and validating data...")
 
+	assertNoDroppedEvents(t, logDir)
 	validateEvents(t, expectedEvents, events)
 
 	t.Log("✅ PHASE 5 COMPLETE: Data validation finished!")
@@ -655,6 +717,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	t.Log("🔍 PHASE 5: Comparing and validating data...")
 	
 	displayFaroQueries(t, configFile)
+	assertNoDroppedEvents(t, logDir)
 	validateEvents(t, expectedEvents, events)
 	
 	t.Log("✅ PHASE 5 COMPLETE: Data validation finished!")
