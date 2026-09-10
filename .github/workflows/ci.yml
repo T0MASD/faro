@@ -13,7 +13,7 @@ permissions:
 env:
   # Pinned kinc release. Bump deliberately; a floating tag makes a CI
   # result depend on whichever kinc happened to be latest that day.
-  KINC_IMAGE: ghcr.io/t0masd/kinc:v1.35.7-0
+  KINC_IMAGE: ghcr.io/t0masd/kinc:v1.36.4-0
 
 jobs:
   test:
