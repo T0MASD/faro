@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Pinned kinc release. Bump deliberately; a floating tag makes a CI
+  # result depend on whichever kinc happened to be latest that day.
+  KINC_IMAGE: ghcr.io/t0masd/kinc:v1.35.7-0
+
 jobs:
   test:
     name: Library Tests
@@ -56,7 +61,7 @@ jobs:
             --sysctl net.netfilter.nf_conntrack_tcp_timeout_close_wait=3600 \
             -p 127.0.0.1:6443:6443/tcp \
             --env container=podman \
-            ghcr.io/t0masd/kinc:latest
+            ${{ env.KINC_IMAGE }}
           
           echo "⏳ Waiting for kinc cluster initialization..."
           echo "   First run: 2-5 minutes (downloads container images)"
@@ -170,7 +175,7 @@ jobs:
             --sysctl net.netfilter.nf_conntrack_tcp_timeout_close_wait=3600 \
             -p 127.0.0.1:6443:6443/tcp \
             --env container=podman \
-            ghcr.io/t0masd/kinc:latest
+            ${{ env.KINC_IMAGE }}
           
           echo "⏳ Waiting for kinc cluster initialization..."
           echo "   First run: 2-5 minutes (downloads container images)"
