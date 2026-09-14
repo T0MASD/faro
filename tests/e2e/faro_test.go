@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"github.com/T0MASD/faro/tests/testutils"
 	"bufio"
 	"context"
 	"encoding/json"
@@ -86,15 +87,8 @@ func extractLogDirFromConfig(configFile string) string {
 }
 
 
-type FaroJSONEvent struct {
-	Timestamp string            `json:"timestamp"`
-	EventType string            `json:"eventType"`
-	GVR       string            `json:"gvr"`
-	Namespace string            `json:"namespace,omitempty"`
-	Name      string            `json:"name"`
-	UID       string            `json:"uid,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
-}
+// Shared with every other suite, so the contract has one definition.
+type FaroJSONEvent = testutils.FaroJSONEvent
 
 // Config structures for parsing Faro config
 type FaroConfig struct {
@@ -1097,6 +1091,31 @@ func formatQuery(q QueryInfo) string {
 	return query
 }
 
+// A matched event is not enough: a capture has to be orderable, and DELETED is
+// where that broke. A DELETED event is reconstructed from a stub with no
+// creationTimestamp, and formatting the zero value put "0001-01-01T00:00:00Z"
+// on 17% of deletes in a measured capture - they sort to the beginning of time
+// and one is enough to ruin a T+0 baseline.
+//
+// This harness matched on type, GVR, namespace and name only, so it passed
+// throughout. Every matched event now has to carry a usable time.
+func assertEventIsOrderable(t *testing.T, act FaroJSONEvent, resourcePath string) {
+	t.Helper()
+	if act.EventTime == "" {
+		t.Errorf("✗ NO eventTime: %s %s %s - this event cannot be placed in a timeline",
+			act.EventType, act.GVR, resourcePath)
+		return
+	}
+	if _, err := time.Parse(time.RFC3339Nano, act.EventTime); err != nil {
+		t.Errorf("✗ BAD eventTime: %s %s %s has %q, not RFC3339Nano: %v",
+			act.EventType, act.GVR, resourcePath, act.EventTime, err)
+	}
+	if strings.HasPrefix(act.Timestamp, "0001-01-01") {
+		t.Errorf("✗ ZERO timestamp: %s %s %s carries %q - omit it rather than emit the zero value",
+			act.EventType, act.GVR, resourcePath, act.Timestamp)
+	}
+}
+
 func validateEvents(t *testing.T, expected []FaroJSONEvent, actual []FaroJSONEvent) {
 	t.Logf("=== ACTUAL EVENTS FOUND (%d) ===", len(actual))
 	for i, act := range actual {
@@ -1127,6 +1146,7 @@ func validateEvents(t *testing.T, expected []FaroJSONEvent, actual []FaroJSONEve
 					resourcePath = "/" + exp.Namespace + "/" + exp.Name
 				}
 				t.Logf("✓ MATCHED: %s %s %s", exp.EventType, exp.GVR, resourcePath)
+				assertEventIsOrderable(t, act, resourcePath)
 				break
 			}
 		}
