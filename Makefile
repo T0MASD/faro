@@ -1,6 +1,6 @@
 # Faro Makefile
 
-.PHONY: help build build-dev test test-ci test-unit test-e2e test-integration test-operator clean tag-patch tag-minor tag-major operator-image operator-image-load
+.PHONY: help build build-dev test test-ci test-pkg test-unit test-e2e test-integration test-operator clean tag-patch tag-minor tag-major operator-image operator-image-load
 
 # Default target
 help:
@@ -10,7 +10,8 @@ help:
 	@echo "  build            - Build the faro binary"
 	@echo "  build-dev        - Build with development version info"
 	@echo "  test             - Run all tests (unit + e2e + integration) - requires K8s"
-	@echo "  test-ci          - Run CI-safe tests only (unit tests, no K8s required)"
+	@echo "  test-ci          - Run CI-safe tests only (pkg + unit, no K8s required)"
+	@echo "  test-pkg         - Run in-package tests only (no K8s required)"
 	@echo "  test-unit        - Run unit tests only (no K8s required)"
 	@echo "  test-e2e         - Run E2E tests only (requires K8s cluster)"
 	@echo "  test-integration - Run integration tests only (requires K8s cluster)"
@@ -37,13 +38,22 @@ build-dev:
 	go build -ldflags "-X main.version=dev-$(shell git rev-parse --short HEAD) -X main.commit=$(shell git rev-parse HEAD) -X main.date=$(shell date -u +%Y-%m-%dT%H:%M:%SZ) -X main.builtBy=make" -o faro main.go
 
 # Run all tests (requires Kubernetes cluster)
-test: clean test-unit test-e2e test-integration
+test: clean test-pkg test-unit test-e2e test-integration
 
 # Run only tests that don't require Kubernetes (for CI/releases)
-test-ci: test-unit
-	@echo "CI tests completed (unit tests only)"
+test-ci: test-pkg test-unit
+	@echo "CI tests completed (no cluster required)"
 
-# Run unit tests
+# Run in-package tests (root module)
+#
+# Separate from test-unit because they are a different module and test a
+# different surface: tests/unit is an external package and can only reach
+# exported API, while some behaviour is only reachable from inside pkg.
+test-pkg:
+	@echo "Running in-package tests..."
+	go test -v ./pkg/...
+
+# Run unit tests (tests/unit module, external package)
 test-unit:
 	@echo "Running unit tests..."
 	cd tests/unit && go test -v
