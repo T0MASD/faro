@@ -594,9 +594,13 @@ func (c *Controller) Start() error {
 		go c.runWorker()
 	}
 
-	// 1. Discover all available API resources in the cluster
+	// 1. Discover all available API resources in the cluster. Discovery is an optimisation
+	// here, not a requirement: the configuration already names every GVR to watch, and an
+	// informer for a type the API does not serve yet retries until it does. Endpoints exist
+	// that serve resources but no usable discovery (KubeEdge's metaServer answers /apis with
+	// protobuf labelled application/json), so a failure here must not stop the watch.
 	if err := c.discoverAPIResources(); err != nil {
-		return fmt.Errorf("failed to discover API resources: %w", err)
+		c.logger.Warning("controller", fmt.Sprintf("Discovery unavailable (%v); watching the configured GVRs directly", err))
 	}
 
 	// 2. Start informers based on configuration and discovery results
@@ -1135,13 +1139,22 @@ func (c *Controller) startConfigDrivenInformers() error {
 	for gvrString, normalizedConfigs := range normalizedGVRs {
 		c.logger.Info("controller", fmt.Sprintf("Processing %s (matches %d configuration entries)", gvrString, len(normalizedConfigs)))
 
-		// Look up resource info from discovery
+		// Look up resource info from discovery, and fall back to the configuration for a type
+		// discovery does not know: one whose CRD is not installed yet, or an endpoint that
+		// serves no usable discovery. The reflector retries until the type is served.
 		c.discoveredResourcesMu.RLock()
 		resourceInfo, found := c.discoveredResources[gvrString]
 		c.discoveredResourcesMu.RUnlock()
 		if !found {
-			c.logger.Warning("controller", fmt.Sprintf("Resource %s not found in discovery results, skipping", gvrString))
-			continue
+			resourceInfo = c.resourceInfoFromConfig(gvrString)
+			if resourceInfo == nil {
+				c.logger.Warning("controller", fmt.Sprintf("Cannot parse GVR %q, skipping", gvrString))
+				continue
+			}
+			c.logger.Info("controller", fmt.Sprintf("Resource %s is not in discovery results; watching it from the configuration (namespaced: %t)", gvrString, resourceInfo.Namespaced))
+			c.discoveredResourcesMu.Lock()
+			c.discoveredResources[gvrString] = resourceInfo
+			c.discoveredResourcesMu.Unlock()
 		}
 
 		// Create GVR and scope from discovered information
@@ -1584,3 +1597,27 @@ func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstruc
 	c.workQueue.Add(workItem)
 }
 
+
+
+// resourceInfoFromConfig builds resource info from a configured GVR string alone, for a type that
+// discovery does not describe. Scope comes from a resource-centric entry's scope field; anything
+// else is namespaced, which is what the namespace-centric format can express. Kind is left empty:
+// it is only reported by discovery, never used to build an informer.
+func (c *Controller) resourceInfoFromConfig(gvrString string) *ResourceInfo {
+	var info *ResourceInfo
+	switch parts := strings.Split(gvrString, "/"); len(parts) {
+	case 2: // version/resource, the core group
+		info = &ResourceInfo{Version: parts[0], Resource: parts[1]}
+	case 3: // group/version/resource
+		info = &ResourceInfo{Group: parts[0], Version: parts[1], Resource: parts[2]}
+	default:
+		return nil
+	}
+	info.Namespaced = true
+	for _, r := range c.config.Resources {
+		if r.GVR == gvrString && r.Scope == ClusterScope {
+			info.Namespaced = false
+		}
+	}
+	return info
+}
