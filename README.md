@@ -560,6 +560,7 @@ When `json_export: true`, events are exported in structured format:
 ```json
 {
   "timestamp": "2025-11-10T14:33:02Z",
+  "eventTime": "2025-11-10T16:04:11.882471903Z",
   "eventType": "ADDED",
   "gvr": "v1/pods",
   "namespace": "default",
@@ -575,6 +576,13 @@ When `json_export: true`, events are exported in structured format:
   }
 }
 ```
+
+**`timestamp` and `eventTime` answer different questions.** `timestamp` is the
+object's `creationTimestamp` - its age - so every update to one object carries
+the same value and a capture cannot be ordered by it. `eventTime` is when Faro
+observed the event, and is what a timeline is built from. `timestamp` is omitted
+when it is unknown, which is the case for a `DELETED` event reconstructed after
+the object is gone.
 
 Events are written to:
 - **Library mode**: `${output_dir}/events-YYYYMMDD-HHMMSS.json`

@@ -4,6 +4,12 @@
 
 This document analyzes the relationship between direct Kubernetes resource monitoring (e.g., `v1/pods`, `batch/v1/jobs`) and `v1/events` monitoring in the context of Faro's workload monitoring capabilities. The key finding is that **v1/events complements rather than duplicates direct GVR monitoring**, and the intelligent deduplication approach causes data loss.
 
+> **Note on the samples below.** These are captures from September 2025 and
+> predate the `eventTime` field, so they show `timestamp` alone. At the time
+> `timestamp` was the object's `creationTimestamp`, which is object age rather
+> than when the event was observed - worth knowing before reading any ordering
+> into them. They are left as recorded.
+
 ## Background
 
 During development of Faro's intelligent deduplication feature, we implemented logic to automatically stop direct GVR informers (e.g., `v1/pods`) when `v1/events` contained `involvedObject` references to those resources. The assumption was that `v1/events` could replace direct resource monitoring to save memory.
