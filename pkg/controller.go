@@ -48,12 +48,25 @@ type MatchedEvent struct {
 	GVR       string                      // Group/Version/Resource identifier
 	Key       string                      // namespace/name or name
 	Config    NormalizedConfig            // Configuration that matched this event
-	Timestamp time.Time                   // When the event was processed
+
+	// Timestamp is the object's creationTimestamp - object age, not when
+	// anything happened. Every update to an object carries the same value, so
+	// handlers cannot order events by it. EventTime is when Faro observed the
+	// event and is what a timeline is built from.
+	Timestamp time.Time
+	EventTime time.Time
 }
 
 // JSONEvent represents a structured JSON event for export
+//
+// Timestamp is the object's creationTimestamp - object age, not when anything
+// happened. Every UPDATE to an object carries the same value, so a capture
+// cannot be ordered by it: one lease was observed with 677 UPDATED events all
+// stamped with its single creation time. EventTime is when Faro observed the
+// event and is what a timeline is built from.
 type JSONEvent struct {
-	Timestamp   string            `json:"timestamp"`
+	Timestamp   string            `json:"timestamp,omitempty"`
+	EventTime   string            `json:"eventTime"`
 	EventType   string            `json:"eventType"`
 	GVR         string            `json:"gvr"`
 	Namespace   string            `json:"namespace,omitempty"`
@@ -104,6 +117,11 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 		}
 	}
 	
+	// When Faro saw this, as distinct from when the object was created. Taken
+	// before any middleware runs, so it is the observation and not the
+	// processing.
+	eventTime := time.Now().UTC().Format(time.RFC3339Nano)
+
 	// Create object copy for middleware processing
 	if obj != nil {
 		// RACE CONDITION FIX: Create a deep copy to avoid concurrent map access
@@ -111,7 +129,13 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 		
 		
 		annotations = objCopy.GetAnnotations()
-		timestamp = objCopy.GetCreationTimestamp().UTC().Format(time.RFC3339Nano)
+		// A DELETED event is reconstructed from a stub, which has no
+		// creationTimestamp; formatting the zero value produced
+		// "0001-01-01T00:00:00Z" on 17% of deletes in a measured capture and
+		// silently sorted them to the beginning of time.
+		if ct := objCopy.GetCreationTimestamp(); !ct.IsZero() {
+			timestamp = ct.UTC().Format(time.RFC3339Nano)
+		}
 	} else {
 		// For DELETED events, create a minimal object for middleware processing
 		objCopy = &unstructured.Unstructured{}
@@ -156,6 +180,7 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	
 	jsonEvent := JSONEvent{
 		Timestamp:   timestamp,
+		EventTime:   eventTime,
 		EventType:   eventType,
 		GVR:         gvr,
 		Namespace:   namespace,
@@ -1402,7 +1427,10 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 					GVR:       workItem.GVRString,
 					Key:       workItem.Key,
 					Config:    config,
-					Timestamp: time.Now(), // DELETE events don't have the full object, so use current time
+					// A deleted object carries no creationTimestamp, so there is
+					// no object age to report - only when this was observed.
+					Timestamp: time.Time{},
+					EventTime: time.Now().UTC(),
 				}
 				
 				// Call event handlers (non-blocking)
@@ -1477,6 +1505,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 			Key:       obj.GetNamespace() + "/" + obj.GetName(),
 			Config:    config,
 			Timestamp: obj.GetCreationTimestamp().Time,
+			EventTime: time.Now().UTC(),
 		}
 		
 		// For cluster-scoped resources, key is just the name

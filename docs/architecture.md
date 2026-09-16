@@ -117,6 +117,7 @@ Kubernetes Informer → Work Queue → Worker Goroutines → Event Handlers
 ```json
 {
   "timestamp": "2025-01-18T10:30:45Z",
+  "eventTime": "2025-01-18T11:02:13.114882301Z",
   "eventType": "ADDED",
   "gvr": "v1/configmaps", 
   "namespace": "default",

@@ -2,6 +2,7 @@
 package testutils
 
 import (
+	faro "github.com/T0MASD/faro/pkg"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,16 +22,11 @@ import (
 
 // FaroJSONEvent represents the structure of JSON events exported by Faro
 // This is the canonical definition used across all test suites
-type FaroJSONEvent struct {
-	Timestamp   string            `json:"timestamp"`
-	EventType   string            `json:"eventType"`
-	GVR         string            `json:"gvr"`
-	Namespace   string            `json:"namespace,omitempty"`
-	Name        string            `json:"name"`
-	UID         string            `json:"uid,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Annotations map[string]string `json:"annotations,omitempty"`
-}
+// FaroJSONEvent is the exported event contract itself, not a copy of it.
+// Three hand-maintained copies of this struct existed and had already drifted -
+// the e2e suite's lacked Annotations, and none of them saw eventTime until it
+// was added by hand. An alias cannot drift.
+type FaroJSONEvent = faro.JSONEvent
 
 // CreateKubernetesClients creates both standard and dynamic Kubernetes clients
 func CreateKubernetesClients(t *testing.T) (kubernetes.Interface, dynamic.Interface) {
