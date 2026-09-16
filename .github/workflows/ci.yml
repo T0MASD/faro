@@ -29,6 +29,30 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          # Cache handled below. setup-go's own key is
+          #   setup-go-${os}-${arch}-go-${version}-${hashFiles('**/go.mod')}
+          # which is identical for every job in this workflow, so the parallel
+          # jobs race to write one entry and the loser's work is discarded.
+          # Actions cache entries are immutable, so whoever wins is what
+          # everyone restores until a go.mod changes.
+          cache: false
+
+      - name: Go caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          # Scoped per job, so lint/test/operator no longer collide. The run id
+          # makes an exact hit impossible on purpose: a fresh entry is written
+          # every run and restore-keys pull the nearest previous one, so the
+          # cache keeps up with the code instead of freezing until a dependency
+          # changes. go.sum is hashed as well as go.mod - this repo has five
+          # modules and the sums are what actually pin the downloads.
+          key: go-${{ runner.os }}-${{ github.job }}-1.24-${{ hashFiles('**/go.sum', '**/go.mod') }}-${{ github.run_id }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ github.job }}-1.24-${{ hashFiles('**/go.sum', '**/go.mod') }}-
+            go-${{ runner.os }}-${{ github.job }}-1.24-
 
       # Deploy kinc cluster for Kubernetes testing
       - name: Deploy kinc cluster
@@ -143,6 +167,30 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          # Cache handled below. setup-go's own key is
+          #   setup-go-${os}-${arch}-go-${version}-${hashFiles('**/go.mod')}
+          # which is identical for every job in this workflow, so the parallel
+          # jobs race to write one entry and the loser's work is discarded.
+          # Actions cache entries are immutable, so whoever wins is what
+          # everyone restores until a go.mod changes.
+          cache: false
+
+      - name: Go caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          # Scoped per job, so lint/test/operator no longer collide. The run id
+          # makes an exact hit impossible on purpose: a fresh entry is written
+          # every run and restore-keys pull the nearest previous one, so the
+          # cache keeps up with the code instead of freezing until a dependency
+          # changes. go.sum is hashed as well as go.mod - this repo has five
+          # modules and the sums are what actually pin the downloads.
+          key: go-${{ runner.os }}-${{ github.job }}-1.24-${{ hashFiles('**/go.sum', '**/go.mod') }}-${{ github.run_id }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ github.job }}-1.24-${{ hashFiles('**/go.sum', '**/go.mod') }}-
+            go-${{ runner.os }}-${{ github.job }}-1.24-
 
       # Deploy kinc cluster for Kubernetes testing
       - name: Deploy kinc cluster
