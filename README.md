@@ -311,6 +311,11 @@ controller := faro.NewController(client, logger, config)
 // Event handlers (implement your business logic)
 controller.AddEventHandler(handler EventHandler)
 
+// Informer status handlers (hear whether a watch listed, and what it holds)
+// An empty result, a refusal, and a type the endpoint does not serve all
+// deliver no events, so OnMatched cannot tell them apart. This can.
+controller.AddInformerStatusHandler(handler InformerStatusHandler)
+
 // JSON middleware (modify objects before export)
 controller.AddJSONMiddleware(middleware JSONMiddleware)
 
@@ -594,9 +599,15 @@ Events are written to:
 
 Check the `examples/` directory for real-world usage:
 
-- **`library-usage.go`** - Basic library integration
-- **`workload-monitor.go`** - Dynamic workload detection
-- **`worker-dispatcher.go`** - Event processing and actions
+- **`examples/library-usage/`** - Basic library integration, event and informer-status handlers
+- **`examples/workload-monitor/`** - Dynamic workload detection
+- **`examples/worker-dispatcher/`** - Event processing and actions
+
+Each is its own package, so it builds and runs directly:
+
+```bash
+go run ./examples/library-usage
+```
 
 ---
 

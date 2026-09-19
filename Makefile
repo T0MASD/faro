@@ -1,6 +1,6 @@
 # Faro Makefile
 
-.PHONY: help build build-dev test test-ci test-pkg test-unit test-e2e test-integration test-operator clean tag-patch tag-minor tag-major operator-image operator-image-load
+.PHONY: help build build-all build-dev test test-ci test-pkg test-unit test-e2e test-integration test-operator clean tag-patch tag-minor tag-major operator-image operator-image-load
 
 # Default target
 help:
@@ -8,6 +8,7 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  build            - Build the faro binary"
+	@echo "  build-all        - Compile every package, examples included"
 	@echo "  build-dev        - Build with development version info"
 	@echo "  test             - Run all tests (unit + e2e + integration) - requires K8s"
 	@echo "  test-ci          - Run CI-safe tests only (pkg + unit, no K8s required)"
@@ -31,6 +32,12 @@ help:
 build:
 	@echo "Building faro binary..."
 	go build -o faro main.go
+
+# Compile every package, examples included. `go build -o faro main.go` compiles
+# one file, so an example that stopped matching the library still "built".
+build-all:
+	@echo "Building all packages..."
+	go build ./...
 
 # Build with version information (for local testing)
 build-dev:
