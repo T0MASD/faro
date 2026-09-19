@@ -30,6 +30,24 @@ type ResourceInfo struct {
 	Namespaced bool
 }
 
+// InformerStatusHandler is notified when an informer establishes its watch, or fails to.
+//
+// A watcher's silence is ambiguous. An empty namespace and one the client is not allowed to read
+// deliver exactly the same nothing, as does a GVR the endpoint does not serve, so a consumer that
+// must tell them apart has to be told which happened. Until now faro could not say: the informer
+// health metrics (OnInformerSyncCompleted, OnInformerSyncFailed) were declared and never called,
+// and the only consumer seam was OnMatched, which by definition never fires for either case.
+//
+// Sync is reported from cache.WaitForCacheSync rather than from the first event, so
+// "synced, holding nothing" is reported as the outcome it is.
+type InformerStatusHandler interface {
+	// OnInformerSynced reports that this informer listed successfully. resourceCount may be 0.
+	OnInformerSynced(gvr, namespace string, resourceCount int)
+	// OnInformerFailed reports a list or watch failure, with the server's error unwrapped —
+	// its message body is where the reason, and the identity it was evaluated for, survive.
+	OnInformerFailed(gvr, namespace string, err error)
+}
+
 // WorkItem represents a queued object key and associated metadata for processing
 type WorkItem struct {
 	Key         string             // Object key (namespace/name or name)
@@ -444,6 +462,9 @@ type Controller struct {
 	eventHandlers []EventHandler
 	handlersMu    sync.RWMutex
 
+	statusHandlers []InformerStatusHandler
+	statusMu       sync.RWMutex
+
 	// JSON middleware for processing objects before JSON logging
 	jsonMiddleware []JSONMiddleware
 	middlewareMu   sync.RWMutex
@@ -474,6 +495,7 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 		workers:             3, // Start with 3 worker goroutines
 		discoveredResources: make(map[string]*ResourceInfo),
 		eventHandlers:       make([]EventHandler, 0),
+		statusHandlers:      make([]InformerStatusHandler, 0),
 		jsonMiddleware:      make([]JSONMiddleware, 0),
 		metrics:             NewMetricsCollector(config.Metrics, *logger),
 	}
@@ -488,6 +510,14 @@ func (c *Controller) AddEventHandler(handler EventHandler) {
 	defer c.handlersMu.Unlock()
 	c.eventHandlers = append(c.eventHandlers, handler)
 	c.logger.Debug("controller", fmt.Sprintf("Added event handler (total: %d)", len(c.eventHandlers)))
+}
+
+// AddInformerStatusHandler registers a handler for informer sync and failure notifications.
+func (c *Controller) AddInformerStatusHandler(handler InformerStatusHandler) {
+	c.statusMu.Lock()
+	defer c.statusMu.Unlock()
+	c.statusHandlers = append(c.statusHandlers, handler)
+	c.logger.Debug("controller", fmt.Sprintf("Added informer status handler (total: %d)", len(c.statusHandlers)))
 }
 
 // AddJSONMiddleware registers a JSON middleware for processing objects before JSON logging
@@ -1066,8 +1096,47 @@ func (c *Controller) startUnifiedInformer(params InformerStartParams) {
 		return
 	}
 	
+	// A refused or otherwise failing list/watch reports here, with the server's error intact.
+	if err := informer.SetWatchErrorHandler(func(_ *cache.Reflector, werr error) {
+		c.metrics.OnInformerSyncFailed(params.GVRString, werr)
+		c.notifyInformerFailed(params.GVRString, params.Namespace, werr)
+		c.logger.Warning("controller", fmt.Sprintf("watch failed for %s in %q: %v",
+			params.GVRString, params.Namespace, werr))
+	}); err != nil {
+		c.logger.Warning("controller", fmt.Sprintf("cannot install watch error handler for %s: %v",
+			params.GVRString, err))
+	}
+
+	// Sync observed independently of traffic, so an empty namespace is not mistaken for a failing one.
+	go func() {
+		started := time.Now()
+		if cache.WaitForCacheSync(c.ctx.Done(), informer.HasSynced) {
+			count := len(informer.GetStore().List())
+			c.metrics.OnInformerSyncCompleted(params.GVRString, time.Since(started), int64(count))
+			c.notifyInformerSynced(params.GVRString, params.Namespace, count)
+		}
+	}()
+
 	// Run with consistent logging
 	c.runInformerWithLogging(informer, c.ctx, params.Description)
+}
+
+func (c *Controller) notifyInformerSynced(gvr, namespace string, resourceCount int) {
+	c.statusMu.RLock()
+	handlers := append([]InformerStatusHandler(nil), c.statusHandlers...)
+	c.statusMu.RUnlock()
+	for _, h := range handlers {
+		h.OnInformerSynced(gvr, namespace, resourceCount)
+	}
+}
+
+func (c *Controller) notifyInformerFailed(gvr, namespace string, err error) {
+	c.statusMu.RLock()
+	handlers := append([]InformerStatusHandler(nil), c.statusHandlers...)
+	c.statusMu.RUnlock()
+	for _, h := range handlers {
+		h.OnInformerFailed(gvr, namespace, err)
+	}
 }
 
 // stopCRDInformer stops the informer for a specific CRD
