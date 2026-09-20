@@ -7,6 +7,10 @@ scratch/
 work/
 faro
 faro-e2e
+# go build ./examples/<name>/ drops the binary in the working directory
+library-usage
+worker-dispatcher
+workload-monitor
 dist/
 # Test artifacts
 test_import

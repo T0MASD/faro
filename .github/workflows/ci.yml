@@ -147,6 +147,12 @@ jobs:
           go build test_import.go
           rm test_import.go
 
+      # Compiles the examples too. The import check above builds one generated
+      # file and `make build` builds main.go, so an example that stopped
+      # matching the library was never compiled by anything.
+      - name: Build all packages
+        run: go build ./...
+
       # Cleanup kinc cluster
       - name: Cleanup kinc cluster
         if: always()
