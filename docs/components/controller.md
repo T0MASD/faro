@@ -18,7 +18,7 @@ Provide reliable informer management and event streaming without business logic:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    LIBRARY USERS                            │
-│ • Event Handlers (Business Logic)                          │
+│ • Event Handlers (Business Logic)                           │
 │ • CRD Discovery                                             │
 │ • Dynamic GVR Discovery                                     │
 │ • Workload Processing                                       │

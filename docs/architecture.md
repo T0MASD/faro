@@ -15,24 +15,24 @@ Faro follows a **clean architecture principle**: the library provides **mechanis
 │                    LIBRARY USERS (Policies)                 │
 ├─────────────────────────────────────────────────────────────┤
 │ • CRD Discovery & Management                                │
-│ • Event-driven GVR Discovery                               │
-│ • Workload Detection & Annotation                          │
-│ • Complex Configuration Interpretation                     │
-│ • Business Logic & Workflows                               │
-│ • External System Integration                              │
+│ • Event-driven GVR Discovery                                │
+│ • Workload Detection & Annotation                           │
+│ • Complex Configuration Interpretation                      │
+│ • Business Logic & Workflows                                │
+│ • External System Integration                               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                   FARO CORE (Mechanisms)                    │
 ├─────────────────────────────────────────────────────────────┤
-│ • Informer Management (Create, Start, Stop)                │
-│ • Event Streaming (Work Queues, Handlers)                  │
-│ • Server-side Filtering (Labels, Names, Namespaces)        │
-│ • JSON Export (Structured Output)                          │
-│ • Lifecycle Management (Startup, Readiness, Shutdown)      │
-│ • Simple Configuration (Basic YAML Parsing)                │
-│ • Metrics Collection (Prometheus, Optional)                │
+│ • Informer Management (Create, Start, Stop)                 │
+│ • Event Streaming (Work Queues, Handlers)                   │
+│ • Server-side Filtering (Labels, Names, Namespaces)         │
+│ • JSON Export (Structured Output)                           │
+│ • Lifecycle Management (Startup, Readiness, Shutdown)       │
+│ • Simple Configuration (Basic YAML Parsing)                 │
+│ • Metrics Collection (Prometheus, Optional)                 │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
