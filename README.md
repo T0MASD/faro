@@ -137,20 +137,20 @@ When deployed as an operator, Faro provides:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        Faro Controller                       │
+│                       Faro Controller                       │
+├─────────────────┬──────────────┬──────────┬─────────────────┤
+│  Config Loader  │  K8s Client  │  Logger  │ Metrics Server  │
+├─────────────────┴──────────────┴──────────┴─────────────────┤
+│               Multi-layered Informer Manager                │
+│  ┌────────────────┐  ┌───────────────┐  ┌────────────────┐  │
+│  │ Config-driven  │  │    Dynamic    │  │   Namespace    │  │
+│  │   Informers    │  │   Informers   │  │     Scoped     │  │
+│  └────────────────┘  └───────────────┘  └────────────────┘  │
 ├─────────────────────────────────────────────────────────────┤
-│  Config Loader  │  K8s Client  │  Logger  │  Metrics Server │
-├─────────────────────────────────────────────────────────────┤
-│              Multi-layered Informer Manager                  │
-│  ┌────────────────┐  ┌────────────────┐  ┌───────────────┐ │
-│  │ Config-driven  │  │   Dynamic      │  │  Namespace    │ │
-│  │   Informers    │  │   Informers    │  │   Scoped      │ │
-│  └────────────────┘  └────────────────┘  └───────────────┘ │
-├─────────────────────────────────────────────────────────────┤
-│                      Event Processing                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │ Work Queues  │→ │Event Handlers│→ │JSON Export/Logs │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  │
+│                      Event Processing                       │
+│  ┌────────────────┐  ┌───────────────┐  ┌────────────────┐  │
+│  │  Work Queues   │  │Event Handlers │  │  JSON Export   │  │
+│  └────────────────┘  └───────────────┘  └────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -663,16 +663,17 @@ faro/
 │   ├── deployment.yaml
 │   ├── service.yaml
 │   └── kustomization.yaml
-├── scripts/               # Deployment and test scripts
+├── scripts/               # Deployment, test and release scripts
 │   ├── deploy-operator.sh
 │   ├── cleanup-operator.sh
-│   └── test-operator.sh
+│   ├── test-operator.sh
+│   └── tag-version.sh     # make tag-patch/minor/major
 ├── tests/                 # Test suites
 │   ├── unit/
 │   ├── e2e/
 │   ├── integration/
 │   └── operator-ci/
-├── examples/              # Usage examples
+├── examples/              # Usage examples, one package each
 └── docs/                  # Documentation
 
 ```
