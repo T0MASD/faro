@@ -16,6 +16,52 @@ env:
   KINC_IMAGE: ghcr.io/t0masd/kinc:v1.36.4-0
 
 jobs:
+  # The operator image is built only at release, so nothing here ever compiled
+  # the Dockerfile - which is how it went unnoticed that the binary was pinned
+  # to amd64 while the image was labelled for whatever built it. This builds
+  # both platforms and does not push, so the release path is exercised on the
+  # pull request that changes it.
+  image:
+    name: Operator image (amd64 + arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build both platforms
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: false
+          outputs: type=oci,dest=/tmp/faro-operator.oci
+
+      - name: The arm64 binary is actually arm64
+        run: |
+          set -euo pipefail
+          # Built per-architecture and then run: a wrong GOARCH produces an
+          # image that pulls and schedules and only fails when it execs, which
+          # is far too late to learn it.
+          docker buildx build --platform linux/arm64 --load -t faro-arm64-probe .
+          got=$(docker run --rm --entrypoint "" --platform linux/arm64 faro-arm64-probe \
+                  /bin/sh -c 'uname -m')
+          echo "  runtime reports: $got"
+          case "$got" in aarch64|arm64) ;; *) echo "::error::expected aarch64, got $got"; exit 1 ;; esac
+          # And the binary itself, not just the shell beside it.
+          docker run --rm --entrypoint "" --platform linux/arm64 faro-arm64-probe \
+            /usr/local/bin/faro-operator --help >/dev/null 2>&1 \
+            || docker run --rm --entrypoint "" --platform linux/arm64 faro-arm64-probe \
+                 /usr/local/bin/faro-operator --version >/dev/null 2>&1 \
+            || { echo "::error::the arm64 binary does not execute"; exit 1; }
+          echo "  the arm64 operator binary runs"
+
   test:
     name: Library Tests
     runs-on: ubuntu-latest

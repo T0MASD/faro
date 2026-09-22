@@ -1,6 +1,9 @@
 # Multi-stage build for Faro operator
 # Stage 1: Build the Go binary
-FROM docker.io/library/golang:1.24-alpine AS builder
+# Pinned to the machine doing the building, not to the machine being built
+# for: Go cross-compiles, so the compile runs at native speed and only the
+# runtime stage below is emulated.
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.24-alpine AS builder
 
 WORKDIR /build
 
@@ -13,7 +16,13 @@ COPY . .
 
 # Build the operator binary
 # CGO_ENABLED=0 for static binary, no C dependencies
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+#
+# GOARCH comes from the platform being built, not from a literal. It used to
+# say amd64, so an arm64 build produced an arm64-labelled image containing an
+# amd64 binary - which pulls and schedules and then cannot exec.
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build \
     -ldflags="-w -s" \
     -o faro-operator \
     main.go
