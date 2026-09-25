@@ -84,9 +84,17 @@ test-operator:
 	bash scripts/test-operator.sh
 
 # Clean build artifacts and test logs
+#
+# The binaries are every one a target here can produce: the faro binary, the
+# e2e helper, and one per example, since `go build ./examples/<name>/` drops
+# its binary in the working directory. The log trees are what a run writes:
+# the tests write under tests/*/logs, and the examples take OutputDir ./logs,
+# which lands wherever they were run from.
 clean:
 	@echo "Cleaning up..."
-	rm -f faro workload-monitor
+	rm -f faro faro-e2e test_import
+	rm -f library-usage worker-dispatcher workload-monitor
+	rm -rf logs examples/logs
 	find tests -type d -name "logs" -exec rm -rf {} + 2>/dev/null || true
 	@echo "Clean complete"
 
@@ -107,8 +115,18 @@ tag-major:
 OPERATOR_IMAGE ?= localhost/faro-operator
 OPERATOR_TAG ?= latest
 
+# OPERATOR_IMAGE is a repository, and OPERATOR_TAG is appended to it. Passing a
+# reference that already carries a tag yields name:tag:tag, which podman rejects
+# as an invalid reference after the build has already run.
 operator-image:
 	@echo "Building faro operator container image..."
+	@ref='$(OPERATOR_IMAGE)'; \
+	case "$${ref##*/}" in \
+	  *:*) echo "❌ OPERATOR_IMAGE must be a repository without a tag."; \
+	       echo "   Got: $$ref"; \
+	       echo "   Use: make operator-image OPERATOR_IMAGE=$${ref%:*} OPERATOR_TAG=$${ref##*:}"; \
+	       exit 1 ;; \
+	esac
 	@echo "Image: $(OPERATOR_IMAGE):$(OPERATOR_TAG)"
 	podman build -f Dockerfile -t $(OPERATOR_IMAGE):$(OPERATOR_TAG) .
 	@echo "✅ Operator image built: $(OPERATOR_IMAGE):$(OPERATOR_TAG)"
