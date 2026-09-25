@@ -196,7 +196,25 @@ func TestWaitsForAggregatedApiToStartServing(t *testing.T) {
 				"metadata": map[string]any{"resourceVersion": "1"}, "items": []any{},
 			})
 		case r.URL.Path == "/apis/example.com/v1":
-			// Declared the whole time, watch included - that is the trap.
+			// DISCOVERY 503s too, which is the part that matters.
+			//
+			// The aggregation layer proxies discovery to the backend exactly as
+			// it proxies lists, so a group served by a Service answers discovery
+			// with 503 for as long as it answers lists with 503. v1.5.4 shipped
+			// a probe of the resource endpoint and a test whose discovery always
+			// succeeded; in a real cluster the discovery error came first and
+			// was read as "cannot tell, proceed", so the probe never ran and 4
+			// of antrea's 5 controlplane GVRs retried for 38 seconds.
+			if unavailable.Load() {
+				reqs503.Add(1)
+				w.WriteHeader(http.StatusServiceUnavailable)
+				json.NewEncoder(w).Encode(map[string]any{
+					"kind": "Status", "apiVersion": "v1", "status": "Failure",
+					"message": "the server is currently unable to handle the request",
+					"reason":  "ServiceUnavailable", "code": 503,
+				})
+				return
+			}
 			json.NewEncoder(w).Encode(map[string]any{
 				"kind": "APIResourceList", "apiVersion": "v1", "groupVersion": "example.com/v1",
 				"resources": []any{map[string]any{
