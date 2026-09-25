@@ -8,23 +8,23 @@ This directory contains examples demonstrating how to use Faro following the **c
 ┌─────────────────────────────────────────────────────────────┐
 │                    LIBRARY USERS (Policies)                 │
 ├─────────────────────────────────────────────────────────────┤
-│ • Business Logic & Workflows                               │
+│ • Business Logic & Workflows                                │
 │ • CRD Discovery & Management                                │
-│ • Event-driven GVR Discovery                               │
-│ • Workload Detection & Annotation                          │
-│ • Complex Configuration Interpretation                     │
-│ • External System Integration                              │
+│ • Event-driven GVR Discovery                                │
+│ • Workload Detection & Annotation                           │
+│ • Complex Configuration Interpretation                      │
+│ • External System Integration                               │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼ (Event Callbacks)
 ┌─────────────────────────────────────────────────────────────┐
 │                   FARO CORE (Mechanisms)                    │
 ├─────────────────────────────────────────────────────────────┤
-│ • Informer Management (Create, Start, Stop)                │
-│ • Event Streaming (Work Queues, Rate Limiting)             │
-│ • Server-side Filtering (Label/Field Selectors)            │
-│ • JSON Export (Structured Output)                          │
-│ • Lifecycle Management (Graceful Shutdown)                 │
+│ • Informer Management (Create, Start, Stop)                 │
+│ • Event Streaming (Work Queues, Rate Limiting)              │
+│ • Server-side Filtering (Label/Field Selectors)             │
+│ • JSON Export (Structured Output)                           │
+│ • Lifecycle Management (Graceful Shutdown)                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
