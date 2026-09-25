@@ -32,27 +32,31 @@ This directory contains examples demonstrating how to use Faro following the **c
 
 ### ✅ **Compliant Examples** (Follow Clean Architecture)
 
-#### 1. `library-usage.go` - Basic Library Integration
-**Demonstrates**: Simple event handling with clean separation of concerns
-- **Faro Core**: Provides informer management and event streaming
-- **User Code**: Implements event handlers with business logic
+#### 1. `library-usage/` - Basic Library Integration
+**Demonstrates**: Event handling, and hearing whether each informer listed
+- **Faro Core**: Provides informer management, event streaming, informer status
+- **User Code**: Implements event handlers and an informer status handler
 - **Architecture**: ✅ Perfect separation of mechanisms vs policies
 
+An `InformerStatusHandler` reports what a watch did. An empty result, a refusal,
+and a type the endpoint does not serve all deliver no events, so `OnMatched`
+cannot tell them apart.
+
 ```bash
-go run library-usage.go
+go run ./examples/library-usage
 ```
 
-#### 2. `worker-dispatcher.go` - Resource-Specific Workers
+#### 2. `worker-dispatcher/` - Resource-Specific Workers
 **Demonstrates**: Advanced event processing with specialized workers
 - **Faro Core**: Provides event streaming mechanisms
 - **User Code**: Implements worker dispatch pattern and resource-specific logic
 - **Architecture**: ✅ Excellent example of policy implementation
 
 ```bash
-go run worker-dispatcher.go
+go run ./examples/worker-dispatcher
 ```
 
-#### 3. `workload-monitor.go` - Dynamic Workload Detection
+#### 3. `workload-monitor/` - Dynamic Workload Detection
 **Demonstrates**: Complex business logic properly separated from Faro core with dynamic configuration
 - **Faro Core**: Provides informer management, event streaming, JSON export
 - **User Code**: Implements workload detection, dynamic GVR discovery, business workflows
@@ -61,23 +65,13 @@ go run worker-dispatcher.go
 
 ```bash
 # Example usage with dynamic configuration
-go run workload-monitor.go \
+go run ./examples/workload-monitor \
   -discover-namespaces="app.kubernetes.io/name~faro" \
   -extract-from-namespace="env-staging-(.+)" \
   -namespace-resources="v1/configmaps,batch/v1/jobs,v1/events" \
   -cluster-resources="v1/namespaces" \
   -log-level="info"
 ```
-
-### ⚠️ **Legacy Examples** (Architectural Issues)
-
-#### 4. `workload-monitor-old.go` - Legacy Implementation
-**Issues**: Mixes Faro mechanisms with complex business logic
-- ❌ Implements CRD discovery in example code
-- ❌ Contains workload detection that should be user responsibility  
-- ❌ Mixes policies with mechanisms
-
-**Status**: Kept for compatibility, but **use `workload-monitor.go` instead**
 
 ## 🔧 Configuration
 
@@ -91,7 +85,7 @@ Simple configuration demonstrating Faro's basic filtering mechanisms:
 ### **Faro Core Provides (Mechanisms):**
 - ✅ **Informer Management**: Create, start, stop Kubernetes informers
 - ✅ **Event Streaming**: Reliable event delivery with work queues  
-- ✅ **Server-side Filtering**: Efficient API-level resource filtering
+- ✅ **Server-side Filtering**: Exact names and label selectors, evaluated by the API server
 - ✅ **JSON Export**: Structured event output for integration
 - ✅ **Lifecycle Management**: Graceful startup, readiness, shutdown
 
@@ -103,10 +97,12 @@ Simple configuration demonstrating Faro's basic filtering mechanisms:
 
 ## 🚀 Getting Started
 
-1. **Start Simple**: Begin with `library-usage.go` to understand basic concepts
-2. **Add Complexity**: Move to `worker-dispatcher.go` for advanced patterns
-3. **Business Logic**: Study `workload-monitor.go` for complex use cases
-4. **Avoid**: Don't use `workload-monitor-old.go` as a reference (architectural issues)
+1. **Start Simple**: Begin with `library-usage/` to understand basic concepts
+2. **Add Complexity**: Move to `worker-dispatcher/` for advanced patterns
+3. **Business Logic**: Study `workload-monitor/` for complex use cases
+
+Each example is its own package under `examples/`, so `go build ./...` covers them
+and `go run ./examples/<name>` runs one.
 
 ## 📖 Further Reading
 
@@ -118,9 +114,8 @@ Simple configuration demonstrating Faro's basic filtering mechanisms:
 
 | Example | Mechanisms (Faro Core) | Policies (User Code) | Architecture |
 |---------|------------------------|---------------------|--------------|
-| `library-usage.go` | Informer management, event streaming | Simple event handlers | ✅ Clean |
-| `worker-dispatcher.go` | Event streaming, JSON export | Worker dispatch, resource logic | ✅ Clean |
-| `workload-monitor.go` | Informer management, streaming, JSON | Workload detection, business logic | ✅ Clean |
-| `workload-monitor-old.go` | Mixed with business logic | Mixed with mechanisms | ❌ Legacy |
+| `library-usage/` | Informer management, event streaming, informer status | Event handlers, status handler | ✅ Clean |
+| `worker-dispatcher/` | Event streaming, JSON export | Worker dispatch, resource logic | ✅ Clean |
+| `workload-monitor/` | Informer management, streaming, JSON | Workload detection, business logic | ✅ Clean |
 
 Choose examples that demonstrate proper separation of concerns for your use case.

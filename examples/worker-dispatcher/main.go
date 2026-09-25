@@ -153,33 +153,34 @@ func getKeys(m map[string]string) []string {
 func main() {
 	fmt.Println("🚀 Faro Worker Dispatcher Example")
 	
-	// 1. Create configuration
+	// 1. Create configuration. One config drives the controller and the logger.
+	//
+	// NameSelector and NamespaceNames are exact names used for server-side
+	// filtering, not patterns. Leaving NameSelector unset matches every object
+	// of the type, which is what these two entries want.
 	config := &faro.Config{
 		OutputDir:  "./logs",
 		LogLevel:   "info",
+		JsonExport: true,
 		Resources: []faro.ResourceConfig{
 			{
-				GVR:               "v1/configmaps",
-				Scope:             faro.NamespaceScope,
-				NamespacePatterns: []string{"default", "kube-system"},
-				NamePattern:       ".*",
+				GVR:            "v1/configmaps",
+				Scope:          faro.NamespaceScope,
+				NamespaceNames: []string{"default", "kube-system"},
 			},
 			{
-				GVR:         "v1/namespaces",
-				Scope:       faro.ClusterScope,
-				NamePattern: ".*test.*",
+				GVR:   "v1/namespaces",
+				Scope: faro.ClusterScope,
 			},
 		},
 	}
-	
+
 	// 2. Create Faro components
 	client, err := faro.NewKubernetesClient()
 	if err != nil {
 		log.Fatalf("Failed to create Kubernetes client: %v", err)
 	}
-	
-	// Create config for logger
-	config := &faro.Config{OutputDir: "./logs", JsonExport: true}
+
 	logger, err := faro.NewLogger(config)
 	if err != nil {
 		log.Fatalf("Failed to create logger: %v", err)
