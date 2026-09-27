@@ -921,6 +921,29 @@ func (c *Controller) waitUntilWatchable(gvrString string) bool {
 		// starting, and nothing would ever signal again.
 		sub := c.readiness.subscribe(group)
 
+		// Ask the registry first: it holds what the API server STATES, so no
+		// error code has to be interpreted and no request is made. Before the
+		// readiness informers have listed it cannot say, and only then does this
+		// fall back to asking the API directly.
+		if info := c.resourceInfoFromConfig(gvrString); info != nil {
+			if ready, known := c.readiness.state(info.Group, info.Version, info.Resource); known && !ready {
+				if !announced {
+					c.logger.Info("controller", fmt.Sprintf(
+						"%s is not served yet; waiting for it to appear before watching", gvrString))
+					announced = true
+				}
+				select {
+				case <-c.ctx.Done():
+					c.readiness.unsubscribe(group, sub)
+					return false
+				case <-sub:
+				case <-time.After(watchabilityRecheck):
+					c.readiness.unsubscribe(group, sub)
+				}
+				continue
+			}
+		}
+
 		switch state, verbs := c.resourceWatchability(gvrString); state {
 		case watchOK, watchUnknown:
 			c.readiness.unsubscribe(group, sub)
@@ -969,6 +992,7 @@ func (c *Controller) waitUntilWatchable(gvrString string) bool {
 // A failure here is not fatal. The wait loop keeps its backstop timer, so the
 // worst case is the behaviour of the previous release.
 func (c *Controller) startReadinessWatchers() {
+	var synced atomic.Int64
 	watch := func(gvr schema.GroupVersionResource, name string, on func(*unstructured.Unstructured)) {
 		factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(c.client.Dynamic, 0, "", nil)
 		inf := factory.ForResource(gvr).Informer()
@@ -994,6 +1018,17 @@ func (c *Controller) startReadinessWatchers() {
 			c.logger.Debug("controller", fmt.Sprintf("no watch error handler for %s: %v", name, err))
 		}
 		go inf.Run(c.ctx.Done())
+		go func() {
+			if cache.WaitForCacheSync(c.ctx.Done(), inf.HasSynced) {
+				if n := synced.Add(1); n == 2 {
+					// Both listed: the registry now knows every group the server
+					// serves, so "no entry" means "not served" rather than "not
+					// seen yet", and nothing needs to ask the API again.
+					c.readiness.markSynced()
+					c.logger.Info("controller", "API readiness registry populated from APIServices and CRDs")
+				}
+			}
+		}()
 		c.logger.Info("controller", fmt.Sprintf("watching %s to wake informers when their API becomes usable", name))
 	}
 
