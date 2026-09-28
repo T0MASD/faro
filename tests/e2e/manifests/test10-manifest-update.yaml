@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config-10
+  namespace: faro-test-10
+data:
+  key1: "value1-updated"
