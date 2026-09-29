@@ -1166,3 +1166,66 @@ func validateEvents(t *testing.T, expected []FaroJSONEvent, actual []FaroJSONEve
 
 
 
+
+// TestFaroTest10ConfigurableFields proves the two halves of configurable event
+// fields against a real cluster: a configured path reaches the emitted event,
+// and a Secret's data does not - even though the config asks for it.
+//
+// The denylist is the reason this is an e2e test and not only a unit test. A
+// Secret's data is base64, not encryption, and the capture file it would land
+// in sits on shared storage in a real deployment. It is worth proving against
+// a live apiserver that nothing in the informer path reintroduces it.
+func TestFaroTest10ConfigurableFields(t *testing.T) {
+	t.Parallel()
+
+	expectedEvents := []FaroJSONEvent{
+		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-10", Name: "test-config-10"},
+		{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-10", Name: "test-config-10"},
+		{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-10", Name: "test-config-10"},
+		{EventType: "ADDED", GVR: "v1/secrets", Namespace: "faro-test-10", Name: "test-secret-10"},
+		{EventType: "DELETED", GVR: "v1/secrets", Namespace: "faro-test-10", Name: "test-secret-10"},
+	}
+
+	runParallelE2ETest(t, "test10", "configs/simple-test-10.yaml",
+		"manifests/test10-manifest.yaml", "manifests/test10-manifest-update.yaml",
+		expectedEvents)
+
+	events, err := readJSONEvents("logs/test10")
+	if err != nil {
+		t.Fatalf("reading emitted events: %v", err)
+	}
+
+	var sawConfigMapValue, sawSecret bool
+	for _, e := range events {
+		switch e.GVR {
+		case "v1/configmaps":
+			if v, ok := e.Fields["data.key1"]; ok {
+				sawConfigMapValue = true
+				if s, _ := v.(string); s != "value1" && s != "value1-updated" {
+					t.Errorf("data.key1 = %#v, want the manifest value", v)
+				}
+			}
+			if _, ok := e.Fields["metadata.generation"]; ok {
+				t.Error("absent path must be omitted, not emitted empty")
+			}
+		case "v1/secrets":
+			sawSecret = true
+			for _, denied := range []string{"data", "data.password", "stringData"} {
+				if _, ok := e.Fields[denied]; ok {
+					t.Fatalf("SECRET LEAK: %q was emitted for %s/%s", denied, e.Namespace, e.Name)
+				}
+			}
+			// the non-sensitive field asked for in the same list still works,
+			// so the denylist is surgical rather than disabling the feature.
+			if v, ok := e.Fields["type"]; ok && v != "Opaque" {
+				t.Errorf("secret type = %#v, want Opaque", v)
+			}
+		}
+	}
+	if !sawConfigMapValue {
+		t.Error("no configmap event carried the configured field")
+	}
+	if !sawSecret {
+		t.Error("no secret event observed - the denylist assertion never ran")
+	}
+}
