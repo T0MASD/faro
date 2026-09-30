@@ -240,6 +240,16 @@ main() {
         exit 1
     fi
     log_info "  - Captured $(wc -l < tests/operator-ci/logs/captured-events.json) events"
+
+    # The operator config asks for `fields` on pods and events. If none come
+    # back, either the deployed image predates configurable fields or the
+    # config did not reach it - both make the capture answer WHAT changed and
+    # never WHY, which is the whole reason the artifact is kept.
+    if ! grep -q '"fields"' tests/operator-ci/logs/captured-events.json; then
+        log_error "no event carried 'fields' - configurable fields are not reaching the operator"
+        exit 1
+    fi
+    log_info "  - $(grep -c '"fields"' tests/operator-ci/logs/captured-events.json) events carry extracted fields"
     
     log_info ""
     log_info "=========================================="
