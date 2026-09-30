@@ -32,12 +32,32 @@ data:
       bind_addr: "0.0.0.0"
     
     # Namespace-centric configuration
+    # `fields` names object paths copied into the emitted event. Without
+    # it a capture says WHAT changed and never WHY - a restarting pod
+    # produces Event objects whose reason and message explain it, and
+    # neither is metadata, so they were simply absent from the record.
+    #
+    # Opt-in per GVR, on pods and events only. What makes a broad capture
+    # affordable is that each record stays small; services, deployments
+    # and jobs are here to prove the watch works, not to be diagnosed
+    # from, so they carry identity alone.
     namespaces:
       - name_selector: "faro-test-validation"
         resources:
-          "v1/pods": {}
+          "v1/pods":
+            fields:
+              - "status.phase"
+              - "status.containerStatuses.restartCount"
+              - "status.containerStatuses.lastState.terminated.reason"
+              - "status.containerStatuses.lastState.terminated.exitCode"
           "v1/services": {}
           "apps/v1/deployments": {}
           "batch/v1/jobs": {}
-          "v1/events": {}
+          "v1/events":
+            fields:
+              - "reason"
+              - "message"
+              - "type"
+              - "involvedObject.kind"
+              - "involvedObject.name"
 

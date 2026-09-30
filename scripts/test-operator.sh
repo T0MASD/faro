@@ -218,9 +218,38 @@ main() {
     mkdir -p tests/operator-ci/logs
     kubectl logs -n "$OPERATOR_NAMESPACE" "$pod_name" > tests/operator-ci/logs/operator.log || true
     
-    # Export events from operator
+    # Export events from operator.
+    #
+    # The path is <output_dir>/logs, not <output_dir>: Config.GetLogDir()
+    # returns filepath.Join(OutputDir, "logs"), and the JSON export lands
+    # there as events-<timestamp>.json. This glob used to be one directory
+    # too shallow, so it matched nothing - and with 2>/dev/null swallowing
+    # the error and || true swallowing the exit code, every run uploaded a
+    # captured-events.json of exactly 0 bytes. Confirmed empty on run
+    # 38088128887.
     kubectl exec -n "$OPERATOR_NAMESPACE" "$pod_name" -- \
-        sh -c "cat /var/faro/events/*.json 2>/dev/null" > tests/operator-ci/logs/captured-events.json || true
+        sh -c "cat /var/faro/events/logs/events-*.json 2>/dev/null" \
+        > tests/operator-ci/logs/captured-events.json || true
+
+    # An empty capture means the operator recorded nothing. That is a
+    # failure worth seeing, not an empty artifact to download later.
+    if [ ! -s tests/operator-ci/logs/captured-events.json ]; then
+        log_error "captured-events.json is empty - operator exported no events"
+        kubectl exec -n "$OPERATOR_NAMESPACE" "$pod_name" -- \
+            sh -c "ls -la /var/faro/events /var/faro/events/logs 2>&1" || true
+        exit 1
+    fi
+    log_info "  - Captured $(wc -l < tests/operator-ci/logs/captured-events.json) events"
+
+    # The operator config asks for `fields` on pods and events. If none come
+    # back, either the deployed image predates configurable fields or the
+    # config did not reach it - both make the capture answer WHAT changed and
+    # never WHY, which is the whole reason the artifact is kept.
+    if ! grep -q '"fields"' tests/operator-ci/logs/captured-events.json; then
+        log_error "no event carried 'fields' - configurable fields are not reaching the operator"
+        exit 1
+    fi
+    log_info "  - $(grep -c '"fields"' tests/operator-ci/logs/captured-events.json) events carry extracted fields"
     
     log_info ""
     log_info "=========================================="
