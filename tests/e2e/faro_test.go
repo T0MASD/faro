@@ -1195,37 +1195,73 @@ func TestFaroTest10ConfigurableFields(t *testing.T) {
 		t.Fatalf("reading emitted events: %v", err)
 	}
 
-	var sawConfigMapValue, sawSecret bool
-	for _, e := range events {
-		switch e.GVR {
-		case "v1/configmaps":
-			if v, ok := e.Fields["data.key1"]; ok {
-				sawConfigMapValue = true
-				if s, _ := v.(string); s != "value1" && s != "value1-updated" {
-					t.Errorf("data.key1 = %#v, want the manifest value", v)
-				}
-			}
-			if _, ok := e.Fields["metadata.generation"]; ok {
-				t.Error("absent path must be omitted, not emitted empty")
-			}
-		case "v1/secrets":
-			sawSecret = true
-			for _, denied := range []string{"data", "data.password", "stringData"} {
-				if _, ok := e.Fields[denied]; ok {
-					t.Fatalf("SECRET LEAK: %q was emitted for %s/%s", denied, e.Namespace, e.Name)
-				}
-			}
-			// the non-sensitive field asked for in the same list still works,
-			// so the denylist is surgical rather than disabling the feature.
-			if v, ok := e.Fields["type"]; ok && v != "Opaque" {
-				t.Errorf("secret type = %#v, want Opaque", v)
+	// Assert the EXACT field set per event, not merely that something is
+	// present. A weaker check passes while extraction is stale (the UPDATE
+	// still reporting the created value) or over-broad (emitting paths nobody
+	// asked for), and both are the failures worth catching.
+	// Matched on NAME as well as GVR and type. The namespace also carries
+	// kube-root-ca.crt, which is a v1/configmaps ADDED event with no fields -
+	// matching on GVR alone would pick whichever came first and assert against
+	// the wrong object.
+	fieldsOf := func(evs []FaroJSONEvent, gvr, eventType, name string) (map[string]interface{}, bool) {
+		for _, e := range evs {
+			if e.GVR == gvr && e.EventType == eventType && e.Name == name {
+				return e.Fields, true
 			}
 		}
+		return nil, false
 	}
-	if !sawConfigMapValue {
-		t.Error("no configmap event carried the configured field")
+	same := func(got map[string]interface{}, want map[string]string) bool {
+		if len(got) != len(want) {
+			return false
+		}
+		for k, v := range want {
+			g, ok := got[k]
+			if !ok {
+				return false
+			}
+			if s, _ := g.(string); s != v {
+				return false
+			}
+		}
+		return true
 	}
-	if !sawSecret {
-		t.Error("no secret event observed - the denylist assertion never ran")
+
+	// ADDED carries the created value.
+	add, ok := fieldsOf(events, "v1/configmaps", "ADDED", "test-config-10")
+	if !ok {
+		t.Fatal("no ADDED configmap event")
+	}
+	if !same(add, map[string]string{"data.key1": "value1"}) {
+		t.Errorf("ADDED configmap fields = %#v, want exactly {data.key1: value1}", add)
+	}
+
+	// UPDATED carries the NEW value. This is the assertion that fails if the
+	// object is read once and cached: accepting "either value" would pass
+	// while every update reported what the object looked like at creation.
+	upd, ok := fieldsOf(events, "v1/configmaps", "UPDATED", "test-config-10")
+	if !ok {
+		t.Fatal("no UPDATED configmap event")
+	}
+	if !same(upd, map[string]string{"data.key1": "value1-updated"}) {
+		t.Errorf("UPDATED configmap fields = %#v, want exactly {data.key1: value1-updated}", upd)
+	}
+
+	// The Secret asked for type, data and data.password. EXACTLY type comes
+	// back: the denylist is surgical, not a blanket refusal that would also
+	// drop the harmless field - and nothing else leaks in either.
+	sec, ok := fieldsOf(events, "v1/secrets", "ADDED", "test-secret-10")
+	if !ok {
+		t.Fatal("no ADDED secret event - the denylist assertion never ran")
+	}
+	if !same(sec, map[string]string{"type": "Opaque"}) {
+		t.Fatalf("SECRET: fields = %#v, want exactly {type: Opaque}", sec)
+	}
+
+	// Stated rather than assumed: a DELETED event is built from a minimal
+	// object, so it carries no fields. Anyone reading a capture needs to know
+	// the reason is absent there by construction, not because nothing failed.
+	if del, ok := fieldsOf(events, "v1/configmaps", "DELETED", "test-config-10"); ok && len(del) != 0 {
+		t.Errorf("DELETED carries fields %#v; expected none (minimal object)", del)
 	}
 }
