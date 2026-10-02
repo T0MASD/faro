@@ -227,8 +227,15 @@ resources:
 
 ```json
 {"eventTime":"...","eventType":"ADDED","gvr":"v1/events","name":"pod.18dd44",
- "fields":{"reason":"BackOff","message":"Back-off restarting failed container"}}
+ "fields":{"reason":"BackOff","involvedObject":{"kind":"Pod","name":"antrea-agent-86jgg"}}}
 ```
+
+**The config path is dotted; the output is nested.** `involvedObject.name` is
+the natural way to *name* a path, but a flat key would *contain* a dot - and a
+dot is the path separator in every tool that reads the capture afterwards, so
+`.fields.involvedObject.name` in jq and
+`json_extract(detail,'$.involvedObject.name')` in SQLite would both return
+null, silently and with no error. Paths sharing a prefix merge into one object.
 
 - a path crossing a **list** applies to every element, so
   `status.containerStatuses.restartCount` yields one value per container
