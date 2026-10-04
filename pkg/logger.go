@@ -112,13 +112,24 @@ func (l *Logger) LogJSON(component, message string) {
 		return
 	}
 	
-	if l.jsonFile != nil {
-		l.mu.Lock()
-		defer l.mu.Unlock()
-		
-		// Write pure JSON (one line per event)
-		l.jsonFile.WriteString(message + "\n")
-		l.jsonFile.Sync() // Ensure immediate write
+	// Lock before reading jsonFile: Shutdown() sets it to nil under this same
+	// lock, so testing it first raced with shutdown.
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.jsonFile == nil {
+		return
+	}
+
+	// Say so when a write fails. Both of these return an error and both used to
+	// be discarded, so the capture could stop at an arbitrary point while the
+	// process stayed healthy and the text log carried on - with nothing logged
+	// at any level, and afterwards no way to say why.
+	if _, err := l.jsonFile.WriteString(message + "\n"); err != nil {
+		klog.Errorf("[logger] JSON capture write failed, this event is not in the capture: %v", err)
+		return
+	}
+	if err := l.jsonFile.Sync(); err != nil {
+		klog.Errorf("[logger] JSON capture sync failed, this event may not be in the capture: %v", err)
 	}
 }
 
