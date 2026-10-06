@@ -35,7 +35,11 @@ func TestLogJSONEventDeletedFromStub(t *testing.T) {
 	stub.SetName("cloudcore")
 	stub.SetNamespace("kubeedge")
 
-	c.logJSONEvent("DELETED", "v1/configmaps", "kubeedge", "cloudcore", "uid-1", nil, stub)
+	// The observation time now comes from the caller (the WorkItem), so pass one
+	// and assert it is what lands in the record rather than the time the write
+	// happened to run.
+	observed := time.Date(2026, 10, 12, 18, 30, 0, 0, time.UTC)
+	c.logJSONEvent("DELETED", "v1/configmaps", "kubeedge", "cloudcore", "uid-1", nil, stub, observed)
 	logger.Shutdown()
 
 	files, _ := filepath.Glob(filepath.Join(dir, "logs", "events-*.json"))
@@ -70,8 +74,12 @@ func TestLogJSONEventDeletedFromStub(t *testing.T) {
 		if e.EventTime == "" {
 			t.Fatal("stub delete has no eventTime; this is the event that cannot be ordered")
 		}
-		if _, err := time.Parse(time.RFC3339Nano, e.EventTime); err != nil {
+		got, err := time.Parse(time.RFC3339Nano, e.EventTime)
+		if err != nil {
 			t.Fatalf("eventTime %q is not RFC3339Nano: %v", e.EventTime, err)
+		}
+		if !got.Equal(observed) {
+			t.Fatalf("eventTime = %v, want the observation time %v - a record must say when Faro SAW the change, not when a worker wrote it", got, observed)
 		}
 		t.Logf("stub delete -> timestamp=%q eventTime=%q", e.Timestamp, e.EventTime)
 	}
@@ -94,8 +102,12 @@ func TestLogJSONEventCarriesEventTime(t *testing.T) {
 	obj.SetName("cp1")
 	obj.SetCreationTimestamp(metav1.NewTime(time.Now().Add(-time.Hour)))
 
-	c.logJSONEvent("ADDED", "v1/nodes", "", "cp1", "uid-1", nil, obj)
-	c.logJSONEvent("UPDATED", "v1/nodes", "", "cp1", "uid-1", nil, obj)
+	// Two observations of the same hour-old object, seen a second apart. The
+	// times now come from the caller, which is the point: creation is history,
+	// each eventTime is when Faro saw that particular change.
+	first := time.Date(2026, 10, 12, 18, 30, 0, 0, time.UTC)
+	c.logJSONEvent("ADDED", "v1/nodes", "", "cp1", "uid-1", nil, obj, first)
+	c.logJSONEvent("UPDATED", "v1/nodes", "", "cp1", "uid-1", nil, obj, first.Add(time.Second))
 	logger.Shutdown()
 
 	files, _ := filepath.Glob(filepath.Join(dir, "logs", "events-*.json"))
