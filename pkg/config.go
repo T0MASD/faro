@@ -69,6 +69,21 @@ type Config struct {
 	LogLevel        string            `yaml:"log_level"`        // Log level: debug, info, warning, error, fatal
 	AutoShutdownSec int               `yaml:"auto_shutdown_sec"` // Auto-shutdown timeout in seconds (0 = run indefinitely)
 	JsonExport      bool              `yaml:"json_export,omitempty"` // Enable JSON event export to separate file
+
+	// How often the capture file is fsynced: "interval" (the default, once a
+	// second) or "record" (after every record).
+	//
+	// "record" was the only behaviour and it caps the collector at one record
+	// per fsync. On a network filesystem that is ~100ms, so ~8 records/s no
+	// matter how many workers run, and above that the work queue grows without
+	// bound (#35). "interval" trades the last second of capture on a hard kill
+	// for a cap set by the disk's throughput rather than its latency.
+	//
+	// It is the default because under load it loses LESS: a backlog lives only
+	// in memory, so a collector that is minutes behind loses minutes of events
+	// if its pod is rescheduled, where an interval sync that keeps up loses at
+	// most a second if the node is destroyed outright.
+	JsonSync        string            `yaml:"json_sync,omitempty"`   // "interval" (default) or "record"
 	Metrics         MetricsConfig     `yaml:"metrics,omitempty"`     // Prometheus metrics configuration
 	
 	// Simple configuration formats

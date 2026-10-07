@@ -22,7 +22,11 @@ func newJSONLogger(t *testing.T) (*Logger, string) {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { f.Close() })
-	return &Logger{jsonFile: f}, path
+	l := &Logger{jsonFile: f}
+	// Per-record sync, so a write error surfaces on the record that caused it
+	// rather than on the next tick - which is what these tests are about.
+	l.startCaptureWriter(f, true)
+	return l, path
 }
 
 // Events still reach the file.
@@ -31,6 +35,9 @@ func TestLogJSONWritesEvents(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		l.LogJSON("controller", okEvent)
 	}
+	// The capture is written by its own goroutine now, so read it back only
+	// after Shutdown has drained and synced it.
+	l.Shutdown()
 	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
@@ -70,9 +77,12 @@ func TestLogJSONWriteFailureIsReported(t *testing.T) {
 	l.mu.Unlock()
 
 	l.LogJSON("controller", okEvent)
+	// Drain the writer: the record is handed over asynchronously, and it is the
+	// writer that discovers the file is gone.
+	l.Shutdown()
 	klog.Flush()
 
-	if got := buf.String(); !strings.Contains(got, "JSON capture write failed") {
+	if got := buf.String(); !strings.Contains(got, "JSON capture") {
 		t.Fatalf("a failed JSON write produced no report.\nklog output was:\n%s", got)
 	}
 }

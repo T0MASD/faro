@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -30,6 +31,30 @@ var (
 )
 
 // buildBinary builds the Faro binary once and reuses it across all tests
+// stopFaro ends the Faro process the way Kubernetes would, with SIGTERM.
+//
+// Not Process.Kill(): that is SIGKILL, which cannot be caught, so main()'s
+// graceful shutdown never runs and the logger never flushes what it has
+// buffered. SIGTERM is also what a pod gets on delete, so it is the path worth
+// exercising. SIGKILL stays as the backstop if the process will not leave.
+func stopFaro(cmd *exec.Cmd) {
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	_ = cmd.Process.Signal(syscall.SIGTERM)
+	done := make(chan struct{})
+	go func() {
+		_ = cmd.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		_ = cmd.Process.Kill()
+		<-done
+	}
+}
+
 func buildBinary() error {
 	var buildErr error
 	binaryOnce.Do(func() {
@@ -444,8 +469,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 	// Ensure Faro is killed even if test fails
 	defer func() {
 		if cmd.Process != nil {
-			cmd.Process.Kill()
-			cmd.Wait()
+			stopFaro(cmd)
 		}
 	}()
 
@@ -500,8 +524,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 
 	// Stop Faro
 	if cmd.Process != nil {
-		cmd.Process.Kill()
-		cmd.Wait()
+		stopFaro(cmd)
 	}
 
 	t.Log("✅ PHASE 3 COMPLETE: Faro binary stopped!")
@@ -610,8 +633,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	}
 	defer func() {
 		if faroCmd.Process != nil {
-			faroCmd.Process.Kill()
-			faroCmd.Wait()
+			stopFaro(faroCmd)
 		}
 	}()
 
@@ -672,8 +694,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	t.Log("🛑 PHASE 3: Stopping Faro binary...")
 	
 	// Stop Faro
-	faroCmd.Process.Kill()
-	faroCmd.Wait()
+	stopFaro(faroCmd)
 	
 	t.Log("✅ PHASE 3 COMPLETE: Faro binary stopped!")
 
