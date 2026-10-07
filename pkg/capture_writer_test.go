@@ -165,3 +165,52 @@ func TestFlushCaptureWaitsForQueuedRecords(t *testing.T) {
 			"anything reading the capture sees a file that is short or empty.", got, records)
 	}
 }
+
+// An idle writer must not fsync.
+//
+// The ticker fires on wall-clock time, not on activity. On a chunked network
+// filesystem every fsync appends a chunk and fsync latency grows with the
+// chunk count - measured on a SeaweedFS CSI mount at 14ms -> 44ms over 2000
+// syncs, against a flat 11-14ms on an emptyDir - so a collector watching a
+// quiet cluster was making its own capture slower in exchange for nothing.
+//
+// The interval here is the real one, so this test is about the behaviour and
+// not about a shortened timer: it writes nothing, waits past two ticks, and
+// asserts the sink was never synced.
+func TestIdleWriterDoesNotSync(t *testing.T) {
+	sink := &slowSink{}
+	l := &Logger{}
+	l.startCaptureWriter(sink, false)
+	defer l.Shutdown()
+
+	time.Sleep(2*captureSyncInterval + 300*time.Millisecond)
+
+	sink.mu.Lock()
+	n := sink.syncs
+	sink.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("an idle writer synced %d time(s) in %v; every one of those appends a chunk and costs the next sync", n, 2*captureSyncInterval)
+	}
+}
+
+// ...but a write still gets synced on the next tick, which is the whole point
+// of the interval. Asserted so the skip above cannot turn into "never syncs".
+func TestWriteIsSyncedOnTheNextTick(t *testing.T) {
+	sink := &slowSink{}
+	l := &Logger{}
+	l.startCaptureWriter(sink, false)
+	defer l.Shutdown()
+
+	l.LogJSON("controller", okEvent)
+	time.Sleep(captureSyncInterval + 500*time.Millisecond)
+
+	sink.mu.Lock()
+	n, lines := sink.syncs, strings.Count(sink.b.String(), "\n")
+	sink.mu.Unlock()
+	if n == 0 {
+		t.Fatal("a written record was never synced")
+	}
+	if lines != 1 {
+		t.Fatalf("capture holds %d records, want 1", lines)
+	}
+}
