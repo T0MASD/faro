@@ -11,9 +11,25 @@ permissions:
   contents: read
 
 env:
-  # Pinned kinc release. Bump deliberately; a floating tag makes a CI
-  # result depend on whichever kinc happened to be latest that day.
-  KINC_IMAGE: ghcr.io/t0masd/kinc:v1.36.4-0
+  # The MINOR-level kinc tag, deliberately - not an exact build, and not
+  # :latest.
+  #
+  # An exact pin rots. This sat at v1.36.4-0 while the estate ran v1.37.0-6,
+  # so faro was tested against an older Kubernetes minor than it shipped into,
+  # and nobody noticed until someone went looking - which is the one gap a pin
+  # is supposed to close rather than create.
+  #
+  # :latest is worse in the other direction: it crosses Kubernetes MINORS
+  # without warning. v1.36 -> v1.37 replaced kindnet with Antrea, whose OVS
+  # datapath needs a different host contract, and on :latest that lands in CI
+  # on an ordinary afternoon and turns every open pull request red for reasons
+  # that have nothing to do with any of them.
+  #
+  # v1.37-latest tracks every kinc patch and rebuild automatically - v1.37.1-0,
+  # v1.37.1-1, v1.37.2-0 all arrive with nothing to bump - while crossing a
+  # minor stays a one-line change somebody chooses to make. Which is right: a
+  # minor bump is a real event and deserves a pull request of its own.
+  KINC_IMAGE: ghcr.io/t0masd/kinc:v1.37-latest
 
 jobs:
   # The operator image is built only at release, so nothing here ever compiled
@@ -105,25 +121,53 @@ jobs:
         run: |
           # Enable IP forwarding (required for kinc networking)
           echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+          # Antrea's datapath is Open vSwitch, and a rootless nested container cannot
+          # load a kernel module - kinc's own tools say so and check for it
+          # (tools/deploy.sh and tools/join-host.sh), and kinc's CI host prep does
+          # exactly this (tools/ci-prepare-host.sh). Without them antrea-agent never
+          # starts, so /var/run/antrea/cni.sock is never created and EVERY pod sandbox
+          # fails with
+          #
+          #   plugin type="antrea" failed (add): dial unix /var/run/antrea/cni.sock:
+          #   connect: no such file or directory
+          #
+          # The control plane still comes up, which is what makes it confusing: the
+          # failure looks like a slow cluster rather than a missing module.
+          #
+          # A module compiled into the kernel never appears in /sys/module, so
+          # modules.builtin is consulted too.
+          sudo modprobe openvswitch || true
+          sudo modprobe geneve || true
+          for m in openvswitch geneve; do
+            if [ -d "/sys/module/$m" ]; then echo "  kernel module $m: loaded"
+            elif grep -qw "$m" "/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null; then echo "  kernel module $m: builtin"
+            else echo "::warning::kernel module $m is not available; Antrea will not start"; fi
+          done
           
           # Create volume for persistent data
           podman volume create kinc-var-data
           
+          # Antrea's datapath is Open vSwitch, and kinc v1.37 replaced kindnet with it.
+          # OVS needs more of the host than kindnet did. kinc's own quadlet
+          # (runtime/quadlet/kinc-control-plane.container) states the contract: the full
+          # capability set, /dev/fuse, /lib/modules, and a /run and /var that PROPAGATE
+          # mounts, so network namespaces created inside the cluster container are
+          # visible to the agent. A rootless nested container cannot load a kernel
+          # module itself, so /lib/modules has to come from the host.
+          #
+          # This block predates that change and met none of the last three, which is why
+          # every antrea-agent sat un-Ready until kubectl wait gave up.
           # Start kinc cluster with baked-in configuration (zero-config deployment)
           podman run -d --name kinc-cluster \
             --hostname kinc-control-plane \
             --cgroups=split \
-            --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \
-            --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \
-            --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \
-            --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \
-            --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \
-            --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \
+            --cap-add=all \
             --device /dev/fuse \
             --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \
-            --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run:rw,rshared,nosuid,nodev,tmpcopyup \
             --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \
-            --volume kinc-var-data:/var:rw \
+            --volume kinc-var-data:/var:rw,rshared \
+            --volume /lib/modules:/lib/modules:ro \
             --volume $HOME/.local/share/containers/storage:/root/.local/share/containers/storage:rw \
             --sysctl net.ipv6.conf.all.disable_ipv6=0 \
             --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \
@@ -140,6 +184,34 @@ jobs:
           # Wait for API server to start and be ready (check for HTTP 200)
           timeout 300 bash -c 'until curl -k -s -o /dev/null -w "%{http_code}" https://localhost:6443/healthz 2>/dev/null | grep -q "200"; do sleep 2; done'
           echo "✅ API server responding"
+          # Wait for kinc's OWN completion signal before asking kubectl anything.
+          #
+          # kinc-postinit writes /var/lib/kinc-initialized when the cluster has finished
+          # coming up, and kinc's deploy.sh and run-validation.sh both wait on exactly
+          # this. The API answering /healthz is not that signal: it responds while
+          # postinit is still applying addons, so everything after it was racing.
+          #
+          # This is what made "Waiting for storage provisioner..." fail on v1.37 - the
+          # local-path-storage namespace had simply not been created yet, and 60 seconds
+          # of guessing was standing in for a signal the container was already offering.
+          timeout 300 bash -c 'until podman exec kinc-cluster test -f /var/lib/kinc-initialized 2>/dev/null; do sleep 2; done' || true
+          # If kinc never reports ready, say why. Without this the step fails with a
+          # bare exit 124 and the container is thrown away by the cleanup step, so every
+          # diagnosis costs another full run.
+          if ! podman exec kinc-cluster test -f /var/lib/kinc-initialized 2>/dev/null; then
+            echo "::group::kinc did not finish initialising - diagnostics"
+            echo "--- failed/activating units ---"
+            podman exec kinc-cluster systemctl list-units --type=service --state=failed,activating --no-legend --no-pager 2>&1 | head -20 || true
+            echo "--- kubeadm-init.log (tail) ---"
+            podman exec kinc-cluster tail -60 /var/log/kinc/kubeadm-init.log 2>&1 || true
+            echo "--- kubelet errors ---"
+            podman exec kinc-cluster journalctl -u kubelet --no-pager -n 300 2>&1 | grep -iE "error|fail" | tail -20 || true
+            echo "--- crictl ---"
+            podman exec kinc-cluster crictl ps -a 2>&1 | head -15 || true
+            echo "::endgroup::"
+            exit 1
+          fi
+          echo "✅ kinc reports initialization complete"
           
           # Extract kubeconfig
           mkdir -p ~/.kube
@@ -261,25 +333,53 @@ jobs:
         run: |
           # Enable IP forwarding (required for kinc networking)
           echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+          # Antrea's datapath is Open vSwitch, and a rootless nested container cannot
+          # load a kernel module - kinc's own tools say so and check for it
+          # (tools/deploy.sh and tools/join-host.sh), and kinc's CI host prep does
+          # exactly this (tools/ci-prepare-host.sh). Without them antrea-agent never
+          # starts, so /var/run/antrea/cni.sock is never created and EVERY pod sandbox
+          # fails with
+          #
+          #   plugin type="antrea" failed (add): dial unix /var/run/antrea/cni.sock:
+          #   connect: no such file or directory
+          #
+          # The control plane still comes up, which is what makes it confusing: the
+          # failure looks like a slow cluster rather than a missing module.
+          #
+          # A module compiled into the kernel never appears in /sys/module, so
+          # modules.builtin is consulted too.
+          sudo modprobe openvswitch || true
+          sudo modprobe geneve || true
+          for m in openvswitch geneve; do
+            if [ -d "/sys/module/$m" ]; then echo "  kernel module $m: loaded"
+            elif grep -qw "$m" "/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null; then echo "  kernel module $m: builtin"
+            else echo "::warning::kernel module $m is not available; Antrea will not start"; fi
+          done
           
           # Create volume for persistent data
           podman volume create kinc-var-data
           
+          # Antrea's datapath is Open vSwitch, and kinc v1.37 replaced kindnet with it.
+          # OVS needs more of the host than kindnet did. kinc's own quadlet
+          # (runtime/quadlet/kinc-control-plane.container) states the contract: the full
+          # capability set, /dev/fuse, /lib/modules, and a /run and /var that PROPAGATE
+          # mounts, so network namespaces created inside the cluster container are
+          # visible to the agent. A rootless nested container cannot load a kernel
+          # module itself, so /lib/modules has to come from the host.
+          #
+          # This block predates that change and met none of the last three, which is why
+          # every antrea-agent sat un-Ready until kubectl wait gave up.
           # Start kinc cluster with baked-in configuration (zero-config deployment)
           podman run -d --name kinc-cluster \
             --hostname kinc-control-plane \
             --cgroups=split \
-            --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \
-            --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \
-            --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \
-            --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \
-            --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \
-            --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \
+            --cap-add=all \
             --device /dev/fuse \
             --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \
-            --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run:rw,rshared,nosuid,nodev,tmpcopyup \
             --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \
-            --volume kinc-var-data:/var:rw \
+            --volume kinc-var-data:/var:rw,rshared \
+            --volume /lib/modules:/lib/modules:ro \
             --volume $HOME/.local/share/containers/storage:/root/.local/share/containers/storage:rw \
             --sysctl net.ipv6.conf.all.disable_ipv6=0 \
             --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \
@@ -296,6 +396,34 @@ jobs:
           # Wait for API server to start and be ready (check for HTTP 200)
           timeout 300 bash -c 'until curl -k -s -o /dev/null -w "%{http_code}" https://localhost:6443/healthz 2>/dev/null | grep -q "200"; do sleep 2; done'
           echo "✅ API server responding"
+          # Wait for kinc's OWN completion signal before asking kubectl anything.
+          #
+          # kinc-postinit writes /var/lib/kinc-initialized when the cluster has finished
+          # coming up, and kinc's deploy.sh and run-validation.sh both wait on exactly
+          # this. The API answering /healthz is not that signal: it responds while
+          # postinit is still applying addons, so everything after it was racing.
+          #
+          # This is what made "Waiting for storage provisioner..." fail on v1.37 - the
+          # local-path-storage namespace had simply not been created yet, and 60 seconds
+          # of guessing was standing in for a signal the container was already offering.
+          timeout 300 bash -c 'until podman exec kinc-cluster test -f /var/lib/kinc-initialized 2>/dev/null; do sleep 2; done' || true
+          # If kinc never reports ready, say why. Without this the step fails with a
+          # bare exit 124 and the container is thrown away by the cleanup step, so every
+          # diagnosis costs another full run.
+          if ! podman exec kinc-cluster test -f /var/lib/kinc-initialized 2>/dev/null; then
+            echo "::group::kinc did not finish initialising - diagnostics"
+            echo "--- failed/activating units ---"
+            podman exec kinc-cluster systemctl list-units --type=service --state=failed,activating --no-legend --no-pager 2>&1 | head -20 || true
+            echo "--- kubeadm-init.log (tail) ---"
+            podman exec kinc-cluster tail -60 /var/log/kinc/kubeadm-init.log 2>&1 || true
+            echo "--- kubelet errors ---"
+            podman exec kinc-cluster journalctl -u kubelet --no-pager -n 300 2>&1 | grep -iE "error|fail" | tail -20 || true
+            echo "--- crictl ---"
+            podman exec kinc-cluster crictl ps -a 2>&1 | head -15 || true
+            echo "::endgroup::"
+            exit 1
+          fi
+          echo "✅ kinc reports initialization complete"
           
           # Extract kubeconfig
           mkdir -p ~/.kube
