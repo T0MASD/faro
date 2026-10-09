@@ -82,8 +82,12 @@ func TestLogJSONWriteFailureIsReported(t *testing.T) {
 	l.Shutdown()
 	klog.Flush()
 
-	if got := buf.String(); !strings.Contains(got, "JSON capture") {
-		t.Fatalf("a failed JSON write produced no report.\nklog output was:\n%s", got)
+	// The report is now sink-generic, because a capture can go to several
+	// destinations and the file is only one of them. What must not change is
+	// that a write which did not land says so.
+	got := buf.String()
+	if !strings.Contains(got, "capture sink") || !strings.Contains(got, "failed") {
+		t.Fatalf("a failed write produced no report.\nklog output was:\n%s", got)
 	}
 }
 
