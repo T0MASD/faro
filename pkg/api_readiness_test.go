@@ -208,3 +208,50 @@ func TestReadinessSubscriptionWakesWaitersWithoutPolling(t *testing.T) {
 	t.Fatalf("not woken by the APIService event (listed=%t watched=%t); only the %s backstop could have",
 		listed.Load(), watched.Load(), watchabilityRecheck)
 }
+
+// The registry must only answer when it has positive evidence. Absence of an
+// entry is not evidence of absence: concluding "not served" from a missing
+// APIService would make this a single point of failure for every informer in
+// the process - a failed watch or a partial list and nothing ever starts.
+func TestRegistryAnswersOnlyFromPositiveEvidence(t *testing.T) {
+	r := newAPIReadiness()
+
+	if _, known := r.state("example.com", "v1", "things"); known {
+		t.Fatal("answered before the informers had listed")
+	}
+	r.markSynced()
+
+	if _, known := r.state("example.com", "v1", "things"); known {
+		t.Fatal("answered for a groupVersion it has never seen; must fall back to the API")
+	}
+
+	// Positive evidence: the APIService exists and says it is not Available.
+	r.gvAvailable["example.com/v1"] = false
+	ready, known := r.state("example.com", "v1", "things")
+	if !known || ready {
+		t.Fatalf("APIService Available=False should be a definite not-ready, got ready=%t known=%t", ready, known)
+	}
+
+	r.gvAvailable["example.com/v1"] = true
+	if ready, known := r.state("example.com", "v1", "things"); !known || !ready {
+		t.Fatalf("APIService Available=True should be ready, got ready=%t known=%t", ready, known)
+	}
+
+	// A CRD in an available group that has not established yet is still not
+	// ready: APIService is per group/version, Established is per resource, and
+	// velero's two groupVersions carry 13 CRDs between them.
+	r.crdSeen["example.com/things"] = true
+	r.crdEstab["example.com/things"] = false
+	if ready, known := r.state("example.com", "v1", "things"); !known || ready {
+		t.Fatalf("unestablished CRD in an available group should not be ready, got ready=%t known=%t", ready, known)
+	}
+	r.crdEstab["example.com/things"] = true
+	if ready, known := r.state("example.com", "v1", "things"); !known || !ready {
+		t.Fatalf("established CRD in an available group should be ready, got ready=%t known=%t", ready, known)
+	}
+
+	// A sibling resource in the same group is unaffected by that CRD.
+	if ready, known := r.state("example.com", "v1", "others"); !known || !ready {
+		t.Fatalf("sibling resource should follow the group, got ready=%t known=%t", ready, known)
+	}
+}

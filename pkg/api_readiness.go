@@ -29,10 +29,79 @@ import (
 type apiReadiness struct {
 	mu      sync.Mutex
 	waiters map[string][]chan struct{}
+
+	// What the API server currently STATES, rather than what an error code
+	// implies. Populated from both informers' initial LIST and kept current by
+	// their events.
+	//
+	// Inferring readiness from errors needs a rule per error - 404 means not
+	// served, 503 means not served, anything else means proceed - and each rule
+	// is a chance to classify wrong. v1.5.4 shipped with one of them missing and
+	// did nothing at all. These two conditions are the API server's own answer.
+	gvAvailable map[string]bool // "group/version" -> APIService Available
+	crdSeen     map[string]bool // "group/resource" -> a CRD defines it
+	crdEstab    map[string]bool // "group/resource" -> CRD Established
+	synced      bool            // both informers have listed at least once
 }
 
 func newAPIReadiness() *apiReadiness {
-	return &apiReadiness{waiters: make(map[string][]chan struct{})}
+	return &apiReadiness{
+		waiters:     make(map[string][]chan struct{}),
+		gvAvailable: make(map[string]bool),
+		crdSeen:     make(map[string]bool),
+		crdEstab:    make(map[string]bool),
+	}
+}
+
+// markSynced is called once both readiness informers have completed their
+// initial LIST. Until then the registry cannot distinguish "not ready" from
+// "not seen yet", so callers fall back to asking the API directly.
+func (a *apiReadiness) markSynced() {
+	a.mu.Lock()
+	a.synced = true
+	a.mu.Unlock()
+}
+
+// state reports whether a GVR's API is usable, and whether the registry is in a
+// position to say at all.
+//
+// Two conditions at two granularities, because they are not interchangeable:
+// APIService.Available is per group/VERSION and covers whether the group is
+// served, while CRD.Established is per RESOURCE - velero's two groupVersions
+// carry 13 CRDs, and the group can be Available while one of them is still
+// establishing, which is the datadownloads race.
+func (a *apiReadiness) state(group, version, resource string) (ready, known bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.synced {
+		return false, false
+	}
+	gvKey := group + "/" + version
+	avail, seenGV := a.gvAvailable[gvKey]
+	if !seenGV {
+		// NO ENTRY IS NOT AN ANSWER. Every group the server serves does have an
+		// APIService - measured at 32 objects for 32 groupVersions, core,
+		// CRD-backed and aggregated alike - so absence usually does mean "not
+		// served". But concluding that here makes this registry a single point
+		// of failure for every informer in the process: a watch that fails, a
+		// partial list, an endpoint that does not serve apiregistration at all,
+		// and nothing ever starts. Caught by a test whose fake API server had no
+		// APIServices collection: all 533 informers waited forever.
+		//
+		// So the registry only speaks when it has positive evidence, and
+		// silence falls back to asking the API directly - which is slower and
+		// always correct.
+		return false, false
+	}
+	if !avail {
+		// Positive evidence: the APIService exists and says it is not Available.
+		return false, true
+	}
+	crdKey := group + "/" + resource
+	if a.crdSeen[crdKey] && !a.crdEstab[crdKey] {
+		return false, true
+	}
+	return true, true
 }
 
 // subscribe returns a channel closed when the group is reported ready. The caller
@@ -83,11 +152,20 @@ func (a *apiReadiness) onCRD(obj *unstructured.Unstructured) {
 	if runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, &crd) != nil {
 		return
 	}
+	key := crd.Spec.Group + "/" + crd.Spec.Names.Plural
+	established := false
 	for _, c := range crd.Status.Conditions {
 		if c.Type == apiextensionsv1.Established && c.Status == apiextensionsv1.ConditionTrue {
-			a.ready(crd.Spec.Group)
-			return
+			established = true
+			break
 		}
+	}
+	a.mu.Lock()
+	a.crdSeen[key] = true
+	a.crdEstab[key] = established
+	a.mu.Unlock()
+	if established {
+		a.ready(crd.Spec.Group)
 	}
 }
 
@@ -98,23 +176,36 @@ func (a *apiReadiness) onCRD(obj *unstructured.Unstructured) {
 // to depend on k8s.io/kube-aggregator for one struct, and two string fields do
 // not justify a module.
 func (a *apiReadiness) onAPIService(obj *unstructured.Unstructured) {
-	group, found, err := unstructured.NestedString(obj.Object, "spec", "group")
-	if err != nil || !found || group == "" {
+	// spec.group is EMPTY for the core group's APIService ("v1."), which is a
+	// real entry and not a malformed one: core types are the ones most likely to
+	// be waited on by mistake if it is dropped.
+	group, _, err := unstructured.NestedString(obj.Object, "spec", "group")
+	if err != nil {
 		return
 	}
 	conds, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
 	if err != nil || !found {
 		return
 	}
+	version, _, _ := unstructured.NestedString(obj.Object, "spec", "version")
+	available := false
 	for _, raw := range conds {
 		c, ok := raw.(map[string]any)
 		if !ok {
 			continue
 		}
-		if c["type"] == "Available" && c["status"] == "True" {
-			a.ready(group)
-			return
+		if c["type"] == "Available" {
+			available = c["status"] == "True"
+			break
 		}
+	}
+	if version != "" {
+		a.mu.Lock()
+		a.gvAvailable[group+"/"+version] = available
+		a.mu.Unlock()
+	}
+	if available {
+		a.ready(group)
 	}
 }
 
