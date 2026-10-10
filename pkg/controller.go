@@ -829,13 +829,55 @@ func (c *Controller) resourceWatchability(gvrString string) (watchability, []str
 	}
 	for _, r := range list.APIResources {
 		if r.Name == info.Resource {
-			if isResourceWatchable(r.Verbs) {
+			if !isResourceWatchable(r.Verbs) {
+				return watchUnsupported, r.Verbs
+			}
+			// Declared is not the same as serving. An aggregated API - anything
+			// an APIService points at a Service rather than Local - is
+			// registered and fully described in discovery the moment its
+			// APIService object exists, which is before the Deployment behind
+			// it has started. The aggregation layer answers every request in
+			// that window with 503 "the server is currently unable to handle
+			// the request".
+			//
+			// Measured on antrea: the APIService for controlplane.antrea.io is
+			// registered 2 seconds before antrea-controller's pod is even
+			// created, and does not go Available for another 35s while the
+			// image pulls and the container starts. Faro asked in that window
+			// and burned 104 reflector retries on 26 audited 503s.
+			//
+			// This is a wait, exactly like a CRD whose addon has not installed
+			// it yet, so it gets the same answer.
+			if c.serving(info) {
 				return watchOK, r.Verbs
 			}
-			return watchUnsupported, r.Verbs
+			return watchNotServed, r.Verbs
 		}
 	}
 	return watchNotServed, nil
+}
+
+// serving reports whether the endpoint can actually return objects for a GVR,
+// as opposed to merely describing it in discovery.
+//
+// One LIST capped at a single item: the cheapest question that reaches the
+// backend rather than the aggregation layer's own registry. It is asked once
+// per informer before the informer exists, instead of a reflector asking it
+// forever afterwards.
+//
+// Only 503 means "not yet" - that is the aggregation layer's specific answer
+// for a registered APIService whose backend is not up. A 404 is handled by the
+// caller. Anything else, including a permission error or a timeout, is NOT
+// read as an answer: the informer is built and the reflector reports whatever
+// is really wrong, which is the behaviour this had before.
+func (c *Controller) serving(info *ResourceInfo) bool {
+	gvr := schema.GroupVersionResource{
+		Group: info.Group, Version: info.Version, Resource: info.Resource,
+	}
+	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
+	defer cancel()
+	_, err := c.client.Dynamic.Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
+	return !apierrors.IsServiceUnavailable(err)
 }
 
 // waitUntilWatchable blocks until the API can serve a watch for this GVR, and
@@ -845,8 +887,13 @@ func (c *Controller) resourceWatchability(gvrString string) (watchability, []str
 // unwatchable does not give up - it fails and retries for the life of the
 // process, and on a capture-everything config seven such types produced 228
 // failures every two minutes in the log the capture exists to produce.
+// How long to wait before asking again about a GVR that is not served yet. A
+// variable rather than a constant so a test can ask the same question quickly;
+// nothing outside tests changes it.
+var watchabilityRecheck = 15 * time.Second
+
 func (c *Controller) waitUntilWatchable(gvrString string) bool {
-	const recheck = 15 * time.Second
+	recheck := watchabilityRecheck
 	announced := false
 	for {
 		switch state, verbs := c.resourceWatchability(gvrString); state {
