@@ -56,4 +56,3 @@ func NewKubernetesClient() (*KubernetesClient, error) {
 
 	return client, nil
 }
-
