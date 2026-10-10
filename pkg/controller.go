@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -28,6 +30,13 @@ type ResourceInfo struct {
 	Resource   string
 	Kind       string
 	Namespaced bool
+	// Verbs as discovery reported them, or nil for a resource discovery did not
+	// know. An informer needs both list and watch, and a resource can serve one
+	// without the other - the antrea stats APIs and v1/componentstatuses offer
+	// get,list and no watch. nil means "not discovered", which is NOT the same
+	// as "no verbs": a CRD that is not installed yet must still get an informer
+	// so it is picked up when it appears.
+	Verbs []string
 }
 
 // InformerStatusHandler is notified when an informer establishes its watch, or fails to.
@@ -448,6 +457,11 @@ type Controller struct {
 	cancellers      sync.Map // map[string]context.CancelFunc for informer shutdown
 	activeInformers sync.Map // map[string]bool for tracking active informers by GVR
 	listers         sync.Map // map[string]cache.GenericLister for object retrieval
+	// Informers created vs informers whose cache has actually synced. These are
+	// not the same number for minutes on a large config, and the difference is
+	// the part of the cluster Faro cannot yet see.
+	informersStarted atomic.Int64
+	informersSynced  atomic.Int64
 
 	// Event handlers for library usage
 	eventHandlers []EventHandler
@@ -627,7 +641,16 @@ func (c *Controller) Start() error {
 
 	// CRD watching removed - library users should implement CRD discovery if needed
 
-	c.logger.Info("controller", "Multi-layered informer architecture started successfully")
+	// Deliberately NOT "started successfully". Creating an informer and being
+	// able to see what it watches are separated by an initial LIST per informer,
+	// and on a capture-everything config that gap was measured at over two
+	// minutes - during which this line claimed the capture was running and the
+	// addons it exists to record were installing. Report the real state, and
+	// keep reporting it until the caches are actually warm.
+	c.logger.Info("controller", fmt.Sprintf(
+		"%d informers created; capture is NOT complete until their caches sync",
+		c.informersStarted.Load()))
+	go c.reportSyncProgress()
 
 	// Trigger readiness callback
 	c.readyMu.Lock()
@@ -710,6 +733,7 @@ func (c *Controller) processAPIGroup(group, version string) error {
 			Resource:   resource.Name,
 			Kind:       resource.Kind,
 			Namespaced: resource.Namespaced,
+			Verbs:      resource.Verbs,
 		}
 
 		// Avoid overwriting if we already have this exact GVR (from previous version processing)
@@ -725,17 +749,127 @@ func (c *Controller) processAPIGroup(group, version string) error {
 	return nil
 }
 
-// isResourceWatchable checks if a resource supports watch or list operations
-func (c *Controller) isResourceWatchable(resource metav1.APIResource) bool {
-	// Loop over resource verbs and return true if "watch" or "list" is found
-	for _, verb := range resource.Verbs {
-		if verb == "watch" || verb == "list" {
-			return true
+// isResourceWatchable reports whether an informer can be built for a resource.
+//
+// BOTH list and watch, not either. This read `watch || list` and was never
+// called from anywhere, so a resource offering get,list and no watch passed the
+// test twice over: once because nothing asked, and once because list alone
+// satisfied it. An informer does an initial LIST and then WATCHes from that
+// resourceVersion; without watch the reflector fails every attempt with
+//
+//	watch is not supported on resources of kind "networkpolicystats.stats.antrea.io"
+//
+// and retries forever. Measured on a capture-everything config: 228 failures
+// every two minutes from seven such types, drowning the log the capture exists
+// to produce.
+//
+// nil verbs means discovery did not know this resource, which must NOT be read
+// as unwatchable - that is the CRD-not-installed-yet case, where the informer is
+// created deliberately so it picks the type up once the CRD arrives.
+func isResourceWatchable(verbs []string) bool {
+	if verbs == nil {
+		return true
+	}
+	var canList, canWatch bool
+	for _, verb := range verbs {
+		switch verb {
+		case "list":
+			canList = true
+		case "watch":
+			canWatch = true
 		}
 	}
+	return canList && canWatch
+}
 
-	// If we reach here, neither "watch" nor "list" verb was found
-	return false
+// watchability of a GVR, as the API server can report it right now.
+type watchability int
+
+const (
+	// The endpoint serves this resource and says it supports list and watch.
+	watchOK watchability = iota
+	// The endpoint serves this resource and it cannot be watched. Never retry.
+	watchUnsupported
+	// The endpoint does not serve this resource yet - a CRD whose addon has not
+	// installed it, or an aggregated API whose APIService is not up. Wait.
+	watchNotServed
+	// Discovery could not be read at all. NOT the same as "not served": the
+	// resource endpoint may work perfectly while discovery is broken - KubeEdge's
+	// metaServer answers /apis with protobuf labelled application/json - so the
+	// only safe answer is to go ahead and let the reflector find out.
+	watchUnknown
+)
+
+// resourceWatchability asks the API server what it can currently do with a GVR.
+//
+// Live, not the startup discovery snapshot: the snapshot cannot answer for a
+// type that did not exist when Faro started, and on a cluster being built that
+// is most of them.
+func (c *Controller) resourceWatchability(gvrString string) (watchability, []string) {
+	info := c.resourceInfoFromConfig(gvrString)
+	if info == nil {
+		return watchUnknown, nil
+	}
+	gv := info.Version
+	if info.Group != "" {
+		gv = info.Group + "/" + info.Version
+	}
+	list, err := c.client.Discovery.ServerResourcesForGroupVersion(gv)
+	if err != nil {
+		// A 404 is the group genuinely not being served yet. Anything else -
+		// a decode error, a connection failure - means discovery is unusable
+		// and must not be read as an answer about the resource.
+		if apierrors.IsNotFound(err) {
+			return watchNotServed, nil
+		}
+		return watchUnknown, nil
+	}
+	if list == nil {
+		return watchUnknown, nil
+	}
+	for _, r := range list.APIResources {
+		if r.Name == info.Resource {
+			if isResourceWatchable(r.Verbs) {
+				return watchOK, r.Verbs
+			}
+			return watchUnsupported, r.Verbs
+		}
+	}
+	return watchNotServed, nil
+}
+
+// waitUntilWatchable blocks until the API can serve a watch for this GVR, and
+// reports whether to build the informer. False means never: say so once, by name.
+//
+// This is the point of the exercise. A reflector asked to watch something
+// unwatchable does not give up - it fails and retries for the life of the
+// process, and on a capture-everything config seven such types produced 228
+// failures every two minutes in the log the capture exists to produce.
+func (c *Controller) waitUntilWatchable(gvrString string) bool {
+	const recheck = 15 * time.Second
+	announced := false
+	for {
+		switch state, verbs := c.resourceWatchability(gvrString); state {
+		case watchOK, watchUnknown:
+			return true
+		case watchUnsupported:
+			c.logger.Warning("controller", fmt.Sprintf(
+				"%s does not support watch (verbs: %v); no informer will be started for it",
+				gvrString, verbs))
+			return false
+		case watchNotServed:
+			if !announced {
+				c.logger.Info("controller", fmt.Sprintf(
+					"%s is not served yet; waiting for it to appear before watching", gvrString))
+				announced = true
+			}
+		}
+		select {
+		case <-c.ctx.Done():
+			return false
+		case <-time.After(recheck):
+		}
+	}
 }
 
 // startCRDWatcher starts a CRD informer to watch for new CustomResourceDefinitions
@@ -1059,6 +1193,13 @@ func (c *Controller) startUnifiedInformer(params InformerStartParams) {
 	}
 	defer c.activeInformers.Delete(trackingKey)
 
+	// Check that the API can serve a watch BEFORE starting one, both for a
+	// resource that already exists and for one that appears later. Blocking here
+	// is free: this function already runs in its own goroutine per informer.
+	if !c.waitUntilWatchable(params.GVRString) {
+		return
+	}
+
 	// Create informer config
 	config := InformerConfig{
 		GVR:         params.GVR,
@@ -1104,7 +1245,32 @@ func (c *Controller) startUnifiedInformer(params InformerStartParams) {
 	c.runInformerWithLogging(informer, c.ctx, params.Description)
 }
 
+// reportSyncProgress says how much of the cluster Faro can actually see, until
+// all of it is visible. Silence here would be indistinguishable from coverage.
+func (c *Controller) reportSyncProgress() {
+	const every = 10 * time.Second
+	started := time.Now()
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-time.After(every):
+		}
+		want, got := c.informersStarted.Load(), c.informersSynced.Load()
+		if got >= want {
+			c.logger.Info("controller", fmt.Sprintf(
+				"capture established: %d/%d informer caches synced after %s",
+				got, want, time.Since(started).Round(time.Second)))
+			return
+		}
+		c.logger.Info("controller", fmt.Sprintf(
+			"capture incomplete: %d/%d informer caches synced after %s",
+			got, want, time.Since(started).Round(time.Second)))
+	}
+}
+
 func (c *Controller) notifyInformerSynced(gvr, namespace string, resourceCount int) {
+	c.informersSynced.Add(1)
 	c.statusMu.RLock()
 	handlers := append([]InformerStatusHandler(nil), c.statusHandlers...)
 	c.statusMu.RUnlock()
@@ -1256,6 +1422,7 @@ func (c *Controller) startConfigDrivenInformers() error {
 
 			// Start separate informer for this namespace+GVR combination
 			c.wg.Add(1)
+			c.informersStarted.Add(1)
 			go c.startUnifiedInformer(InformerStartParams{
 				GVR:               gvr,
 				Scope:             scope,
