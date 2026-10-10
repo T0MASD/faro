@@ -462,6 +462,9 @@ type Controller struct {
 	// the part of the cluster Faro cannot yet see.
 	informersStarted atomic.Int64
 	informersSynced  atomic.Int64
+	// Wakes informers waiting for their API group to become usable, from the
+	// API server's own transitions rather than a timer. See api_readiness.go.
+	readiness *apiReadiness
 
 	// Event handlers for library usage
 	eventHandlers []EventHandler
@@ -501,6 +504,7 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 		discoveredResources: make(map[string]*ResourceInfo),
 		eventHandlers:       make([]EventHandler, 0),
 		statusHandlers:      make([]InformerStatusHandler, 0),
+		readiness:           newAPIReadiness(),
 		jsonMiddleware:      make([]JSONMiddleware, 0),
 		metrics:             NewMetricsCollector(config.Metrics, *logger),
 	}
@@ -632,6 +636,10 @@ func (c *Controller) Start() error {
 	if err := c.discoverAPIResources(); err != nil {
 		c.logger.Warning("controller", fmt.Sprintf("Discovery unavailable (%v); watching the configured GVRs directly", err))
 	}
+
+	// Before any informer waits on anything, so a group that becomes ready
+	// during startup wakes its waiters instead of being missed.
+	c.startReadinessWatchers()
 
 	// 2. Start informers based on configuration and discovery results
 	c.logger.Info("controller", "Starting informers for configured GVRs")
@@ -816,12 +824,24 @@ func (c *Controller) resourceWatchability(gvrString string) (watchability, []str
 	}
 	list, err := c.client.Discovery.ServerResourcesForGroupVersion(gv)
 	if err != nil {
-		// A 404 is the group genuinely not being served yet. Anything else -
-		// a decode error, a connection failure - means discovery is unusable
-		// and must not be read as an answer about the resource.
-		if apierrors.IsNotFound(err) {
+		// 404: the group is genuinely not served yet.
+		//
+		// 503: an aggregated API whose backend is not up. The aggregation layer
+		// proxies DISCOVERY to the backend as well as the resource endpoints, so
+		// a group served by a Service answers discovery with 503 for exactly as
+		// long as it answers lists with 503.
+		//
+		// Missing this is why v1.5.4 did not work. It probed the resource
+		// endpoint for 503 but returned here first on the discovery error, so
+		// the probe was unreachable for the one case it was written for: 4 of
+		// antrea's 5 controlplane GVRs took this branch, were told "proceed",
+		// and retried for 38 seconds. Only the fifth - checked before the
+		// APIService object existed at all, so a true 404 - waited.
+		if apierrors.IsNotFound(err) || apierrors.IsServiceUnavailable(err) {
 			return watchNotServed, nil
 		}
+		// Anything else - a decode error, a connection failure - means discovery
+		// is unusable and must not be read as an answer about the resource.
 		return watchUnknown, nil
 	}
 	if list == nil {
@@ -893,13 +913,23 @@ func (c *Controller) serving(info *ResourceInfo) bool {
 var watchabilityRecheck = 15 * time.Second
 
 func (c *Controller) waitUntilWatchable(gvrString string) bool {
-	recheck := watchabilityRecheck
+	group := groupOf(gvrString)
 	announced := false
 	for {
+		// Subscribe BEFORE checking. The other order loses the wakeup: the group
+		// can become ready between the check saying "not yet" and the wait
+		// starting, and nothing would ever signal again.
+		sub := c.readiness.subscribe(group)
+
 		switch state, verbs := c.resourceWatchability(gvrString); state {
 		case watchOK, watchUnknown:
+			c.readiness.unsubscribe(group, sub)
+			if announced {
+				c.logger.Info("controller", fmt.Sprintf("%s is served now; watching it", gvrString))
+			}
 			return true
 		case watchUnsupported:
+			c.readiness.unsubscribe(group, sub)
 			c.logger.Warning("controller", fmt.Sprintf(
 				"%s does not support watch (verbs: %v); no informer will be started for it",
 				gvrString, verbs))
@@ -911,12 +941,69 @@ func (c *Controller) waitUntilWatchable(gvrString string) bool {
 				announced = true
 			}
 		}
+
+		// The timer is a backstop, not the mechanism. It covers a transition
+		// this process never saw - an informer that dropped its watch, a group
+		// that was ready before the watchers started - so a missed event costs
+		// one interval instead of forever.
 		select {
 		case <-c.ctx.Done():
+			c.readiness.unsubscribe(group, sub)
 			return false
-		case <-time.After(recheck):
+		case <-sub:
+		case <-time.After(watchabilityRecheck):
+			c.readiness.unsubscribe(group, sub)
 		}
 	}
+}
+
+// startReadinessWatchers subscribes to the two transitions that make an API
+// group usable, so informers waiting on one are woken by the API server instead
+// of by a timer.
+//
+// Its own informers, deliberately not the capture config's. Both resources
+// happen to be in a capture-everything config, but the thing that decides
+// whether informers start cannot depend on the configuration it is deciding
+// about - a config that omits them would silently restore polling.
+//
+// A failure here is not fatal. The wait loop keeps its backstop timer, so the
+// worst case is the behaviour of the previous release.
+func (c *Controller) startReadinessWatchers() {
+	watch := func(gvr schema.GroupVersionResource, name string, on func(*unstructured.Unstructured)) {
+		factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(c.client.Dynamic, 0, "", nil)
+		inf := factory.ForResource(gvr).Informer()
+		if inf == nil {
+			c.logger.Warning("controller", fmt.Sprintf("cannot watch %s for readiness; waits fall back to polling", name))
+			return
+		}
+		handle := func(obj any) {
+			if u, ok := obj.(*unstructured.Unstructured); ok {
+				on(u)
+			}
+		}
+		if _, err := inf.AddEventHandler(cache.ResourceEventHandlerFuncs{
+			AddFunc:    handle,
+			UpdateFunc: func(_, newObj any) { handle(newObj) },
+		}); err != nil {
+			c.logger.Warning("controller", fmt.Sprintf("cannot handle %s events: %v", name, err))
+			return
+		}
+		if err := inf.SetWatchErrorHandler(func(_ *cache.Reflector, werr error) {
+			c.logger.Debug("controller", fmt.Sprintf("readiness watch on %s: %v", name, werr))
+		}); err != nil {
+			c.logger.Debug("controller", fmt.Sprintf("no watch error handler for %s: %v", name, err))
+		}
+		go inf.Run(c.ctx.Done())
+		c.logger.Info("controller", fmt.Sprintf("watching %s to wake informers when their API becomes usable", name))
+	}
+
+	watch(schema.GroupVersionResource{
+		Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions",
+	}, "CustomResourceDefinitions", c.readiness.onCRD)
+
+	watch(schema.GroupVersionResource{
+		Group: "apiregistration.k8s.io", Version: "v1", Resource: "apiservices",
+	}, "APIServices", c.readiness.onAPIService)
 }
 
 // startCRDWatcher starts a CRD informer to watch for new CustomResourceDefinitions
