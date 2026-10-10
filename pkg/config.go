@@ -113,6 +113,23 @@ type Config struct {
 	// for bounding file SIZE on a collector that writes hard.
 	JsonRotateInterval string `yaml:"json_rotate_interval,omitempty"` // "" = 1h, "0" = never
 	JsonRotateRecords  int    `yaml:"json_rotate_records,omitempty"`  // 0 = never
+
+	// Where the SQLite capture goes. "" uses <output_dir>/logs/capture.db,
+	// which is the DEFAULT: there is always a queryable capture.
+	//
+	// One database, reopened in place across restarts rather than a new file
+	// per start. Safe because the Deployment runs Recreate so one collector
+	// writes at a time, and measured: a hard VM kill with a 4.1MB live WAL on
+	// a SeaweedFS RWX volume left the database opening clean, every
+	// acknowledged commit present, nothing torn.
+	//
+	// "off" disables it.
+	SqlitePath string `yaml:"sqlite_path,omitempty"`
+
+	// The JSON-lines capture, which is now OPTIONAL and off unless asked for.
+	// It remains because CI, the e2e suite and the drive-test harness read it,
+	// and because it is the format that has survived every failure thrown at
+	// it. json_export: true keeps writing it alongside the database.
 	Metrics         MetricsConfig     `yaml:"metrics,omitempty"`     // Prometheus metrics configuration
 	
 	// Simple configuration formats

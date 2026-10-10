@@ -80,6 +80,9 @@ type Logger struct {
 	openNext      sinkOpener
 	rotateRecords int
 	rotateEvery   time.Duration
+
+	// Prepared by NewLogger before the destinations are started together.
+	pendingFileSink Sink
 }
 
 // startCaptureWriter wires up the writer around a single file sink. Split out
@@ -87,6 +90,13 @@ type Logger struct {
 func (l *Logger) startCaptureWriter(sink captureSink, syncEvery bool) {
 	l.syncEvery = syncEvery
 	l.startSinks(newFileSink(sink, syncEvery, l.openNext, l.rotateRecords, l.rotateEvery))
+}
+
+// fileSinkFor prepares the file sink without starting the writer, so NewLogger
+// can collect every destination first and start them together.
+func (l *Logger) fileSinkFor(sink captureSink, syncEvery bool) {
+	l.syncEvery = syncEvery
+	l.pendingFileSink = newFileSink(sink, syncEvery, l.openNext, l.rotateRecords, l.rotateEvery)
 }
 
 // startSinks runs the writer over the given destinations. The capture goes to
@@ -284,14 +294,54 @@ func NewLogger(config *Config) (*Logger, error) {
 					logger.rotateEvery = d // 0 disables it
 				}
 			}
-			logger.startCaptureWriter(jsonFile, config.JsonSync == "record")
+			logger.fileSinkFor(jsonFile, config.JsonSync == "record")
 
 			// Log JSON file path to stdout for test identification
 			fmt.Printf("FARO_JSON_FILE: %s\n", jsonPath)
 		}
 	}
 
+	// SQLite is the default destination; the JSON file is opt-in alongside it.
+	//
+	// There is always a queryable capture, which is what lets the analysis side
+	// open what faro wrote instead of parsing it back out of a text file.
+	var sinks []Sink
+	if logger.pendingFileSink != nil {
+		sinks = append(sinks, logger.pendingFileSink)
+	}
+	if p := sqliteTarget(config); p != "" {
+		s, err := newSQLiteSink(p, os.Getenv("FARO_NODE"))
+		if err != nil {
+			// A capture that cannot open its database is worth saying loudly,
+			// and worth continuing without: the other destinations still work,
+			// and no capture at all is the worse outcome.
+			klog.Errorf("[logger] SQLite capture at %s could not be opened, continuing without it: %v", p, err)
+		} else {
+			sinks = append(sinks, s)
+			fmt.Printf("FARO_SQLITE_FILE: %s\n", p)
+		}
+	}
+	if len(sinks) > 0 {
+		logger.startSinks(sinks...)
+	}
+
 	return logger, nil
+}
+
+// sqliteTarget resolves where the SQLite capture goes. "off" disables it;
+// empty means the default beside the other capture files.
+func sqliteTarget(config *Config) string {
+	switch config.SqlitePath {
+	case "off":
+		return ""
+	case "":
+		if d := config.GetLogDir(); d != "" {
+			return d + "/capture.db"
+		}
+		return ""
+	default:
+		return config.SqlitePath
+	}
 }
 
 // SetConsoleEnabled enables or disables console output
