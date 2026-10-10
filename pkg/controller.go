@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -28,6 +30,13 @@ type ResourceInfo struct {
 	Resource   string
 	Kind       string
 	Namespaced bool
+	// Verbs as discovery reported them, or nil for a resource discovery did not
+	// know. An informer needs both list and watch, and a resource can serve one
+	// without the other - the antrea stats APIs and v1/componentstatuses offer
+	// get,list and no watch. nil means "not discovered", which is NOT the same
+	// as "no verbs": a CRD that is not installed yet must still get an informer
+	// so it is picked up when it appears.
+	Verbs []string
 }
 
 // InformerStatusHandler is notified when an informer establishes its watch, or fails to.
@@ -50,10 +59,10 @@ type InformerStatusHandler interface {
 
 // WorkItem represents a queued object key and associated metadata for processing
 type WorkItem struct {
-	Key         string             // Object key (namespace/name or name)
-	GVRString   string             // Group/Version/Resource identifier
-	Configs     []NormalizedConfig // Configuration rules that apply to this GVR
-	EventType   string             // ADDED, UPDATED, DELETED
+	Key       string             // Object key (namespace/name or name)
+	GVRString string             // Group/Version/Resource identifier
+	Configs   []NormalizedConfig // Configuration rules that apply to this GVR
+	EventType string             // ADDED, UPDATED, DELETED
 	// For DELETED events - preserve metadata that's lost when object is removed from cache
 	DeletedUID         string            // UID of deleted object
 	DeletedAnnotations map[string]string // Annotations of deleted object
@@ -61,11 +70,11 @@ type WorkItem struct {
 
 // MatchedEvent represents a filtered event that matched configuration criteria
 type MatchedEvent struct {
-	EventType string                      // ADDED, UPDATED, DELETED
-	Object    *unstructured.Unstructured  // Full Kubernetes object
-	GVR       string                      // Group/Version/Resource identifier
-	Key       string                      // namespace/name or name
-	Config    NormalizedConfig            // Configuration that matched this event
+	EventType string                     // ADDED, UPDATED, DELETED
+	Object    *unstructured.Unstructured // Full Kubernetes object
+	GVR       string                     // Group/Version/Resource identifier
+	Key       string                     // namespace/name or name
+	Config    NormalizedConfig           // Configuration that matched this event
 
 	// Timestamp is the object's creationTimestamp - object age, not when
 	// anything happened. Every update to an object carries the same value, so
@@ -92,7 +101,7 @@ type JSONEvent struct {
 	UID         string            `json:"uid,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
-	
+
 	// Additional fields can be added by library users via middleware
 }
 
@@ -117,9 +126,6 @@ type InformerStateTracker struct {
 	mu            sync.RWMutex
 }
 
-
-
-
 // logJSONEvent creates and logs a structured JSON event with middleware support
 func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured) {
 	var objCopy *unstructured.Unstructured
@@ -134,7 +140,7 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 			finalUID = c.getUIDFromInformerState(gvr, namespace, name)
 		}
 	}
-	
+
 	// When Faro saw this, as distinct from when the object was created. Taken
 	// before any middleware runs, so it is the observation and not the
 	// processing.
@@ -144,8 +150,7 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	if obj != nil {
 		// RACE CONDITION FIX: Create a deep copy to avoid concurrent map access
 		objCopy = obj.DeepCopy()
-		
-		
+
 		annotations = objCopy.GetAnnotations()
 		// A DELETED event is reconstructed from a stub, which has no
 		// creationTimestamp; formatting the zero value produced
@@ -174,28 +179,28 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	c.middlewareMu.RLock()
 	middleware := c.jsonMiddleware
 	c.middlewareMu.RUnlock()
-	
+
 	processedObj := objCopy
 	shouldContinue := true
-	
+
 	for _, mw := range middleware {
 		if !shouldContinue {
 			break
 		}
 		processedObj, shouldContinue = mw.ProcessBeforeJSON(eventType, gvr, namespace, name, finalUID, processedObj)
 	}
-	
+
 	// Skip logging if middleware says not to continue
 	if !shouldContinue {
 		return
 	}
-	
+
 	// Update annotations and labels from processed object
 	if processedObj != nil {
 		annotations = processedObj.GetAnnotations()
 		labels = processedObj.GetLabels()
 	}
-	
+
 	jsonEvent := JSONEvent{
 		Timestamp:   timestamp,
 		EventTime:   eventTime,
@@ -220,7 +225,6 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	c.logger.Debug("controller", string(jsonData))
 }
 
-
 // getUIDFromInformerState retrieves UID from informer state tracker
 func (c *Controller) getUIDFromInformerState(gvrString, namespace, name string) string {
 	trackerInterface, exists := c.informerTrackers.Load(gvrString)
@@ -228,15 +232,15 @@ func (c *Controller) getUIDFromInformerState(gvrString, namespace, name string) 
 		c.metrics.OnUIDResolution(gvrString, "cache_miss")
 		return "unknown" // No tracker for this GVR
 	}
-	
+
 	tracker := trackerInterface.(*InformerStateTracker)
 	key := c.makeResourceKey(gvrString, namespace, name)
-	
+
 	if cachedUID, exists := tracker.UIDCache.Load(key); exists {
 		c.metrics.OnUIDResolution(gvrString, "success")
 		return cachedUID.(string)
 	}
-	
+
 	c.metrics.OnUIDResolution(gvrString, "unknown")
 	return "unknown" // Not found in informer state
 }
@@ -247,13 +251,11 @@ func (c *Controller) cleanupUIDFromInformerState(gvrString, namespace, name stri
 	if !exists {
 		return // No tracker for this GVR
 	}
-	
+
 	tracker := trackerInterface.(*InformerStateTracker)
 	key := c.makeResourceKey(gvrString, namespace, name)
 	tracker.UIDCache.Delete(key)
 }
-
-
 
 // makeResourceKey creates a consistent key for resource tracking
 func (c *Controller) makeResourceKey(gvr, namespace, name string) string {
@@ -280,39 +282,39 @@ func (c *Controller) populateInitialUIDCache(tracker *InformerStateTracker, conf
 	var objects []runtime.Object
 	var err error
 	var resourceCount int64
-	
+
 	// List all resources from the informer's lister
 	objects, err = tracker.Lister.List(labels.Everything())
-	
+
 	if err != nil {
 		c.logger.Error("controller", fmt.Sprintf("Failed to list resources for %s: %v", config.GVRString, err))
 		return 0
 	}
-	
+
 	for _, obj := range objects {
 		if unstructured, ok := obj.(*unstructured.Unstructured); ok {
 			key := c.makeResourceKey(config.GVRString, unstructured.GetNamespace(), unstructured.GetName())
 			uid := string(unstructured.GetUID())
 			tracker.UIDCache.Store(key, uid)
 			resourceCount++
-			
+
 			// Update metrics for tracked resource
 			c.metrics.OnResourceTracked(config.GVRString, unstructured.GetNamespace(), 1)
-			
+
 			c.logger.Debug("controller", fmt.Sprintf("Cached existing resource: %s (UID: %s)", key, uid))
 		}
 	}
-	
+
 	return resourceCount
 }
 
 // setupSyncCallback sets up callback-driven sync detection and cache population
 func (c *Controller) setupSyncCallback(informer cache.SharedIndexInformer, tracker *InformerStateTracker, config InformerConfig) {
 	syncStartTime := time.Now()
-	
+
 	// Use sync.Once to ensure sync logic only runs once
 	var syncOnce sync.Once
-	
+
 	// Add a special event handler that detects when informer is synced
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
@@ -321,14 +323,14 @@ func (c *Controller) setupSyncCallback(informer cache.SharedIndexInformer, track
 				syncOnce.Do(func() {
 					// Sync completed - populate cache
 					resourceCount := c.populateInitialUIDCache(tracker, config)
-					
+
 					tracker.mu.Lock()
 					tracker.SyncCompleted = true
 					tracker.mu.Unlock()
-					
+
 					syncDuration := time.Since(syncStartTime)
 					c.metrics.OnInformerSyncCompleted(config.GVRString, syncDuration, resourceCount)
-					
+
 					c.logger.Info("controller", "Initial UID cache populated for "+config.GVRString+" with "+fmt.Sprintf("%d", resourceCount)+" resources in "+syncDuration.String())
 				})
 			}
@@ -345,11 +347,11 @@ func (c *Controller) createStateTrackingEventHandlers(tracker *InformerStateTrac
 				key := c.makeResourceKey(config.GVRString, unstructured.GetNamespace(), unstructured.GetName())
 				uid := string(unstructured.GetUID())
 				tracker.UIDCache.Store(key, uid)
-				
+
 				// Update metrics
 				c.metrics.OnEventProcessed(config.GVRString, "ADDED", unstructured.GetNamespace())
 				c.metrics.OnResourceTracked(config.GVRString, unstructured.GetNamespace(), 1)
-				
+
 				// Call original handler
 				config.HandlerFunc("ADDED", unstructured)
 			} else {
@@ -362,10 +364,10 @@ func (c *Controller) createStateTrackingEventHandlers(tracker *InformerStateTrac
 				key := c.makeResourceKey(config.GVRString, unstructured.GetNamespace(), unstructured.GetName())
 				uid := string(unstructured.GetUID())
 				tracker.UIDCache.Store(key, uid)
-				
+
 				// Update metrics
 				c.metrics.OnEventProcessed(config.GVRString, "UPDATED", unstructured.GetNamespace())
-				
+
 				// Call original handler
 				config.HandlerFunc("UPDATED", unstructured)
 			} else {
@@ -375,7 +377,7 @@ func (c *Controller) createStateTrackingEventHandlers(tracker *InformerStateTrac
 		DeleteFunc: func(obj interface{}) {
 			var unstructuredObj *unstructured.Unstructured
 			var ok bool
-			
+
 			// Handle tombstone
 			if tombstone, isTombstone := obj.(cache.DeletedFinalStateUnknown); isTombstone {
 				unstructuredObj, ok = tombstone.Obj.(*unstructured.Unstructured)
@@ -390,10 +392,10 @@ func (c *Controller) createStateTrackingEventHandlers(tracker *InformerStateTrac
 					return
 				}
 			}
-			
+
 			if ok {
 				key := c.makeResourceKey(config.GVRString, unstructuredObj.GetNamespace(), unstructuredObj.GetName())
-				
+
 				// Get UID from cache before deletion (for logging) - no fallbacks
 				cachedUID, exists := tracker.UIDCache.Load(key)
 				if !exists {
@@ -401,27 +403,26 @@ func (c *Controller) createStateTrackingEventHandlers(tracker *InformerStateTrac
 					return
 				}
 				uid := cachedUID.(string)
-				
+
 				// Update metrics
 				c.metrics.OnEventProcessed(config.GVRString, "DELETED", unstructuredObj.GetNamespace())
 				c.metrics.OnResourceTracked(config.GVRString, unstructuredObj.GetNamespace(), -1)
-				
+
 				// DON'T remove from cache yet - let the work queue processing handle cleanup
 				// This ensures the UID is available when the work queue processes the DELETED event
-				
+
 				// Create enhanced unstructured object with UID for handler
 				enhancedObj := unstructuredObj.DeepCopy()
 				if uid != "" {
 					enhancedObj.SetUID(types.UID(uid))
 				}
-				
+
 				// Call original handler with UID-enhanced object
 				config.HandlerFunc("DELETED", enhancedObj)
 			}
 		},
 	}
 }
-
 
 // InformerConfig holds configuration for creating a generic informer
 type InformerConfig struct {
@@ -456,7 +457,11 @@ type Controller struct {
 	cancellers      sync.Map // map[string]context.CancelFunc for informer shutdown
 	activeInformers sync.Map // map[string]bool for tracking active informers by GVR
 	listers         sync.Map // map[string]cache.GenericLister for object retrieval
-
+	// Informers created vs informers whose cache has actually synced. These are
+	// not the same number for minutes on a large config, and the difference is
+	// the part of the cluster Faro cannot yet see.
+	informersStarted atomic.Int64
+	informersSynced  atomic.Int64
 
 	// Event handlers for library usage
 	eventHandlers []EventHandler
@@ -471,14 +476,14 @@ type Controller struct {
 
 	// Informer state tracking for UID preservation
 	informerTrackers sync.Map // map[string]*InformerStateTracker for UID tracking per GVR
-	
+
 	// Metrics collection
 	metrics *MetricsCollector
 
 	// Readiness callback
-	onReady   func()
-	readyMu   sync.Mutex
-	isReady   bool
+	onReady func()
+	readyMu sync.Mutex
+	isReady bool
 }
 
 // NewController creates an informer-based controller
@@ -499,7 +504,7 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 		jsonMiddleware:      make([]JSONMiddleware, 0),
 		metrics:             NewMetricsCollector(config.Metrics, *logger),
 	}
-	
+
 	logger.Debug("controller", "Created new controller instance")
 	return controller
 }
@@ -528,13 +533,12 @@ func (c *Controller) AddJSONMiddleware(middleware JSONMiddleware) {
 	c.logger.Debug("controller", fmt.Sprintf("Added JSON middleware (total: %d)", len(c.jsonMiddleware)))
 }
 
-
 // SetReadyCallback sets a callback function to be called when Faro is fully initialized and ready
 func (c *Controller) SetReadyCallback(callback func()) {
 	c.readyMu.Lock()
 	defer c.readyMu.Unlock()
 	c.onReady = callback
-	
+
 	// If already ready, call immediately
 	if c.isReady && callback != nil {
 		go callback()
@@ -561,8 +565,6 @@ func (c *Controller) StartInformers() error {
 	return c.startConfigDrivenInformers()
 }
 
-
-
 // createEventHandlers creates consistent event handlers with error checking
 func (c *Controller) createEventHandlers(handlerFunc func(string, *unstructured.Unstructured), gvrString string) cache.ResourceEventHandlerFuncs {
 	return cache.ResourceEventHandlerFuncs{
@@ -583,7 +585,7 @@ func (c *Controller) createEventHandlers(handlerFunc func(string, *unstructured.
 		DeleteFunc: func(obj interface{}) {
 			var unstructuredObj *unstructured.Unstructured
 			var ok bool
-			
+
 			// Handle Kubernetes cache tombstone objects properly
 			if tombstone, isTombstone := obj.(cache.DeletedFinalStateUnknown); isTombstone {
 				unstructuredObj, ok = tombstone.Obj.(*unstructured.Unstructured)
@@ -598,7 +600,7 @@ func (c *Controller) createEventHandlers(handlerFunc func(string, *unstructured.
 					return
 				}
 			}
-			
+
 			handlerFunc("DELETED", unstructuredObj)
 		},
 	}
@@ -611,8 +613,6 @@ func (c *Controller) runInformerWithLogging(informer cache.SharedIndexInformer, 
 	informer.Run(ctx.Done())
 	c.logger.Info("controller", fmt.Sprintf("Stopped %s", description))
 }
-
-
 
 // Start initializes and starts the multi-layered informer architecture
 func (c *Controller) Start() error {
@@ -641,18 +641,27 @@ func (c *Controller) Start() error {
 
 	// CRD watching removed - library users should implement CRD discovery if needed
 
-	c.logger.Info("controller", "Multi-layered informer architecture started successfully")
-	
+	// Deliberately NOT "started successfully". Creating an informer and being
+	// able to see what it watches are separated by an initial LIST per informer,
+	// and on a capture-everything config that gap was measured at over two
+	// minutes - during which this line claimed the capture was running and the
+	// addons it exists to record were installing. Report the real state, and
+	// keep reporting it until the caches are actually warm.
+	c.logger.Info("controller", fmt.Sprintf(
+		"%d informers created; capture is NOT complete until their caches sync",
+		c.informersStarted.Load()))
+	go c.reportSyncProgress()
+
 	// Trigger readiness callback
 	c.readyMu.Lock()
 	c.isReady = true
 	callback := c.onReady
 	c.readyMu.Unlock()
-	
+
 	if callback != nil {
 		go callback()
 	}
-	
+
 	return nil
 }
 
@@ -710,7 +719,6 @@ func (c *Controller) processAPIGroup(group, version string) error {
 
 	for _, resource := range resources.APIResources {
 
-
 		// Create GVR key
 		var gvrKey string
 		if group == "" {
@@ -725,6 +733,7 @@ func (c *Controller) processAPIGroup(group, version string) error {
 			Resource:   resource.Name,
 			Kind:       resource.Kind,
 			Namespaced: resource.Namespaced,
+			Verbs:      resource.Verbs,
 		}
 
 		// Avoid overwriting if we already have this exact GVR (from previous version processing)
@@ -740,17 +749,127 @@ func (c *Controller) processAPIGroup(group, version string) error {
 	return nil
 }
 
-// isResourceWatchable checks if a resource supports watch or list operations
-func (c *Controller) isResourceWatchable(resource metav1.APIResource) bool {
-	// Loop over resource verbs and return true if "watch" or "list" is found
-	for _, verb := range resource.Verbs {
-		if verb == "watch" || verb == "list" {
-			return true
+// isResourceWatchable reports whether an informer can be built for a resource.
+//
+// BOTH list and watch, not either. This read `watch || list` and was never
+// called from anywhere, so a resource offering get,list and no watch passed the
+// test twice over: once because nothing asked, and once because list alone
+// satisfied it. An informer does an initial LIST and then WATCHes from that
+// resourceVersion; without watch the reflector fails every attempt with
+//
+//	watch is not supported on resources of kind "networkpolicystats.stats.antrea.io"
+//
+// and retries forever. Measured on a capture-everything config: 228 failures
+// every two minutes from seven such types, drowning the log the capture exists
+// to produce.
+//
+// nil verbs means discovery did not know this resource, which must NOT be read
+// as unwatchable - that is the CRD-not-installed-yet case, where the informer is
+// created deliberately so it picks the type up once the CRD arrives.
+func isResourceWatchable(verbs []string) bool {
+	if verbs == nil {
+		return true
+	}
+	var canList, canWatch bool
+	for _, verb := range verbs {
+		switch verb {
+		case "list":
+			canList = true
+		case "watch":
+			canWatch = true
 		}
 	}
-	
-	// If we reach here, neither "watch" nor "list" verb was found
-	return false
+	return canList && canWatch
+}
+
+// watchability of a GVR, as the API server can report it right now.
+type watchability int
+
+const (
+	// The endpoint serves this resource and says it supports list and watch.
+	watchOK watchability = iota
+	// The endpoint serves this resource and it cannot be watched. Never retry.
+	watchUnsupported
+	// The endpoint does not serve this resource yet - a CRD whose addon has not
+	// installed it, or an aggregated API whose APIService is not up. Wait.
+	watchNotServed
+	// Discovery could not be read at all. NOT the same as "not served": the
+	// resource endpoint may work perfectly while discovery is broken - KubeEdge's
+	// metaServer answers /apis with protobuf labelled application/json - so the
+	// only safe answer is to go ahead and let the reflector find out.
+	watchUnknown
+)
+
+// resourceWatchability asks the API server what it can currently do with a GVR.
+//
+// Live, not the startup discovery snapshot: the snapshot cannot answer for a
+// type that did not exist when Faro started, and on a cluster being built that
+// is most of them.
+func (c *Controller) resourceWatchability(gvrString string) (watchability, []string) {
+	info := c.resourceInfoFromConfig(gvrString)
+	if info == nil {
+		return watchUnknown, nil
+	}
+	gv := info.Version
+	if info.Group != "" {
+		gv = info.Group + "/" + info.Version
+	}
+	list, err := c.client.Discovery.ServerResourcesForGroupVersion(gv)
+	if err != nil {
+		// A 404 is the group genuinely not being served yet. Anything else -
+		// a decode error, a connection failure - means discovery is unusable
+		// and must not be read as an answer about the resource.
+		if apierrors.IsNotFound(err) {
+			return watchNotServed, nil
+		}
+		return watchUnknown, nil
+	}
+	if list == nil {
+		return watchUnknown, nil
+	}
+	for _, r := range list.APIResources {
+		if r.Name == info.Resource {
+			if isResourceWatchable(r.Verbs) {
+				return watchOK, r.Verbs
+			}
+			return watchUnsupported, r.Verbs
+		}
+	}
+	return watchNotServed, nil
+}
+
+// waitUntilWatchable blocks until the API can serve a watch for this GVR, and
+// reports whether to build the informer. False means never: say so once, by name.
+//
+// This is the point of the exercise. A reflector asked to watch something
+// unwatchable does not give up - it fails and retries for the life of the
+// process, and on a capture-everything config seven such types produced 228
+// failures every two minutes in the log the capture exists to produce.
+func (c *Controller) waitUntilWatchable(gvrString string) bool {
+	const recheck = 15 * time.Second
+	announced := false
+	for {
+		switch state, verbs := c.resourceWatchability(gvrString); state {
+		case watchOK, watchUnknown:
+			return true
+		case watchUnsupported:
+			c.logger.Warning("controller", fmt.Sprintf(
+				"%s does not support watch (verbs: %v); no informer will be started for it",
+				gvrString, verbs))
+			return false
+		case watchNotServed:
+			if !announced {
+				c.logger.Info("controller", fmt.Sprintf(
+					"%s is not served yet; waiting for it to appear before watching", gvrString))
+				announced = true
+			}
+		}
+		select {
+		case <-c.ctx.Done():
+			return false
+		case <-time.After(recheck):
+		}
+	}
 }
 
 // startCRDWatcher starts a CRD informer to watch for new CustomResourceDefinitions
@@ -792,7 +911,7 @@ func (c *Controller) startCRDWatcher() error {
 		DeleteFunc: func(obj interface{}) {
 			var unstructuredObj *unstructured.Unstructured
 			var ok bool
-			
+
 			// Handle Kubernetes cache tombstone objects properly for CRDs
 			if tombstone, isTombstone := obj.(cache.DeletedFinalStateUnknown); isTombstone {
 				unstructuredObj, ok = tombstone.Obj.(*unstructured.Unstructured)
@@ -807,7 +926,7 @@ func (c *Controller) startCRDWatcher() error {
 					return
 				}
 			}
-			
+
 			c.handleCRDDeleted(unstructuredObj)
 		},
 	})
@@ -958,7 +1077,6 @@ func (c *Controller) handleCRDDeleted(crdUnstructured *unstructured.Unstructured
 	c.stopCRDInformer(&crd)
 }
 
-
 // selectCRDVersion selects the most appropriate version for monitoring a CRD
 // Priority: 1) Storage version 2) Served version 3) First version
 func (c *Controller) selectCRDVersion(crd *apiextensionsv1.CustomResourceDefinition) (*apiextensionsv1.CustomResourceDefinitionVersion, error) {
@@ -1001,11 +1119,10 @@ func (c *Controller) selectCRDVersion(crd *apiextensionsv1.CustomResourceDefinit
 	return &crd.Spec.Versions[0], nil
 }
 
-
 // createNamespaceSpecificInformer creates an informer for a specific namespace
 func (c *Controller) createNamespaceSpecificInformer(config InformerConfig, namespace string, normalizedConfigs []NormalizedConfig) (cache.SharedIndexInformer, error) {
 	c.logger.Info("controller", fmt.Sprintf("Starting namespace-specific informer for %s (namespace: %s)", config.GVRString, namespace))
-	
+
 	// Simple selector application - complex interpretation removed
 	// Library users should implement their own selector logic via middleware
 	var tweakListOptions func(*metav1.ListOptions)
@@ -1019,7 +1136,7 @@ func (c *Controller) createNamespaceSpecificInformer(config InformerConfig, name
 	// Create dynamic informer factory with namespace-specific filtering - pure event-driven, no resync needed
 	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
 		c.client.Dynamic, 0, namespace, tweakListOptions)
-	
+
 	// Get informer
 	informer := factory.ForResource(config.GVR).Informer()
 	if informer == nil {
@@ -1038,16 +1155,16 @@ func (c *Controller) createNamespaceSpecificInformer(config InformerConfig, name
 		Lister: lister,
 	}
 	c.informerTrackers.Store(listerKey, tracker)
-	
+
 	// Notify metrics of informer creation
 	c.metrics.OnInformerCreated(config.GVRString, config.Scope)
-	
+
 	// Hook into informer sync completion via callback
 	c.setupSyncCallback(informer, tracker, config)
-	
+
 	// Add state-tracking event handlers
 	informer.AddEventHandler(c.createStateTrackingEventHandlers(tracker, config))
-	
+
 	c.logger.Info("controller", fmt.Sprintf("Running namespace-specific informer for %s (namespace: %s)", config.GVRString, namespace))
 	return informer, nil
 }
@@ -1058,23 +1175,30 @@ type InformerStartParams struct {
 	Scope             apiextensionsv1.ResourceScope
 	GVRString         string
 	Name              string
-	InformerKey       string // For namespace-specific informers (optional)
-	Namespace         string // For namespace-specific informers (optional)
-	NormalizedConfigs []NormalizedConfig // For CRD and namespace-specific informers (optional)
+	InformerKey       string                                   // For namespace-specific informers (optional)
+	Namespace         string                                   // For namespace-specific informers (optional)
+	NormalizedConfigs []NormalizedConfig                       // For CRD and namespace-specific informers (optional)
 	HandlerFunc       func(string, *unstructured.Unstructured) // Event handler function
-	Description       string // For logging
+	Description       string                                   // For logging
 }
 
 // startUnifiedInformer is a unified function that replaces startDynamicCRDInformer, startBuiltinInformer, and startNamespaceSpecificInformer
 func (c *Controller) startUnifiedInformer(params InformerStartParams) {
 	defer c.wg.Done()
-	
+
 	// Determine which key to use for active informer tracking
 	trackingKey := params.InformerKey
 	if trackingKey == "" {
 		trackingKey = params.GVRString
 	}
 	defer c.activeInformers.Delete(trackingKey)
+
+	// Check that the API can serve a watch BEFORE starting one, both for a
+	// resource that already exists and for one that appears later. Blocking here
+	// is free: this function already runs in its own goroutine per informer.
+	if !c.waitUntilWatchable(params.GVRString) {
+		return
+	}
 
 	// Create informer config
 	config := InformerConfig{
@@ -1085,17 +1209,17 @@ func (c *Controller) startUnifiedInformer(params InformerStartParams) {
 		Name:        params.Name,
 		HandlerFunc: params.HandlerFunc,
 	}
-	
+
 	// Create informer using appropriate factory
 	// UNIFIED PATH: Always use createNamespaceSpecificInformer for consistent lister key strategy
 	// For cluster-scoped resources, params.Namespace will be "" which is handled correctly
 	informer, err := c.createNamespaceSpecificInformer(config, params.Namespace, params.NormalizedConfigs)
-	
+
 	if err != nil {
 		c.logger.Error("controller", fmt.Sprintf("Failed to create %s: %v", params.Description, err))
 		return
 	}
-	
+
 	// A refused or otherwise failing list/watch reports here, with the server's error intact.
 	if err := informer.SetWatchErrorHandler(func(_ *cache.Reflector, werr error) {
 		c.metrics.OnInformerSyncFailed(params.GVRString, werr)
@@ -1121,7 +1245,32 @@ func (c *Controller) startUnifiedInformer(params InformerStartParams) {
 	c.runInformerWithLogging(informer, c.ctx, params.Description)
 }
 
+// reportSyncProgress says how much of the cluster Faro can actually see, until
+// all of it is visible. Silence here would be indistinguishable from coverage.
+func (c *Controller) reportSyncProgress() {
+	const every = 10 * time.Second
+	started := time.Now()
+	for {
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-time.After(every):
+		}
+		want, got := c.informersStarted.Load(), c.informersSynced.Load()
+		if got >= want {
+			c.logger.Info("controller", fmt.Sprintf(
+				"capture established: %d/%d informer caches synced after %s",
+				got, want, time.Since(started).Round(time.Second)))
+			return
+		}
+		c.logger.Info("controller", fmt.Sprintf(
+			"capture incomplete: %d/%d informer caches synced after %s",
+			got, want, time.Since(started).Round(time.Second)))
+	}
+}
+
 func (c *Controller) notifyInformerSynced(gvr, namespace string, resourceCount int) {
+	c.informersSynced.Add(1)
 	c.statusMu.RLock()
 	handlers := append([]InformerStatusHandler(nil), c.statusHandlers...)
 	c.statusMu.RUnlock()
@@ -1260,19 +1409,20 @@ func (c *Controller) startConfigDrivenInformers() error {
 		// Create separate informer for each namespace
 		for namespace, configs := range namespaceGroups {
 			informerKey := gvrString + "@" + namespace
-			
+
 			// Mark this GVR+namespace as having an active informer
 			c.activeInformers.Store(informerKey, true)
-			
+
 			actualNamespace := namespace
 			if namespace == "cluster-scoped" {
 				actualNamespace = ""
 			}
-			
+
 			c.logger.Info("controller", fmt.Sprintf("Setting up informer for %s (namespace: %s)", gvrString, actualNamespace))
-			
+
 			// Start separate informer for this namespace+GVR combination
-		c.wg.Add(1)
+			c.wg.Add(1)
+			c.informersStarted.Add(1)
 			go c.startUnifiedInformer(InformerStartParams{
 				GVR:               gvr,
 				Scope:             scope,
@@ -1281,21 +1431,18 @@ func (c *Controller) startConfigDrivenInformers() error {
 				InformerKey:       informerKey,
 				Namespace:         actualNamespace,
 				NormalizedConfigs: configs,
-		HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
+				HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
 					c.handleNamespaceSpecificEvent(eventType, obj, gvrString, configs)
 				},
-				Description:       fmt.Sprintf("namespace-specific informer for %s (namespace: %s)", gvrString, actualNamespace),
+				Description: fmt.Sprintf("namespace-specific informer for %s (namespace: %s)", gvrString, actualNamespace),
 			})
-		informerCount++
+			informerCount++
 		}
 	}
 
 	c.logger.Info("controller", fmt.Sprintf("Started %d config-driven informers", informerCount))
 	return nil
 }
-
-
-
 
 // handleCustomResourceEvent processes events from dynamic CRD informers
 func (c *Controller) handleCustomResourceEvent(eventType string, obj *unstructured.Unstructured, crdName string) {
@@ -1362,9 +1509,9 @@ func (c *Controller) Stop() {
 
 	// Wait for all goroutines to finish gracefully - no arbitrary timeout
 	c.logger.Info("controller", "Waiting for all informers and workers to stop gracefully...")
-		c.wg.Wait()
-		c.logger.Info("controller", "All informers and workers stopped gracefully")
-	
+	c.wg.Wait()
+	c.logger.Info("controller", "All informers and workers stopped gracefully")
+
 	// Shutdown metrics server gracefully without timeout
 	if c.metrics != nil {
 		if err := c.metrics.Shutdown(context.Background()); err != nil {
@@ -1427,7 +1574,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 		c.logger.Error("controller", "Failed to parse workItem key: "+workItem.Key)
 		return errors.New("failed to parse workItem key: " + workItem.Key)
 	}
-	
+
 	namespaceListerKey := workItem.GVRString + "@" + namespace
 	listerInterface, exists := c.listers.Load(namespaceListerKey)
 	if !exists {
@@ -1450,10 +1597,10 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				c.logger.Debug("controller", fmt.Sprintf("Skipping %s event for %s %s - object no longer exists", workItem.EventType, workItem.GVRString, workItem.Key))
 				return nil
 			}
-			
+
 			// The object was deleted. Log CONFIG message and call OnMatched handlers.
 			c.logger.Info("controller", fmt.Sprintf("CONFIG [DELETED] %s %s", workItem.GVRString, workItem.Key))
-			
+
 			// Parse the key to get namespace and name for JSON event
 			namespace, name, keyErr := cache.SplitMetaNamespaceKey(workItem.Key)
 			if keyErr != nil {
@@ -1461,17 +1608,17 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				name = workItem.Key
 				namespace = ""
 			}
-			
+
 			// Use captured UID and annotations from WorkItem for DELETED events - no fallbacks
 			if workItem.DeletedUID == "" {
 				c.logger.Error("controller", "No captured UID for DELETED event: "+workItem.Key)
 				return errors.New("no captured UID for DELETED event: " + workItem.Key)
 			}
-			
+
 			uid := workItem.DeletedUID
 			annotations := workItem.DeletedAnnotations
 			c.logger.Debug("controller", fmt.Sprintf("Using captured DELETED metadata: UID=%s, annotations=%d", uid, len(annotations)))
-			
+
 			// Create a minimal object with captured annotations for DELETED events
 			var deletedObjForLogging *unstructured.Unstructured
 			if annotations != nil {
@@ -1485,13 +1632,13 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				}
 				deletedObjForLogging.SetAnnotations(annotations)
 			}
-			
+
 			// Log JSON event for DELETE with captured metadata
 			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, nil, deletedObjForLogging)
-			
+
 			// Clean up UID from cache after processing
 			c.cleanupUIDFromInformerState(workItem.GVRString, namespace, name)
-			
+
 			// Create a minimal unstructured object for DELETE events
 			// We can't get the full object since it's deleted, but we can extract key info
 			deletedObj := &unstructured.Unstructured{}
@@ -1499,7 +1646,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 			if namespace != "" {
 				deletedObj.SetNamespace(namespace)
 			}
-			
+
 			// Call OnMatched handlers for DELETE events
 			for _, config := range workItem.Configs {
 				// RACE CONDITION FIX: Create a deep copy for event handlers to avoid concurrent access
@@ -1514,12 +1661,12 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 					Timestamp: time.Time{},
 					EventTime: time.Now().UTC(),
 				}
-				
+
 				// Call event handlers (non-blocking)
 				c.handlersMu.RLock()
 				handlers := c.eventHandlers
 				c.handlersMu.RUnlock()
-				
+
 				for _, handler := range handlers {
 					// Call handler in goroutine to avoid blocking Faro
 					go func(h EventHandler, event MatchedEvent) {
@@ -1530,7 +1677,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				}
 				break // Only process once per object
 			}
-			
+
 			return nil
 		}
 		return fmt.Errorf("failed to get object %s: %w", workItem.Key, err)
@@ -1572,12 +1719,12 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 				}
 			}
 		}
-		
+
 		// Skip this config if namespace doesn't match
 		if !namespaceMatches {
 			continue
 		}
-		
+
 		// Create matched event for handlers
 		// RACE CONDITION FIX: Create a deep copy for event handlers to avoid concurrent access
 		matchedEvent := MatchedEvent{
@@ -1589,17 +1736,17 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 			Timestamp: obj.GetCreationTimestamp().Time,
 			EventTime: time.Now().UTC(),
 		}
-		
+
 		// For cluster-scoped resources, key is just the name
 		if resourceNamespace == "" {
 			matchedEvent.Key = resourceName
 		}
-		
+
 		// Call event handlers (non-blocking)
 		c.handlersMu.RLock()
 		handlers := c.eventHandlers
 		c.handlersMu.RUnlock()
-		
+
 		for _, handler := range handlers {
 			// Call handler in goroutine to avoid blocking Faro
 			go func(h EventHandler, event MatchedEvent) {
@@ -1608,7 +1755,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 				}
 			}(handler, matchedEvent)
 		}
-		
+
 		// Log the matched event (preserve existing behavior)
 		if resourceNamespace != "" {
 			c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s/%s (UID: %s, namespace: %s)",
@@ -1617,10 +1764,10 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 			c.logger.Info("controller", fmt.Sprintf("CONFIG [%s] %s %s (UID: %s, namespace: %s)",
 				eventType, gvrString, resourceName, resourceUID, config.GVR))
 		}
-		
+
 		// Log JSON event for export
 		c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels(), obj)
-		
+
 		break // Only process once per object
 	}
 
@@ -1629,7 +1776,6 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 
 // REMOVED: All client-side filtering functions have been eliminated from Faro core
 // Old event handler functions removed - replaced by handleUnifiedNormalizedEvent()
-
 
 // handleNamespaceSpecificEvent processes events from namespace-specific informers
 func (c *Controller) handleNamespaceSpecificEvent(eventType string, obj *unstructured.Unstructured, gvrString string, configs []NormalizedConfig) {
@@ -1665,8 +1811,6 @@ func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstruc
 	c.logger.Debug("controller", fmt.Sprintf("Queueing %s event for %s %s", eventType, gvrString, key))
 	c.workQueue.Add(workItem)
 }
-
-
 
 // resourceInfoFromConfig builds resource info from a configured GVR string alone, for a type that
 // discovery does not describe. Scope comes from a resource-centric entry's scope field; anything
