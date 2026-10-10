@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-10
+  labels:
+    workload-type: "e2e-test"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config-10
+  namespace: faro-test-10
+data:
+  key1: "value1"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-secret-10
+  namespace: faro-test-10
+type: Opaque
+stringData:
+  password: "hunter2"
