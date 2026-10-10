@@ -20,6 +20,9 @@ const (
 // ResourceDetails defines what resources to watch within a namespace (legacy format)
 type ResourceDetails struct {
 	LabelSelector string `yaml:"label_selector,omitempty"` // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
+	// Fields are object paths copied into the emitted event, e.g. "reason" or
+	// "status.phase". Per-GVR rather than global: see pkg/fields.go for why.
+	Fields []string `yaml:"fields,omitempty"`
 }
 
 // NamespaceConfig defines namespace and its resources to watch (namespace-centric format)
@@ -35,6 +38,10 @@ type ResourceConfig struct {
 	NamespaceNames []string `yaml:"namespace_names,omitempty"` // Exact namespace names only (for server-side filtering)
 	NameSelector   string   `yaml:"name_selector,omitempty"`   // Exact name for resource name filtering (server-side)
 	LabelSelector  string   `yaml:"label_selector,omitempty"`  // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
+	// Fields are object paths copied into the emitted event, e.g. "reason",
+	// "involvedObject.name" or "status.containerStatuses.restartCount". A path
+	// that is absent on an object is omitted rather than emitted empty.
+	Fields []string `yaml:"fields,omitempty"`
 }
 
 // NormalizedConfig is the unified data structure used internally by the controller.
@@ -45,6 +52,7 @@ type NormalizedConfig struct {
 	NamespaceNames []string        // Literal namespace names only (for server-side filtering)
 	NameSelector   string          // Exact name for resource name filtering (server-side)
 	LabelSelector     string          // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
+	Fields            []string        // Object paths copied into the emitted event
 }
 
 // MetricsConfig defines Prometheus metrics configuration
@@ -221,6 +229,7 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 				GVR:            gvr,
 				NamespaceNames: []string{nsConfig.NameSelector},
 				LabelSelector:  details.LabelSelector,
+				Fields:         allowedFields(gvr, details.Fields),
 			})
 		}
 	}
@@ -232,6 +241,7 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 			NamespaceNames: resConfig.NamespaceNames,
 			NameSelector:   resConfig.NameSelector,
 			LabelSelector:  resConfig.LabelSelector,
+			Fields:         allowedFields(resConfig.GVR, resConfig.Fields),
 		})
 	}
 	
@@ -240,6 +250,28 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 	}
 
 	return normalizedMap, nil
+}
+
+// allowedFields drops any configured path that pkg/fields.go forbids for this
+// resource. Dropped silently-but-deliberately at normalization time so that a
+// denied path cannot reach an informer at all; ExtractFields checks again on
+// the emit path, because a library user may build a controller without ever
+// calling Normalize.
+func allowedFields(gvr string, fields []string) []string {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		if f == "" || FieldDenied(gvr, f) {
+			continue
+		}
+		out = append(out, f)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // printUsage prints command line usage information

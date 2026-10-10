@@ -208,11 +208,50 @@ resources:
     field_selector: "metadata.name=backup-job"
 ```
 
+### Emitting object fields
+
+By default an event carries identity and metadata: `eventTime`, `eventType`,
+`gvr`, `namespace`, `name`, `uid`, and `labels`/`annotations` when present.
+That answers *what changed*, not *why* - a crash-looping pod produces Event
+objects whose `reason` and `message` explain it, and neither is metadata.
+
+`fields` names object paths to copy into the emitted event, **per GVR**:
+
+```yaml
+resources:
+  - gvr: "v1/events"
+    fields: ["reason", "message", "type", "involvedObject.name"]
+  - gvr: "v1/pods"
+    fields: ["status.phase", "status.containerStatuses.restartCount"]
+```
+
+```json
+{"eventTime":"...","eventType":"ADDED","gvr":"v1/events","name":"pod.18dd44",
+ "fields":{"reason":"BackOff","message":"Back-off restarting failed container"}}
+```
+
+- a path crossing a **list** applies to every element, so
+  `status.containerStatuses.restartCount` yields one value per container
+- an **absent** path is omitted rather than emitted null, so one field list
+  works across clusters where a type may not carry it
+- with nothing configured the event is byte-identical to before this existed
+
+**Per GVR, deliberately.** The reason a capture-everything config is affordable
+is that each record is small - measured at 393 bytes across ~5000 events.
+Adding `reason`+`message` to Events alone costs about 3.5%; a global
+"emit everything" would quietly remove that property.
+
+**Secrets are refused in code.** `data` and `stringData` on `v1/secrets` are
+never extracted, whatever the config asks for. A Secret's data is base64, not
+encryption, and a capture file is written to disk and copied around for
+analysis - a typo must not be able to turn this into a credential leak.
+
 ### Configuration Options
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `output_dir` | string | Directory for logs and JSON exports |
+| `fields` | []string | Per-GVR object paths copied into the emitted event (see above) |
 | `log_level` | string | `debug`, `info`, `warning`, `error`, `fatal` |
 | `auto_shutdown_sec` | int | Auto-shutdown after N seconds (0 = disabled) |
 | `json_export` | bool | Enable structured JSON event export |

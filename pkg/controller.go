@@ -102,6 +102,11 @@ type JSONEvent struct {
 	Labels      map[string]string `json:"labels,omitempty"`
 	Annotations map[string]string `json:"annotations,omitempty"`
 
+	// Fields holds object values named by the GVR's `fields:` config, keyed by
+	// path. Omitted entirely when nothing is configured or nothing matched, so
+	// a capture taken without it is byte-identical to one from before.
+	Fields map[string]interface{} `json:"fields,omitempty"`
+
 	// Additional fields can be added by library users via middleware
 }
 
@@ -201,6 +206,16 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 		labels = processedObj.GetLabels()
 	}
 
+	// The object is already in hand - this adds no API calls, only bytes.
+	var extracted map[string]interface{}
+	if paths, ok := c.eventFields[gvr]; ok && len(paths) > 0 {
+		src := objCopy
+		if src == nil {
+			src = obj
+		}
+		extracted = ExtractFields(gvr, src, paths)
+	}
+
 	jsonEvent := JSONEvent{
 		Timestamp:   timestamp,
 		EventTime:   eventTime,
@@ -211,6 +226,7 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 		UID:         finalUID,
 		Labels:      labels,
 		Annotations: annotations,
+		Fields:      extracted,
 	}
 
 	// Special field extraction removed - library users should implement via middleware if needed
@@ -452,6 +468,10 @@ type Controller struct {
 	// API discovery results
 	discoveredResources   map[string]*ResourceInfo // map[GVR] -> ResourceInfo
 	discoveredResourcesMu sync.RWMutex             // Protects discoveredResources map
+
+	// Configured per-GVR field paths, read on the emit path. A plain map
+	// written once during informer setup and only read afterwards.
+	eventFields map[string][]string
 
 	// Informer lifecycle management - using GVR string as consistent key
 	cancellers      sync.Map // map[string]context.CancelFunc for informer shutdown
@@ -1514,6 +1534,24 @@ func (c *Controller) startConfigDrivenInformers() error {
 
 	// Normalize configuration to unified internal structure
 	normalizedGVRs, err := c.config.Normalize()
+	if err == nil {
+		// One entry per GVR, unioned across the configuration rules that match
+		// it - a GVR named by both a namespace rule and a resource rule should
+		// emit the fields either asked for.
+		fields := make(map[string][]string)
+		for gvrString, cfgs := range normalizedGVRs {
+			seen := make(map[string]bool)
+			for _, cfg := range cfgs {
+				for _, f := range cfg.Fields {
+					if !seen[f] {
+						seen[f] = true
+						fields[gvrString] = append(fields[gvrString], f)
+					}
+				}
+			}
+		}
+		c.eventFields = fields
+	}
 	if err != nil {
 		return fmt.Errorf("failed to normalize configuration: %w", err)
 	}

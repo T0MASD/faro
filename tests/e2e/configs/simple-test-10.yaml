@@ -1,0 +1,28 @@
+# E2E Test 10 - configurable event fields, and the Secret denylist.
+#
+# Two GVRs, asking for fields on both. The ConfigMap's data SHOULD be emitted;
+# the Secret's data MUST NOT be, whatever this file says - that is enforced in
+# pkg/fields.go, not here, which is the point of asking for it.
+output_dir: "./logs/test10"
+log_level: "debug"
+auto_shutdown_sec: 120
+json_export: true
+
+resources:
+  - gvr: "v1/configmaps"
+    scope: "Namespaced"
+    namespace_names:
+      - "faro-test-10"
+    name_selector: "test-config-10"
+    fields:
+      - "data.key1"
+      - "metadata.generation"   # absent on a ConfigMap: must be omitted, not null
+  - gvr: "v1/secrets"
+    scope: "Namespaced"
+    namespace_names:
+      - "faro-test-10"
+    name_selector: "test-secret-10"
+    fields:
+      - "type"
+      - "data"            # denied
+      - "data.password"   # denied
