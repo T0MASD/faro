@@ -3,6 +3,7 @@ package faro
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -26,11 +27,16 @@ func TestExtractFieldsEventReasonAndMessage(t *testing.T) {
 		},
 	})
 	got := ExtractFields("v1/events", e,
-		[]string{"reason", "message", "involvedObject.name"})
+		[]string{"reason", "message", "involvedObject.kind", "involvedObject.name"})
+	// Nested, and the two involvedObject paths MERGE into one object rather
+	// than producing two dotted keys.
 	want := map[string]interface{}{
-		"reason":              "BackOff",
-		"message":             "Back-off restarting failed container",
-		"involvedObject.name": "antrea-agent-86jgg",
+		"reason":  "BackOff",
+		"message": "Back-off restarting failed container",
+		"involvedObject": map[string]interface{}{
+			"kind": "Pod",
+			"name": "antrea-agent-86jgg",
+		},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %#v, want %#v", got, want)
@@ -49,9 +55,12 @@ func TestExtractFieldsTraversesLists(t *testing.T) {
 		},
 	})
 	got := ExtractFields("v1/pods", p, []string{"status.containerStatuses.restartCount"})
-	want := []interface{}{int64(2), int64(0)}
-	if !reflect.DeepEqual(got["status.containerStatuses.restartCount"], want) {
-		t.Fatalf("got %#v, want %#v", got["status.containerStatuses.restartCount"], want)
+	want := map[string]interface{}{"status": map[string]interface{}{
+		"containerStatuses": map[string]interface{}{
+			"restartCount": []interface{}{int64(2), int64(0)},
+		}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v, want %#v", got, want)
 	}
 }
 
@@ -62,6 +71,10 @@ func TestExtractFieldsOmitsAbsent(t *testing.T) {
 		[]string{"reason", "message", "status.phase"})
 	if _, ok := got["message"]; ok {
 		t.Fatal("absent path should be omitted")
+	}
+	// An absent nested path must not leave an empty parent behind.
+	if _, ok := got["status"]; ok {
+		t.Fatalf("absent nested path left a parent object: %#v", got)
 	}
 	if len(got) != 1 {
 		t.Fatalf("expected only the present path, got %#v", got)
@@ -97,10 +110,7 @@ func TestSecretDataIsNeverExtracted(t *testing.T) {
 	})
 	got := ExtractFields("v1/secrets", s, []string{"data", "data.password", "type"})
 	if _, ok := got["data"]; ok {
-		t.Fatal("secret data must never be extracted")
-	}
-	if _, ok := got["data.password"]; ok {
-		t.Fatal("secret data subpath must never be extracted")
+		t.Fatalf("secret data must never be extracted: %#v", got)
 	}
 	if got["type"] != "Opaque" {
 		t.Fatalf("non-sensitive fields should still work, got %#v", got)
@@ -159,4 +169,51 @@ func TestNormalizeCarriesFieldsFromNamespaceFormat(t *testing.T) {
 	if got := n["v1/events"][0].Fields; !reflect.DeepEqual(got, []string{"reason"}) {
 		t.Fatalf("got %#v", got)
 	}
+}
+
+// Config asks for both a parent and a child. Whichever is applied second
+// cannot clobber the first, because map iteration order in Go is random and a
+// capture that differed between runs of the same config would be worse than
+// either answer.
+func TestExtractFieldsPrefixCollisionIsStable(t *testing.T) {
+	o := obj(map[string]interface{}{
+		"status": map[string]interface{}{"phase": "Running"},
+	})
+	for i := 0; i < 50; i++ {
+		got := ExtractFields("v1/pods", o, []string{"status", "status.phase"})
+		m, ok := got["status"].(map[string]interface{})
+		if !ok {
+			t.Fatalf("status should be an object, got %#v", got["status"])
+		}
+		if m["phase"] != "Running" {
+			t.Fatalf("iteration %d: unstable output %#v", i, got)
+		}
+	}
+}
+
+// The whole reason for nesting: the emitted key must not contain a dot, or
+// every consumer silently reads it as a path separator.
+func TestNoEmittedKeyContainsADot(t *testing.T) {
+	o := obj(map[string]interface{}{
+		"status": map[string]interface{}{
+			"phase":             "Running",
+			"containerStatuses": []interface{}{map[string]interface{}{"restartCount": int64(1)}},
+		},
+		"involvedObject": map[string]interface{}{"kind": "Pod", "name": "p"},
+	})
+	got := ExtractFields("v1/pods", o, []string{
+		"status.phase", "status.containerStatuses.restartCount",
+		"involvedObject.kind", "involvedObject.name"})
+	var walk func(m map[string]interface{}, path string)
+	walk = func(m map[string]interface{}, path string) {
+		for k, v := range m {
+			if strings.Contains(k, ".") {
+				t.Errorf("emitted key %q at %q contains a dot", k, path)
+			}
+			if sub, ok := v.(map[string]interface{}); ok {
+				walk(sub, path+"/"+k)
+			}
+		}
+	}
+	walk(got, "")
 }

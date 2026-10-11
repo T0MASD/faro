@@ -1211,12 +1211,43 @@ func TestFaroTest10ConfigurableFields(t *testing.T) {
 		}
 		return nil, false
 	}
+	// Fields are emitted NESTED, so the config's "data.key1" arrives as
+	// {"data":{"key1":...}}. Walk the path rather than indexing a dotted key -
+	// the whole point of nesting is that no emitted key contains a dot.
+	at := func(m map[string]interface{}, path string) (interface{}, bool) {
+		var cur interface{} = m
+		for _, seg := range strings.Split(path, ".") {
+			mm, ok := cur.(map[string]interface{})
+			if !ok {
+				return nil, false
+			}
+			cur, ok = mm[seg]
+			if !ok {
+				return nil, false
+			}
+		}
+		return cur, true
+	}
+	// Counting scalar LEAVES keeps "exactly these fields and no others" an
+	// exact claim now that the shape is a tree rather than a flat map.
+	var leafCount func(interface{}) int
+	leafCount = func(v interface{}) int {
+		m, ok := v.(map[string]interface{})
+		if !ok {
+			return 1
+		}
+		n := 0
+		for _, vv := range m {
+			n += leafCount(vv)
+		}
+		return n
+	}
 	same := func(got map[string]interface{}, want map[string]string) bool {
-		if len(got) != len(want) {
+		if leafCount(got) != len(want) {
 			return false
 		}
 		for k, v := range want {
-			g, ok := got[k]
+			g, ok := at(got, k)
 			if !ok {
 				return false
 			}
