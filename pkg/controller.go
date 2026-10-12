@@ -241,6 +241,25 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	c.logger.Debug("controller", string(jsonData))
 }
 
+// emitWatchFailed records a broken watch in the event capture, in the same
+// shape as every other record so existing consumers parse it without change.
+// The error text goes in Fields because the failure is the payload here.
+func (c *Controller) emitWatchFailed(gvr, namespace string, werr error) {
+	ev := JSONEvent{
+		EventTime: time.Now().UTC().Format(time.RFC3339Nano),
+		EventType: "WATCH_FAILED",
+		GVR:       gvr,
+		Namespace: namespace,
+		Fields:    map[string]interface{}{"error": werr.Error()},
+	}
+	b, err := json.Marshal(ev)
+	if err != nil {
+		c.logger.Warning("controller", fmt.Sprintf("Failed to marshal watch failure for %s: %v", gvr, err))
+		return
+	}
+	c.logger.Debug("controller", string(b))
+}
+
 // getUIDFromInformerState retrieves UID from informer state tracker
 func (c *Controller) getUIDFromInformerState(gvrString, namespace, name string) string {
 	trackerInterface, exists := c.informerTrackers.Load(gvrString)
@@ -1415,6 +1434,10 @@ func (c *Controller) startUnifiedInformer(params InformerStartParams) {
 		c.notifyInformerFailed(params.GVRString, params.Namespace, werr)
 		c.logger.Warning("controller", fmt.Sprintf("watch failed for %s in %q: %v",
 			params.GVRString, params.Namespace, werr))
+		// Put it in the CAPTURE too, not only the log. A consumer reading
+		// events-*.json had no way to tell a quiet resource from one whose watch
+		// had broken: both look like an absence of events.
+		c.emitWatchFailed(params.GVRString, params.Namespace, werr)
 	}); err != nil {
 		c.logger.Warning("controller", fmt.Sprintf("cannot install watch error handler for %s: %v",
 			params.GVRString, err))
