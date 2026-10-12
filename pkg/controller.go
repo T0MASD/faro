@@ -261,6 +261,45 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	c.logger.Debug("controller", string(jsonData))
 }
 
+// groupConfigsByNamespace decides which informers a GVR's configs ask for.
+//
+// Scope comes from API discovery, not from the config: a cluster-scoped type
+// ignores NamespaceNames entirely and gets one informer with an empty
+// namespace, and a namespaced type gets one informer per namespace it names.
+//
+// A namespaced type that names NO namespaces asks for nothing, and that is the
+// contract - "all namespaces" is not something this config can express, and
+// tests/e2e asserts that such an entry matches no namespaced object. What it
+// should not be is SILENT. The loop below simply does not execute, so no
+// informer is built, nothing is ever captured for that type, and until now
+// nothing said so at any level: the config loads, Faro starts, reports healthy,
+// and that resource is missing from the capture with no way to tell it apart
+// from a resource that genuinely had no events.
+func (c *Controller) groupConfigsByNamespace(gvrString string, scope apiextensionsv1.ResourceScope, normalizedConfigs []NormalizedConfig) map[string][]NormalizedConfig {
+	namespaceGroups := make(map[string][]NormalizedConfig)
+	for _, config := range normalizedConfigs {
+		if scope == apiextensionsv1.ClusterScoped {
+			// For cluster-scoped resources, ignore NamespaceNames and use cluster-scoped grouping
+			namespaceGroups["cluster-scoped"] = append(namespaceGroups["cluster-scoped"], config)
+			continue
+		}
+		if len(config.NamespaceNames) == 0 {
+			c.logger.Warning("controller", fmt.Sprintf(
+				"%s is namespaced but names no namespaces, so no informer is created and nothing will be captured for it - list the namespaces to watch",
+				gvrString))
+			continue
+		}
+		// For namespace-scoped resources, group by specified namespaces
+		for _, ns := range config.NamespaceNames {
+			if ns == "" {
+				ns = "cluster-scoped" // Fallback for empty namespace
+			}
+			namespaceGroups[ns] = append(namespaceGroups[ns], config)
+		}
+	}
+	return namespaceGroups
+}
+
 // emitWatchFailed records a broken watch in the event capture, in the same
 // shape as every other record so existing consumers parse it without change.
 // The error text goes in Fields because the failure is the payload here.
@@ -1640,21 +1679,7 @@ func (c *Controller) startConfigDrivenInformers() error {
 		}
 
 		// Group configs by namespace to create separate informers
-		namespaceGroups := make(map[string][]NormalizedConfig)
-		for _, config := range normalizedConfigs {
-			if scope == apiextensionsv1.ClusterScoped {
-				// For cluster-scoped resources, ignore NamespaceNames and use cluster-scoped grouping
-				namespaceGroups["cluster-scoped"] = append(namespaceGroups["cluster-scoped"], config)
-			} else {
-				// For namespace-scoped resources, group by specified namespaces
-				for _, ns := range config.NamespaceNames {
-					if ns == "" {
-						ns = "cluster-scoped" // Fallback for empty namespace
-					}
-					namespaceGroups[ns] = append(namespaceGroups[ns], config)
-				}
-			}
-		}
+		namespaceGroups := c.groupConfigsByNamespace(gvrString, scope, normalizedConfigs)
 
 		// Create separate informer for each namespace
 		for namespace, configs := range namespaceGroups {
