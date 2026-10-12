@@ -279,6 +279,18 @@ func (c *Controller) groupConfigsByNamespace(gvrString string, scope apiextensio
 	namespaceGroups := make(map[string][]NormalizedConfig)
 	for _, config := range normalizedConfigs {
 		if scope == apiextensionsv1.ClusterScoped {
+			// Naming namespaces for a cluster-scoped type is a contradiction, and
+			// the names are DISCARDED here. Say so: the entry reads as a request
+			// to watch part of the cluster and silently watches all of it, which
+			// is the opposite of the mistake warned about below and just as
+			// invisible. Worth saying plainly because scope comes from discovery,
+			// so an author who believed the type was namespaced gets no other
+			// signal that it is not.
+			if len(config.NamespaceNames) > 0 {
+				c.logger.Warning("controller", fmt.Sprintf(
+					"%s is cluster-scoped, so the %d namespace(s) named for it are ignored and every object of this type is captured - remove them, or check whether you meant a namespaced type",
+					gvrString, len(config.NamespaceNames)))
+			}
 			// For cluster-scoped resources, ignore NamespaceNames and use cluster-scoped grouping
 			namespaceGroups["cluster-scoped"] = append(namespaceGroups["cluster-scoped"], config)
 			continue
