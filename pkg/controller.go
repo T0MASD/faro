@@ -66,6 +66,26 @@ type WorkItem struct {
 	// For DELETED events - preserve metadata that's lost when object is removed from cache
 	DeletedUID         string            // UID of deleted object
 	DeletedAnnotations map[string]string // Annotations of deleted object
+
+	// The object as it was when this event was observed.
+	//
+	// reconcile() resolves every item through the informer's lister, which
+	// answers for the CURRENT state. A short-lived object - a failed pod, a
+	// completed Job, a churned ConfigMap - can be gone by the time the worker
+	// reaches its ADDED, and the lister then says "not found" for something
+	// that demonstrably existed. Without this the event was dropped, so the
+	// capture showed the object being deleted and never created.
+	//
+	// Measured 2026-10-12 on a six-node lab: during a hypervisor reboot, 220
+	// of 230 API-confirmed ConfigMap creations were missing from the capture
+	// while 0 of 230 deletions were - because DELETED already carried its own
+	// metadata, in the two fields above, and ADDED carried nothing.
+	//
+	// Held as a reference, not a copy. client-go hands the handler a fresh
+	// object per event and replaces store entries rather than mutating them,
+	// so this stays the state at observation time, and a re-list burst does
+	// not pay for thousands of deep copies.
+	Object *unstructured.Unstructured
 }
 
 // MatchedEvent represents a filtered event that matched configuration criteria
@@ -1823,8 +1843,19 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 		if strings.Contains(err.Error(), "not found") {
 			// Only process as DELETED if the workItem.EventType is actually DELETED
 			if workItem.EventType != "DELETED" {
-				// Object was deleted after ADDED/UPDATED event was queued - skip processing
-				c.logger.Debug("controller", fmt.Sprintf("Skipping %s event for %s %s - object no longer exists", workItem.EventType, workItem.GVRString, workItem.Key))
+				// The object went away between this event being queued and the
+				// worker reaching it. That is not a reason to lose the event:
+				// it happened, and the snapshot taken at observation time says
+				// exactly what it looked like.
+				if workItem.Object != nil {
+					c.logger.Debug("controller", fmt.Sprintf("Object %s %s is gone from the cache; recording %s from the snapshot taken when it was observed", workItem.GVRString, workItem.Key, workItem.EventType))
+					return c.processObject(workItem.EventType, workItem.Object, workItem.GVRString, workItem.Configs)
+				}
+				// No snapshot: the event IS lost, and that is worth saying out
+				// loud. It used to be dropped at Debug, which is why this cost
+				// 220 of 230 creations in one scenario with nothing to show for
+				// it at any level anyone reads.
+				c.logger.Warning("controller", fmt.Sprintf("Dropping %s event for %s %s - object no longer exists and no snapshot was captured", workItem.EventType, workItem.GVRString, workItem.Key))
 				return nil
 			}
 
@@ -2036,6 +2067,12 @@ func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstruc
 		workItem.DeletedUID = string(obj.GetUID())
 		workItem.DeletedAnnotations = obj.GetAnnotations()
 		c.logger.Debug("controller", fmt.Sprintf("Captured DELETED metadata: UID=%s, annotations=%d", workItem.DeletedUID, len(workItem.DeletedAnnotations)))
+	}
+
+	// And for everything else, the object itself - so an ADDED survives the
+	// object being deleted before the worker reaches it. See WorkItem.Object.
+	if eventType != "DELETED" {
+		workItem.Object = obj
 	}
 
 	c.logger.Debug("controller", fmt.Sprintf("Queueing %s event for %s %s", eventType, gvrString, key))
