@@ -44,7 +44,9 @@ func TestLoggerPrefixes(t *testing.T) {
 	logger.Warning(component, message)
 	logger.Error(component, message)
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Find the log file
@@ -73,12 +75,12 @@ func TestLoggerPrefixes(t *testing.T) {
 	}
 
 	lines := strings.Split(string(content), "\n")
-	
+
 	// Expected prefixes for each log level
 	expectedPrefixes := map[string]string{
 		"debug":   "D",
 		"info":    "I",
-		"warning": "W", 
+		"warning": "W",
 		"error":   "E",
 	}
 
@@ -147,7 +149,9 @@ func TestDebugLogPrefix(t *testing.T) {
 	message := "debug test message"
 	logger.Debug(component, message)
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Find and read the log file
@@ -223,7 +227,9 @@ func TestInfoLogPrefix(t *testing.T) {
 	message := "info test message"
 	logger.Info(component, message)
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Find and read the log file
@@ -299,7 +305,9 @@ func TestWarningLogPrefix(t *testing.T) {
 	message := "warning test message"
 	logger.Warning(component, message)
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Find and read the log file
@@ -375,7 +383,9 @@ func TestErrorLogPrefix(t *testing.T) {
 	message := "error test message"
 	logger.Error(component, message)
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Find and read the log file
@@ -452,7 +462,9 @@ func TestJSONExportEnabled(t *testing.T) {
 	logger.Debug("controller", validJSON)
 	logger.Info("cluster-handler", validJSON)
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Find the JSON file
@@ -539,7 +551,9 @@ func TestJSONExportDisabled(t *testing.T) {
 	logger.Debug("controller", validJSON)
 	logger.Info("cluster-handler", validJSON)
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Verify no JSON file was created
@@ -591,7 +605,9 @@ func TestJSONComponentFiltering(t *testing.T) {
 	logger.Info("test-component", validJSON)
 	logger.Warning("random-component", validJSON)
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Find and read the JSON file
@@ -675,7 +691,9 @@ func TestJSONInvalidContentFiltering(t *testing.T) {
 	logger.Debug("cluster-handler", "Plain text message")
 	logger.Warning("controller", "Another non-JSON message")
 
-	// Give some time for logs to be written
+	// The capture is written by its own goroutine and synced on an interval,
+	// so ask for a flush rather than sleeping and hoping.
+	logger.FlushCapture()
 	time.Sleep(100 * time.Millisecond)
 
 	// Find and read the JSON file
@@ -775,7 +793,7 @@ func TestJSONFilePathOutput(t *testing.T) {
 			name := file.Name()
 			timestampPart := strings.TrimPrefix(name, "events-")
 			timestampPart = strings.TrimSuffix(timestampPart, ".json")
-			
+
 			if len(timestampPart) != 15 { // YYYYMMDD-HHMMSS = 15 characters
 				t.Errorf("❌ JSON file has incorrect timestamp format: %s", name)
 			} else {

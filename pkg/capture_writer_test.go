@@ -136,3 +136,32 @@ func TestJsonSyncPolicy(t *testing.T) {
 		l.Shutdown()
 	}
 }
+
+// FlushCapture must mean "everything enqueued before me is on disk".
+//
+// It did not, and the bug is the reason this test exists. The flush request
+// travelled on a channel of its own, and select picks uniformly among ready
+// cases - so the writer could answer the flush while records were still queued,
+// flush an empty buffer, and acknowledge a flush that had written nothing.
+// Anything reading the capture back then saw an empty file while the counters
+// said the records had been written. Both kinds of work now travel on one
+// channel, so a flush cannot overtake the records queued ahead of it.
+//
+// No Shutdown here on purpose: Shutdown drains and would hide the defect.
+func TestFlushCaptureWaitsForQueuedRecords(t *testing.T) {
+	const records = 200
+	sink := &slowSink{}
+	l := &Logger{}
+	l.startCaptureWriter(sink, false) // interval sync: only an explicit flush can land these
+
+	for i := 0; i < records; i++ {
+		l.LogJSON("controller", okEvent)
+	}
+	l.FlushCapture()
+
+	if got := sink.lines(); got != records {
+		t.Fatalf("after FlushCapture the capture holds %d of %d records.\n"+
+			"A flush that returns before the records ahead of it are written means "+
+			"anything reading the capture sees a file that is short or empty.", got, records)
+	}
+}

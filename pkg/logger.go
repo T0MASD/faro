@@ -27,6 +27,19 @@ const (
 	captureQueueSize    = 4096
 )
 
+// captureItem is one thing for the writer to do, and both kinds travel on the
+// same channel ON PURPOSE.
+//
+// A flush request on a channel of its own is serviced out of order: select
+// picks uniformly among ready cases, so the writer could answer a flush while
+// records were still queued, flush an empty buffer, and acknowledge a flush
+// that had written nothing. One channel makes a flush mean "everything
+// enqueued before me is on disk", which is the only useful meaning.
+type captureItem struct {
+	line string
+	ack  chan struct{} // non-nil: flush what is buffered, then close this
+}
+
 // captureSink is what the capture writer needs of its output. *os.File
 // satisfies it; a test can substitute something with a slow Sync, which is the
 // condition this whole mechanism exists for.
@@ -48,7 +61,7 @@ type Logger struct {
 	// LogJSON held l.mu across WriteString AND Sync, so all three workers
 	// queued behind one fsync and throughput was 1/fsync-latency regardless of
 	// how many of them ran (#35).
-	lines      chan string
+	lines      chan captureItem
 	writerDone chan struct{}
 	syncEvery  bool // json_sync: "record"
 
@@ -90,16 +103,39 @@ func (l *Logger) CaptureStats() CaptureStats {
 // build a Logger around an arbitrary sink.
 func (l *Logger) startCaptureWriter(sink captureSink, syncEvery bool) {
 	l.syncEvery = syncEvery
-	l.lines = make(chan string, captureQueueSize)
+	l.lines = make(chan captureItem, captureQueueSize)
 	l.writerDone = make(chan struct{})
 	go l.runCaptureWriter(sink, l.lines)
+}
+
+// FlushCapture writes everything queued to the file, fsyncs it, and waits for
+// that to finish.
+//
+// Writes are asynchronous and, by default, synced once a second, so anything
+// that reads the capture back - a test, a tool, an operator about to copy the
+// file - must ask for a flush first rather than sleeping and hoping.
+func (l *Logger) FlushCapture() {
+	ack := make(chan struct{})
+	l.mu.RLock()
+	if l.lines == nil {
+		l.mu.RUnlock()
+		return // already shut down, and shutdown flushes
+	}
+	l.lines <- captureItem{ack: ack}
+	done := l.writerDone
+	l.mu.RUnlock()
+	select {
+	case <-ack:
+	case <-done:
+		// The writer stopped before reaching it; shutting down flushes anyway.
+	}
 }
 
 // The channel is passed in rather than read from l.lines each iteration:
 // Shutdown nils that field before closing the channel, so a writer reading
 // the field would end up selecting on a nil channel and block forever - and
 // reading it unlocked would be a data race besides.
-func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan string) {
+func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan captureItem) {
 	defer close(l.writerDone)
 	bw := bufio.NewWriterSize(sink, 64*1024)
 	t := time.NewTicker(captureSyncInterval)
@@ -123,12 +159,17 @@ func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan string) {
 
 	for {
 		select {
-		case line, ok := <-lines:
+		case item, ok := <-lines:
 			if !ok {
 				flush()
 				return
 			}
-			if _, err := bw.WriteString(line + "\n"); err != nil {
+			if item.ack != nil {
+				flush()
+				close(item.ack)
+				continue
+			}
+			if _, err := bw.WriteString(item.line + "\n"); err != nil {
 				l.failed.Add(1)
 				klog.Errorf("[logger] JSON capture write failed, this event is not in the capture: %v", err)
 				continue
@@ -256,7 +297,7 @@ func (l *Logger) LogJSON(component, message string) {
 	if l.lines == nil {
 		return
 	}
-	l.lines <- message
+	l.lines <- captureItem{line: message}
 }
 
 // Debug logs a debug message with proper D level formatting
