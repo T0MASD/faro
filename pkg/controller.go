@@ -86,6 +86,19 @@ type WorkItem struct {
 	// so this stays the state at observation time, and a re-list burst does
 	// not pay for thousands of deep copies.
 	Object *unstructured.Unstructured
+
+	// When Faro SAW this, stamped in the informer handler before the item is
+	// queued.
+	//
+	// It used to be stamped in logJSONEvent, which runs on a worker after the
+	// queue - so under any backlog every record was dated when a worker
+	// reached it, not when the change happened. Measured on a lab whose output
+	// volume could not keep up: the queue ran four minutes behind and every
+	// eventTime in that window was four minutes late, which silently shifts a
+	// timeline built from the capture and compresses a burst into the order it
+	// drained. The comment on logJSONEvent already claimed this was the
+	// observation rather than the processing; now it is.
+	ObservedAt time.Time
 }
 
 // MatchedEvent represents a filtered event that matched configuration criteria
@@ -152,7 +165,7 @@ type InformerStateTracker struct {
 }
 
 // logJSONEvent creates and logs a structured JSON event with middleware support
-func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured) {
+func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured, observedAt time.Time) {
 	var objCopy *unstructured.Unstructured
 	var annotations map[string]string
 	var timestamp string
@@ -166,10 +179,14 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 		}
 	}
 
-	// When Faro saw this, as distinct from when the object was created. Taken
-	// before any middleware runs, so it is the observation and not the
-	// processing.
-	eventTime := time.Now().UTC().Format(time.RFC3339Nano)
+	// When Faro saw this, as distinct from when the object was created. Stamped
+	// in the informer handler and carried here, so a record written late still
+	// says when the change was observed rather than when a worker got to it.
+	// Falls back to now only for a caller that has no observation time.
+	if observedAt.IsZero() {
+		observedAt = time.Now().UTC()
+	}
+	eventTime := observedAt.UTC().Format(time.RFC3339Nano)
 
 	// Create object copy for middleware processing
 	if obj != nil {
@@ -259,6 +276,14 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 
 	// Log as JSON for the JSONFileHandler to pick up
 	c.logger.Debug("controller", string(jsonData))
+}
+
+// observedAtOrNow keeps a caller that has no observation time working.
+func observedAtOrNow(t time.Time) time.Time {
+	if t.IsZero() {
+		return time.Now().UTC()
+	}
+	return t.UTC()
 }
 
 // groupConfigsByNamespace decides which informers a GVR's configs ask for.
@@ -1886,7 +1911,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				// exactly what it looked like.
 				if workItem.Object != nil {
 					c.logger.Debug("controller", fmt.Sprintf("Object %s %s is gone from the cache; recording %s from the snapshot taken when it was observed", workItem.GVRString, workItem.Key, workItem.EventType))
-					return c.processObject(workItem.EventType, workItem.Object, workItem.GVRString, workItem.Configs)
+					return c.processObject(workItem.EventType, workItem.Object, workItem.GVRString, workItem.Configs, workItem.ObservedAt)
 				}
 				// No snapshot: the event IS lost, and that is worth saying out
 				// loud. It used to be dropped at Debug, which is why this cost
@@ -1932,7 +1957,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 			}
 
 			// Log JSON event for DELETE with captured metadata
-			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, nil, deletedObjForLogging)
+			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, nil, deletedObjForLogging, workItem.ObservedAt)
 
 			// Clean up UID from cache after processing
 			c.cleanupUIDFromInformerState(workItem.GVRString, namespace, name)
@@ -1957,7 +1982,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 					// A deleted object carries no creationTimestamp, so there is
 					// no object age to report - only when this was observed.
 					Timestamp: time.Time{},
-					EventTime: time.Now().UTC(),
+					EventTime: observedAtOrNow(workItem.ObservedAt),
 				}
 
 				// Call event handlers (non-blocking)
@@ -1987,11 +2012,11 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 	}
 
 	// Apply detailed logging logic for ADD/UPDATE
-	return c.processObject(workItem.EventType, unstructuredObj, workItem.GVRString, workItem.Configs)
+	return c.processObject(workItem.EventType, unstructuredObj, workItem.GVRString, workItem.Configs, workItem.ObservedAt)
 }
 
 // processObject contains the core filtering and logging logic
-func (c *Controller) processObject(eventType string, obj *unstructured.Unstructured, gvrString string, configs []NormalizedConfig) error {
+func (c *Controller) processObject(eventType string, obj *unstructured.Unstructured, gvrString string, configs []NormalizedConfig, observedAt time.Time) error {
 	resourceName := obj.GetName()
 	resourceNamespace := obj.GetNamespace()
 	resourceUID := obj.GetUID()
@@ -2032,7 +2057,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 			Key:       obj.GetNamespace() + "/" + obj.GetName(),
 			Config:    config,
 			Timestamp: obj.GetCreationTimestamp().Time,
-			EventTime: time.Now().UTC(),
+			EventTime: observedAtOrNow(observedAt),
 		}
 
 		// For cluster-scoped resources, key is just the name
@@ -2064,7 +2089,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 		}
 
 		// Log JSON event for export
-		c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels(), obj)
+		c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels(), obj, observedAt)
 
 		break // Only process once per object
 	}
@@ -2097,6 +2122,8 @@ func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstruc
 		GVRString: gvrString,
 		Configs:   normalizedConfigs,
 		EventType: eventType,
+		// Here, not on the worker. See WorkItem.ObservedAt.
+		ObservedAt: time.Now().UTC(),
 	}
 
 	// For DELETED events, capture UID and annotations before they're lost
