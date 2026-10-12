@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -65,40 +64,8 @@ type Logger struct {
 	writerDone chan struct{}
 	syncEvery  bool // json_sync: "record"
 
-	written  atomic.Uint64 // records handed to the file
-	failed   atomic.Uint64 // records that could not be written
-	syncFail atomic.Uint64 // flush/sync errors
 }
 
-// CaptureStats is what the capture writer can say about itself.
-//
-// Queued is the part worth watching: it is the backlog that used to be
-// invisible, and a sustained non-zero value means the output volume cannot
-// keep up with the event rate.
-type CaptureStats struct {
-	Written      uint64
-	Failed       uint64
-	SyncFailures uint64
-	Queued       int
-	QueueSize    int
-}
-
-// CaptureStats reports the capture writer's counters.
-func (l *Logger) CaptureStats() CaptureStats {
-	l.mu.RLock()
-	ch := l.lines
-	l.mu.RUnlock()
-	return CaptureStats{
-		Written:      l.written.Load(),
-		Failed:       l.failed.Load(),
-		SyncFailures: l.syncFail.Load(),
-		Queued:       len(ch),
-		QueueSize:    cap(ch),
-	}
-}
-
-// runCaptureWriter owns jsonFile for the lifetime of the logger: nothing else
-// touches it until Shutdown has waited for this to return, so it needs no lock.
 // startCaptureWriter wires up the writer. Split out of NewLogger so a test can
 // build a Logger around an arbitrary sink.
 func (l *Logger) startCaptureWriter(sink captureSink, syncEvery bool) {
@@ -147,12 +114,10 @@ func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan captureItem) {
 	// at any level, and afterwards no way to say why.
 	flush := func() {
 		if err := bw.Flush(); err != nil {
-			l.syncFail.Add(1)
 			klog.Errorf("[logger] JSON capture flush failed, these events are not in the capture: %v", err)
 			return
 		}
 		if err := sink.Sync(); err != nil {
-			l.syncFail.Add(1)
 			klog.Errorf("[logger] JSON capture sync failed, these events may not be in the capture: %v", err)
 		}
 	}
@@ -170,11 +135,9 @@ func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan captureItem) {
 				continue
 			}
 			if _, err := bw.WriteString(item.line + "\n"); err != nil {
-				l.failed.Add(1)
 				klog.Errorf("[logger] JSON capture write failed, this event is not in the capture: %v", err)
 				continue
 			}
-			l.written.Add(1)
 			if l.syncEvery {
 				flush()
 			}
@@ -284,7 +247,7 @@ func (l *Logger) LogJSON(component, message string) {
 	// The lock is still taken, but only to read the channel - never across I/O.
 	//
 	// A full queue BLOCKS rather than drops. That is backpressure, and it shows
-	// up in CaptureStats().Queued; dropping would be silent loss, which is the
+	// up as a producer that waits; dropping would be silent loss, which is the
 	// failure this function keeps being fixed for.
 	// The read lock is held ACROSS the send, not just to fetch the channel.
 	// Shutdown closes it under the write lock, so holding this makes a send
