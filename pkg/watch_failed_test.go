@@ -24,8 +24,12 @@ func TestEmitWatchFailedReachesTheCapture(t *testing.T) {
 	}
 	defer f.Close()
 
-	c := &Controller{logger: &Logger{jsonFile: f}}
+	l := &Logger{jsonFile: f}
+	l.startCaptureWriter(f, true)
+	c := &Controller{logger: l}
 	c.emitWatchFailed("v1/pods", "kube-system", errors.New("connection reset by peer"))
+	// The capture has its own writer goroutine; drain it before reading back.
+	l.Shutdown()
 
 	b, err := os.ReadFile(path)
 	if err != nil {
