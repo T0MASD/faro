@@ -19,6 +19,12 @@ type Event struct {
 	Name      string
 	UID       string
 
+	// The object's resourceVersion at this change: the only field that
+	// identifies the CHANGE rather than the observer, which is what makes a
+	// duplicate recognisable. Empty for WATCH_FAILED, which describes no
+	// object.
+	ResourceVersion string
+
 	Labels      map[string]string
 	Annotations map[string]string
 	Fields      map[string]interface{}

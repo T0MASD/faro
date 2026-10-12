@@ -39,7 +39,7 @@ func TestLogJSONEventDeletedFromStub(t *testing.T) {
 	// and assert it is what lands in the record rather than the time the write
 	// happened to run.
 	observed := time.Date(2026, 10, 12, 18, 30, 0, 0, time.UTC)
-	c.logJSONEvent("DELETED", "v1/configmaps", "kubeedge", "cloudcore", "uid-1", nil, stub, observed)
+	c.logJSONEvent("DELETED", "v1/configmaps", "kubeedge", "cloudcore", "uid-1", "4096", nil, stub, observed)
 	logger.Shutdown()
 
 	files, _ := filepath.Glob(filepath.Join(dir, "logs", "events-*.json"))
@@ -106,8 +106,8 @@ func TestLogJSONEventCarriesEventTime(t *testing.T) {
 	// times now come from the caller, which is the point: creation is history,
 	// each eventTime is when Faro saw that particular change.
 	first := time.Date(2026, 10, 12, 18, 30, 0, 0, time.UTC)
-	c.logJSONEvent("ADDED", "v1/nodes", "", "cp1", "uid-1", nil, obj, first)
-	c.logJSONEvent("UPDATED", "v1/nodes", "", "cp1", "uid-1", nil, obj, first.Add(time.Second))
+	c.logJSONEvent("ADDED", "v1/nodes", "", "cp1", "uid-1", "1", nil, obj, first)
+	c.logJSONEvent("UPDATED", "v1/nodes", "", "cp1", "uid-1", "2", nil, obj, first.Add(time.Second))
 	logger.Shutdown()
 
 	files, _ := filepath.Glob(filepath.Join(dir, "logs", "events-*.json"))
