@@ -35,12 +35,33 @@ CREATE TABLE IF NOT EXISTS events (
   uid         text,
   labels      jsonb,
   annotations jsonb,
-  json        jsonb
+  json        jsonb,
+  resource_version text
 );
+ALTER TABLE events ADD COLUMN IF NOT EXISTS resource_version text;
 CREATE INDEX IF NOT EXISTS ix_events_ts     ON events(ts);
 CREATE INDEX IF NOT EXISTS ix_events_source ON events(source, ts);
 CREATE INDEX IF NOT EXISTS ix_events_gvr    ON events(gvr, ts);
 CREATE INDEX IF NOT EXISTS ix_events_uid    ON events(uid, ts);
+-- WHAT MAKES AN OVERLAP HARMLESS.
+--
+-- Two collectors watching the same stream stamp different eventTimes for one
+-- change - eventTime is the observer's, not the change's - but they see the
+-- same resourceVersion. So this identifies the CHANGE, and a second copy of it
+-- is dropped rather than recorded twice.
+--
+-- That is what lets a rollout overlap deliberately instead of coordinating a
+-- cut-over: there is no cut point to agree on and no clock to synchronise,
+-- because writing the same change twice costs nothing.
+--
+-- A re-list replays the same resourceVersion too, so this makes an informer
+-- replay exactly detectable rather than inferred from "an earlier ADDED with
+-- this UID".
+--
+-- WATCH_FAILED is synthetic and has no resourceVersion. NULLs are distinct in
+-- a unique index in both SQLite and Postgres, so those rows never collide with
+-- each other - which is what we want: two broken watches are two events.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_events_change ON events(gvr, uid, resource_version, action);
 `
 
 const (
@@ -217,15 +238,15 @@ func (p *postgresSink) insert(batch []Event) error {
 		return err
 	}
 	var sb strings.Builder
-	sb.WriteString(`INSERT INTO events (ts, ts_iso, source, node, action, gvr, namespace, name, actor, code, detail, uid, labels, annotations, json) VALUES `)
-	args := make([]interface{}, 0, len(batch)*12)
+	sb.WriteString(`INSERT INTO events (ts, ts_iso, source, node, action, gvr, namespace, name, actor, code, detail, uid, labels, annotations, json, resource_version) VALUES `)
+	args := make([]interface{}, 0, len(batch)*13)
 	for i, e := range batch {
 		if i > 0 {
 			sb.WriteByte(',')
 		}
-		n := i * 12
-		fmt.Fprintf(&sb, "($%d,$%d,'faro',$%d,$%d,$%d,$%d,$%d,NULL,NULL,$%d,$%d,$%d,$%d,$%d)",
-			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12)
+		n := i * 13
+		fmt.Fprintf(&sb, "($%d,$%d,'faro',$%d,$%d,$%d,$%d,$%d,NULL,NULL,$%d,$%d,$%d,$%d,$%d,$%d)",
+			n+1, n+2, n+3, n+4, n+5, n+6, n+7, n+8, n+9, n+10, n+11, n+12, n+13)
 		t := e.EventTime
 		if t.IsZero() {
 			t = time.Now().UTC()
@@ -234,8 +255,10 @@ func (p *postgresSink) insert(batch []Event) error {
 			float64(t.UnixNano())/1e9, t.UTC(),
 			p.node, e.EventType, e.GVR, nullable(e.Namespace), e.Name,
 			jsonOrNull(e.Fields), nullable(e.UID),
-			jsonOrNull(e.Labels), jsonOrNull(e.Annotations), string(e.JSON))
+			jsonOrNull(e.Labels), jsonOrNull(e.Annotations), string(e.JSON),
+			nullable(e.ResourceVersion))
 	}
+	sb.WriteString(" ON CONFLICT DO NOTHING")
 	_, err := p.db.Exec(sb.String(), args...)
 	return err
 }

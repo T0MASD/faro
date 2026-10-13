@@ -64,8 +64,9 @@ type WorkItem struct {
 	Configs   []NormalizedConfig // Configuration rules that apply to this GVR
 	EventType string             // ADDED, UPDATED, DELETED
 	// For DELETED events - preserve metadata that's lost when object is removed from cache
-	DeletedUID         string            // UID of deleted object
-	DeletedAnnotations map[string]string // Annotations of deleted object
+	DeletedUID             string            // UID of deleted object
+	DeletedAnnotations     map[string]string // Annotations of deleted object
+	DeletedResourceVersion string            // resourceVersion of deleted object
 
 	// The object as it was when this event was observed.
 	//
@@ -125,15 +126,26 @@ type MatchedEvent struct {
 // stamped with its single creation time. EventTime is when Faro observed the
 // event and is what a timeline is built from.
 type JSONEvent struct {
-	Timestamp   string            `json:"timestamp,omitempty"`
-	EventTime   string            `json:"eventTime"`
-	EventType   string            `json:"eventType"`
-	GVR         string            `json:"gvr"`
-	Namespace   string            `json:"namespace,omitempty"`
-	Name        string            `json:"name"`
-	UID         string            `json:"uid,omitempty"`
-	Labels      map[string]string `json:"labels,omitempty"`
-	Annotations map[string]string `json:"annotations,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
+	EventTime string `json:"eventTime"`
+	EventType string `json:"eventType"`
+	GVR       string `json:"gvr"`
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name"`
+	UID       string `json:"uid,omitempty"`
+
+	// The object's resourceVersion at this change.
+	//
+	// The only field that identifies the CHANGE rather than the observer. Two
+	// collectors watching the same stream stamp different eventTimes for one
+	// change but see the same resourceVersion, and a re-list replays the same
+	// one again - so it is what lets a duplicate be recognised as a duplicate
+	// instead of inferred from "an earlier ADDED with this UID".
+	//
+	// Absent on WATCH_FAILED, which is synthetic and describes no object.
+	ResourceVersion string            `json:"resourceVersion,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
+	Annotations     map[string]string `json:"annotations,omitempty"`
 
 	// Fields holds object values named by the GVR's `fields:` config, keyed by
 	// path. Omitted entirely when nothing is configured or nothing matched, so
@@ -165,7 +177,7 @@ type InformerStateTracker struct {
 }
 
 // logJSONEvent creates and logs a structured JSON event with middleware support
-func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, labels map[string]string, obj *unstructured.Unstructured, observedAt time.Time) {
+func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid, resourceVersion string, labels map[string]string, obj *unstructured.Unstructured, observedAt time.Time) {
 	var objCopy *unstructured.Unstructured
 	var annotations map[string]string
 	var timestamp string
@@ -254,16 +266,17 @@ func (c *Controller) logJSONEvent(eventType, gvr, namespace, name, uid string, l
 	}
 
 	jsonEvent := JSONEvent{
-		Timestamp:   timestamp,
-		EventTime:   eventTime,
-		EventType:   eventType,
-		GVR:         gvr,
-		Namespace:   namespace,
-		Name:        name,
-		UID:         finalUID,
-		Labels:      labels,
-		Annotations: annotations,
-		Fields:      extracted,
+		Timestamp:       timestamp,
+		EventTime:       eventTime,
+		EventType:       eventType,
+		GVR:             gvr,
+		Namespace:       namespace,
+		Name:            name,
+		UID:             finalUID,
+		ResourceVersion: resourceVersion,
+		Labels:          labels,
+		Annotations:     annotations,
+		Fields:          extracted,
 	}
 
 	// Special field extraction removed - library users should implement via middleware if needed
@@ -643,6 +656,20 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 		jsonMiddleware:      make([]JSONMiddleware, 0),
 		metrics:             NewMetricsCollector(config.Metrics, *logger),
 	}
+
+	// What /ready answers with, now that the controller exists to answer it.
+	//
+	// Ready means every informer that has been started has also synced, and
+	// that at least one was started - "zero of zero" is the state a collector
+	// is in before it has set anything up, and reporting that as ready is how
+	// a rollout would stop the old collector before the new one watches
+	// anything.
+	controller.metrics.SetReadyCheck(func() (bool, string) {
+		want := controller.informersStarted.Load()
+		got := controller.informersSynced.Load()
+		detail := fmt.Sprintf("%d/%d informer caches synced", got, want)
+		return want > 0 && got >= want, detail
+	})
 
 	logger.Debug("controller", "Created new controller instance")
 	return controller
@@ -1957,7 +1984,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 			}
 
 			// Log JSON event for DELETE with captured metadata
-			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, nil, deletedObjForLogging, workItem.ObservedAt)
+			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, workItem.DeletedResourceVersion, nil, deletedObjForLogging, workItem.ObservedAt)
 
 			// Clean up UID from cache after processing
 			c.cleanupUIDFromInformerState(workItem.GVRString, namespace, name)
@@ -2089,7 +2116,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 		}
 
 		// Log JSON event for export
-		c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetLabels(), obj, observedAt)
+		c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetResourceVersion(), obj.GetLabels(), obj, observedAt)
 
 		break // Only process once per object
 	}
@@ -2130,6 +2157,10 @@ func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstruc
 	if eventType == "DELETED" && obj != nil {
 		workItem.DeletedUID = string(obj.GetUID())
 		workItem.DeletedAnnotations = obj.GetAnnotations()
+		// And the resourceVersion, for the same reason the UID is captured
+		// here: reconcile rebuilds a stub for a deleted object and has no
+		// object to read it from by then.
+		workItem.DeletedResourceVersion = obj.GetResourceVersion()
 		c.logger.Debug("controller", fmt.Sprintf("Captured DELETED metadata: UID=%s, annotations=%d", workItem.DeletedUID, len(workItem.DeletedAnnotations)))
 	}
 
