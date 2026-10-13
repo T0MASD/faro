@@ -217,8 +217,15 @@ func (s *sqliteSink) Flush() error {
 	// between the two cannot leave a count that disagrees with the capture.
 	if dropped > 0 {
 		s.dropped += dropped
+		// Accumulated in SQL rather than from the counter in this struct,
+		// which starts at zero every time the process does. A collector that
+		// restarts and reopens the capture would otherwise overwrite the
+		// running total with its own much smaller one, and the number would
+		// silently go backwards across exactly the restarts it is there to
+		// describe.
 		if _, err := tx.Exec(`INSERT INTO meta (k, v) VALUES ('duplicates_dropped', ?)
-		  ON CONFLICT(k) DO UPDATE SET v = excluded.v`, fmt.Sprint(s.dropped)); err != nil {
+		  ON CONFLICT(k) DO UPDATE SET v = CAST(CAST(meta.v AS INTEGER) + ? AS TEXT)`,
+			fmt.Sprint(dropped), dropped); err != nil {
 			tx.Rollback()
 			return err
 		}

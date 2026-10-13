@@ -320,3 +320,46 @@ func TestSQLitePathIsPerCollectorUnderTheDeployment(t *testing.T) {
 		t.Errorf("explicit path = %q, want it honoured verbatim", got)
 	}
 }
+
+// The drop count must survive the collector restarting.
+//
+// It is a running total in the database, not in the process. A restarted
+// collector reopens the same capture with its own counter at zero, and if that
+// were written straight out the total would go backwards across precisely the
+// restarts it exists to describe - and a re-list, which is what a restart
+// causes, is the largest source of drops there is.
+func TestDuplicateCountAccumulatesAcrossRestarts(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "capture.db")
+	at := time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
+
+	for round := 0; round < 3; round++ {
+		s, err := newSQLiteSink(path, "n")
+		if err != nil {
+			t.Fatalf("round %d: %v", round, err)
+		}
+		// The same change every round: the first round records it, and each
+		// later round is a re-list replaying what is already there.
+		s.Append(rvEvent("cm-1", "uid-1", "700", "ADDED", at))
+		s.Append(rvEvent("cm-1", "uid-1", "700", "ADDED", at.Add(time.Second)))
+		if err := s.Close(); err != nil {
+			t.Fatalf("round %d close: %v", round, err)
+		}
+	}
+
+	db, _ := sql.Open("sqlite", path)
+	defer db.Close()
+	var rows int
+	db.QueryRow("select count(*) from events").Scan(&rows)
+	if rows != 1 {
+		t.Errorf("capture holds %d rows, want 1 - it is the same change every time", rows)
+	}
+	var n string
+	if err := db.QueryRow("select v from meta where k='duplicates_dropped'").Scan(&n); err != nil {
+		t.Fatalf("no count: %v", err)
+	}
+	// One per round from the in-batch duplicate, plus one each in rounds two
+	// and three for the change already on disk: 1 + 2 + 2.
+	if n != "5" {
+		t.Errorf("duplicates_dropped = %q, want 5 - the total reset when the collector restarted", n)
+	}
+}
