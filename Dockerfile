@@ -3,7 +3,7 @@
 # Pinned to the machine doing the building, not to the machine being built
 # for: Go cross-compiles, so the compile runs at native speed and only the
 # runtime stage below is emulated.
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27-alpine AS builder
 
 WORKDIR /build
 
