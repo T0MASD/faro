@@ -80,6 +80,18 @@ jobs:
           # Wait for API server to start and be ready (check for HTTP 200)
           timeout 300 bash -c 'until curl -k -s -o /dev/null -w "%{http_code}" https://localhost:6443/healthz 2>/dev/null | grep -q "200"; do sleep 2; done'
           echo "✅ API server responding"
+          # Wait for kinc's OWN completion signal before asking kubectl anything.
+          #
+          # kinc-postinit writes /var/lib/kinc-initialized when the cluster has finished
+          # coming up, and kinc's deploy.sh and run-validation.sh both wait on exactly
+          # this. The API answering /healthz is not that signal: it responds while
+          # postinit is still applying addons, so everything after it was racing.
+          #
+          # This is what made "Waiting for storage provisioner..." fail on v1.37 - the
+          # local-path-storage namespace had simply not been created yet, and 60 seconds
+          # of guessing was standing in for a signal the container was already offering.
+          timeout 300 bash -c 'until podman exec kinc-cluster test -f /var/lib/kinc-initialized 2>/dev/null; do sleep 2; done'
+          echo "✅ kinc reports initialization complete"
           
           # Extract kubeconfig
           mkdir -p ~/.kube
