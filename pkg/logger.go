@@ -108,11 +108,26 @@ func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan captureItem) {
 	t := time.NewTicker(captureSyncInterval)
 	defer t.Stop()
 
-	// Say so when a write fails. Both calls return an error and both used to be
-	// discarded, so the capture could stop at an arbitrary point while the
-	// process stayed healthy and the text log carried on - with nothing logged
-	// at any level, and afterwards no way to say why.
+	// Nothing written since the last sync means there is nothing to sync.
+	//
+	// The ticker fires on wall-clock time, not on activity, so without this a
+	// collector watching a quiet cluster still fsyncs once a second forever.
+	// That is not free: on a chunked network filesystem EVERY fsync appends a
+	// chunk to the file, and fsync latency grows with the number of chunks in
+	// it. Measured on a SeaweedFS CSI mount, 2000 syncs of 300 bytes each: the
+	// median went 14ms -> 44ms, monotonically, while the same test on an
+	// emptyDir stayed flat at 11-14ms. So an idle collector was buying itself
+	// a slower capture in exchange for nothing at all.
+	//
+	// This makes chunk growth proportional to what was actually written rather
+	// than to how long the process has been alive. It does not bound it - see
+	// the rotation issue for that - it stops paying for silence.
+	dirty := false
 	flush := func() {
+		if !dirty {
+			return
+		}
+		dirty = false
 		if err := bw.Flush(); err != nil {
 			klog.Errorf("[logger] JSON capture flush failed, these events are not in the capture: %v", err)
 			return
@@ -138,6 +153,7 @@ func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan captureItem) {
 				klog.Errorf("[logger] JSON capture write failed, this event is not in the capture: %v", err)
 				continue
 			}
+			dirty = true
 			if l.syncEvery {
 				flush()
 			}
