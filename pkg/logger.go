@@ -1,7 +1,6 @@
 package faro
 
 import (
-	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -41,8 +40,8 @@ const (
 // that had written nothing. One channel makes a flush mean "everything
 // enqueued before me is on disk", which is the only useful meaning.
 type captureItem struct {
-	line string
-	ack  chan struct{} // non-nil: flush what is buffered, then close this
+	ev  Event
+	ack chan struct{} // non-nil: flush what is buffered, then close this
 }
 
 // sinkOpener starts the NEXT capture file. Rotation is the writer's, so it
@@ -83,13 +82,19 @@ type Logger struct {
 	rotateEvery   time.Duration
 }
 
-// startCaptureWriter wires up the writer. Split out of NewLogger so a test can
-// build a Logger around an arbitrary sink.
+// startCaptureWriter wires up the writer around a single file sink. Split out
+// of NewLogger so a test can build a Logger around an arbitrary sink.
 func (l *Logger) startCaptureWriter(sink captureSink, syncEvery bool) {
 	l.syncEvery = syncEvery
+	l.startSinks(newFileSink(sink, syncEvery, l.openNext, l.rotateRecords, l.rotateEvery))
+}
+
+// startSinks runs the writer over the given destinations. The capture goes to
+// all of them; see Sink for what faro does and does not promise each one.
+func (l *Logger) startSinks(sinks ...Sink) {
 	l.lines = make(chan captureItem, captureQueueSize)
 	l.writerDone = make(chan struct{})
-	go l.runCaptureWriter(sink, l.lines)
+	go l.runCaptureWriter(sinks, l.lines)
 }
 
 // FlushCapture writes everything queued to the file, fsyncs it, and waits for
@@ -119,111 +124,69 @@ func (l *Logger) FlushCapture() {
 // Shutdown nils that field before closing the channel, so a writer reading
 // the field would end up selecting on a nil channel and block forever - and
 // reading it unlocked would be a data race besides.
-func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan captureItem) {
+func (l *Logger) runCaptureWriter(sinks []Sink, lines <-chan captureItem) {
 	defer close(l.writerDone)
-	bw := bufio.NewWriterSize(sink, 64*1024)
 	t := time.NewTicker(captureSyncInterval)
 	defer t.Stop()
 
-	// Nothing written since the last sync means there is nothing to sync.
-	//
-	// The ticker fires on wall-clock time, not on activity, so without this a
-	// collector watching a quiet cluster still fsyncs once a second forever.
-	// That is not free: on a chunked network filesystem EVERY fsync appends a
-	// chunk to the file, and fsync latency grows with the number of chunks in
-	// it. Measured on a SeaweedFS CSI mount, 2000 syncs of 300 bytes each: the
-	// median went 14ms -> 44ms, monotonically, while the same test on an
-	// emptyDir stayed flat at 11-14ms. So an idle collector was buying itself
-	// a slower capture in exchange for nothing at all.
-	//
-	// This makes chunk growth proportional to what was actually written rather
-	// than to how long the process has been alive. It does not bound it - see
-	// the rotation issue for that - it stops paying for silence.
-	dirty := false
-	flush := func() {
-		if !dirty {
+	// A sink's trouble is its own. One that errors must not stop the others and
+	// must not stop the capture, so every failure is reported and stepped over.
+	// Reported once per sink per run rather than per event: a destination that
+	// is down fails for every record, and a million identical lines would bury
+	// the one that matters.
+	failed := make([]bool, len(sinks))
+	report := func(i int, what string, err error) {
+		if failed[i] {
 			return
 		}
-		dirty = false
-		if err := bw.Flush(); err != nil {
-			klog.Errorf("[logger] JSON capture flush failed, these events are not in the capture: %v", err)
-			return
-		}
-		if err := sink.Sync(); err != nil {
-			klog.Errorf("[logger] JSON capture sync failed, these events may not be in the capture: %v", err)
+		failed[i] = true
+		klog.Errorf("[logger] capture sink %d %s failed, events may be missing from it: %v", i, what, err)
+	}
+	flushAll := func() {
+		for i, s := range sinks {
+			if err := s.Flush(); err != nil {
+				report(i, "flush", err)
+			}
 		}
 	}
-
-	// Rotation state. Here rather than on the Logger because only this
-	// goroutine may touch it.
-	written := 0
-	lastRotate := time.Now()
-	rotate := func(why string) {
-		flush()
-		if c, ok := sink.(io.Closer); ok {
-			_ = c.Close()
+	tickAll := func() {
+		for i, s := range sinks {
+			if tk, ok := s.(interface{ Tick() error }); ok {
+				if err := tk.Tick(); err != nil {
+					report(i, "tick", err)
+				}
+				continue
+			}
+			if err := s.Flush(); err != nil {
+				report(i, "flush", err)
+			}
 		}
-		next, name, err := l.openNext()
-		if err != nil {
-			// Keep writing to the file we have. A failed rotation must not end
-			// the capture: a file that keeps growing is bad, no file is worse.
-			klog.Errorf("[logger] could not start a new capture file, staying on the current one: %v", err)
-			written, lastRotate = 0, time.Now()
-			return
-		}
-		sink = next
-		bw.Reset(sink)
-		written, lastRotate = 0, time.Now()
-		klog.Infof("[logger] capture rotated (%s) -> %s", why, name)
-	}
-	due := func() string {
-		if l.openNext == nil || written == 0 {
-			return ""
-		}
-		if l.rotateRecords > 0 && written >= l.rotateRecords {
-			return fmt.Sprintf("%d records", written)
-		}
-		if l.rotateEvery > 0 && time.Since(lastRotate) >= l.rotateEvery {
-			return "interval"
-		}
-		return ""
 	}
 
 	for {
 		select {
 		case item, ok := <-lines:
 			if !ok {
-				flush()
-				if c, ok := sink.(io.Closer); ok {
-					_ = c.Close()
+				flushAll()
+				for i, s := range sinks {
+					if err := s.Close(); err != nil {
+						report(i, "close", err)
+					}
 				}
 				return
 			}
 			if item.ack != nil {
-				flush()
+				flushAll()
 				close(item.ack)
 				continue
 			}
-			if _, err := bw.WriteString(item.line + "\n"); err != nil {
-				klog.Errorf("[logger] JSON capture write failed, this event is not in the capture: %v", err)
-				continue
-			}
-			dirty = true
-			written++
-			if l.syncEvery {
-				flush()
-			}
-			if why := due(); why != "" {
-				rotate(why)
+			for i, s := range sinks {
+				if err := s.Append(item.ev); err != nil {
+					report(i, "append", err)
+				}
 			}
 		case <-t.C:
-			flush()
-			// due() returns "" when nothing has been written since the last
-			// rotation, so an idle collector does not leave a trail of empty
-			// files: with no writes there are no chunks to escape.
-			if why := due(); why != "" {
-				rotate(why)
-			}
+			tickAll()
 		}
 	}
 }
@@ -348,12 +311,18 @@ func (l *Logger) LogJSON(component, message string) {
 		return
 	}
 
-	// Check if the message is valid JSON
-	var jsonData interface{}
-	if err := json.Unmarshal([]byte(message), &jsonData); err != nil {
+	// Decode it into the event rather than merely checking that it parses.
+	//
+	// This used to unmarshal into an interface{} ONLY to prove the string was
+	// JSON, throw the result away, and pass the string on. Destinations that
+	// want columns rather than bytes would then each have to parse it again -
+	// so the one parse that was already happening now produces the record.
+	var je JSONEvent
+	if err := json.Unmarshal([]byte(message), &je); err != nil {
 		// Not JSON, skip
 		return
 	}
+	ev := eventFromJSON(je, []byte(message))
 
 	// Hand the line to the writer instead of writing it here.
 	//
@@ -376,7 +345,45 @@ func (l *Logger) LogJSON(component, message string) {
 	if l.lines == nil {
 		return
 	}
-	l.lines <- captureItem{line: message}
+	l.lines <- captureItem{ev: ev}
+}
+
+// eventFromJSON converts the wire form into the record the sinks take.
+//
+// EventTime is RFC3339Nano on the wire. A value that will not parse yields the
+// zero time rather than dropping the event: a record with an odd timestamp is
+// still evidence, and losing it would be the worse failure.
+func eventFromJSON(je JSONEvent, raw []byte) Event {
+	t, err := time.Parse(time.RFC3339Nano, je.EventTime)
+	if err != nil {
+		t = time.Time{}
+	}
+	return Event{
+		EventTime:   t,
+		EventType:   je.EventType,
+		GVR:         je.GVR,
+		Namespace:   je.Namespace,
+		Name:        je.Name,
+		UID:         je.UID,
+		Labels:      je.Labels,
+		Annotations: je.Annotations,
+		Fields:      je.Fields,
+		JSON:        raw,
+	}
+}
+
+// AppendEvent hands a already-built event to the capture.
+//
+// The structured path: a caller that has the values does not pay to encode
+// them, have them decoded again, and lose the types on the way. LogJSON is the
+// same thing for a caller that only has the bytes.
+func (l *Logger) AppendEvent(ev Event) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.lines == nil {
+		return
+	}
+	l.lines <- captureItem{ev: ev}
 }
 
 // Debug logs a debug message with proper D level formatting
