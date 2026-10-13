@@ -84,6 +84,35 @@ type Config struct {
 	// if its pod is rescheduled, where an interval sync that keeps up loses at
 	// most a second if the node is destroyed outright.
 	JsonSync        string            `yaml:"json_sync,omitempty"`   // "interval" (default) or "record"
+
+	// When to start a new capture file.
+	//
+	// On a chunked network filesystem EVERY fsync appends a chunk, and fsync
+	// latency grows with the number of chunks in the file. Measured on a
+	// SeaweedFS CSI mount - one 300-byte append plus fsync, 7164 times into a
+	// single file:
+	//
+	//   syncs    0-999  1000-1999  2000-2999  4000-4999  6000-6999
+	//   median    20ms     39ms       67ms      104ms      167ms
+	//
+	// The same test against an emptyDir stays flat at 11-14ms, which is what
+	// makes this chunk accumulation rather than the file merely getting
+	// larger. The curve is super-linear: a sync passes 500ms in roughly six
+	// hours at one per second, and would reach the sync interval itself inside
+	// a day - at which point the lag the asynchronous writer removed comes
+	// back.
+	//
+	// Rotation is the bound, because a new file starts with no chunks. It also
+	// bounds what one damaged or unsynced file can cost.
+	//
+	// The interval defaults to an hour rather than to off. Off would mean the
+	// default configuration degrades on the storage this is deployed on, and
+	// only someone who had read the issue would be spared it. An hour caps a
+	// file at ~3600 chunks, which the table above puts around 80ms. Records
+	// default to off: the interval already bounds the chunk count, and this is
+	// for bounding file SIZE on a collector that writes hard.
+	JsonRotateInterval string `yaml:"json_rotate_interval,omitempty"` // "" = 1h, "0" = never
+	JsonRotateRecords  int    `yaml:"json_rotate_records,omitempty"`  // 0 = never
 	Metrics         MetricsConfig     `yaml:"metrics,omitempty"`     // Prometheus metrics configuration
 	
 	// Simple configuration formats
