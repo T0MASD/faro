@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -321,11 +322,43 @@ func NewLogger(config *Config) (*Logger, error) {
 			fmt.Printf("FARO_SQLITE_FILE: %s\n", p)
 		}
 	}
+	if dsn := postgresDSN(config); dsn != "" {
+		ps, err := newPostgresSink(dsn, os.Getenv("FARO_NODE"))
+		if err != nil {
+			klog.Errorf("[logger] Postgres capture could not be set up, continuing without it: %v", err)
+		} else {
+			sinks = append(sinks, ps)
+			fmt.Println("FARO_POSTGRES: attached")
+		}
+	}
 	if len(sinks) > 0 {
 		logger.startSinks(sinks...)
 	}
 
 	return logger, nil
+}
+
+// postgresDSN reads the connection string from where it is kept, never from
+// the config itself. See Config.PostgresDSNFile.
+//
+// The file's whole contents are the DSN, trimmed: that is what a Secret volume
+// and a file on a node both look like. An unreadable path is reported and
+// skipped rather than fatal - Postgres is the optional destination, and losing
+// it must not cost the capture.
+func postgresDSN(config *Config) string {
+	if v := strings.TrimSpace(os.Getenv("FARO_POSTGRES_DSN")); v != "" {
+		return v
+	}
+	if config.PostgresDSNFile == "" {
+		return ""
+	}
+	b, err := os.ReadFile(config.PostgresDSNFile)
+	if err != nil {
+		klog.Errorf("[logger] postgres_dsn_file %s could not be read, continuing without Postgres: %v",
+			config.PostgresDSNFile, err)
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // sqliteTarget resolves where the SQLite capture goes. "off" disables it;

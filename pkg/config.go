@@ -13,8 +13,8 @@ import (
 type Scope string
 
 const (
-	ClusterScope    Scope = "Cluster"
-	NamespaceScope  Scope = "Namespaced"
+	ClusterScope   Scope = "Cluster"
+	NamespaceScope Scope = "Namespaced"
 )
 
 // ResourceDetails defines what resources to watch within a namespace (legacy format)
@@ -28,12 +28,12 @@ type ResourceDetails struct {
 // NamespaceConfig defines namespace and its resources to watch (namespace-centric format)
 type NamespaceConfig struct {
 	NameSelector string                     `yaml:"name_selector"` // Exact namespace name for server-side filtering
-	Resources   map[string]ResourceDetails `yaml:"resources"`     // Map of GVR to resource config
+	Resources    map[string]ResourceDetails `yaml:"resources"`     // Map of GVR to resource config
 }
 
 // ResourceConfig defines a resource-centric configuration
 type ResourceConfig struct {
-	GVR            string   `yaml:"gvr"`                        // Group/Version/Resource identifier
+	GVR            string   `yaml:"gvr"`                       // Group/Version/Resource identifier
 	Scope          Scope    `yaml:"scope,omitempty"`           // Explicitly define scope (Cluster or Namespaced)
 	NamespaceNames []string `yaml:"namespace_names,omitempty"` // Exact namespace names only (for server-side filtering)
 	NameSelector   string   `yaml:"name_selector,omitempty"`   // Exact name for resource name filtering (server-side)
@@ -47,28 +47,28 @@ type ResourceConfig struct {
 // NormalizedConfig is the unified data structure used internally by the controller.
 // This represents the normalized form that both configuration formats are converted to.
 type NormalizedConfig struct {
-	GVR               string          // Group/Version/Resource identifier
-	ResourceDetails   ResourceDetails // Resource matching details (SERVER-SIDE only)
-	NamespaceNames []string        // Literal namespace names only (for server-side filtering)
-	NameSelector   string          // Exact name for resource name filtering (server-side)
-	LabelSelector     string          // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
-	Fields            []string        // Object paths copied into the emitted event
+	GVR             string          // Group/Version/Resource identifier
+	ResourceDetails ResourceDetails // Resource matching details (SERVER-SIDE only)
+	NamespaceNames  []string        // Literal namespace names only (for server-side filtering)
+	NameSelector    string          // Exact name for resource name filtering (server-side)
+	LabelSelector   string          // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
+	Fields          []string        // Object paths copied into the emitted event
 }
 
 // MetricsConfig defines Prometheus metrics configuration
 type MetricsConfig struct {
-	Enabled    bool   `yaml:"enabled"`              // Enable Prometheus metrics
-	Port       int    `yaml:"port"`                 // Port for metrics HTTP server (default: 8080)
-	Path       string `yaml:"path"`                 // Metrics endpoint path (default: /metrics)
-	BindAddr   string `yaml:"bind_addr"`            // Bind address (default: 0.0.0.0)
+	Enabled  bool   `yaml:"enabled"`   // Enable Prometheus metrics
+	Port     int    `yaml:"port"`      // Port for metrics HTTP server (default: 8080)
+	Path     string `yaml:"path"`      // Metrics endpoint path (default: /metrics)
+	BindAddr string `yaml:"bind_addr"` // Bind address (default: 0.0.0.0)
 }
 
 // Config represents the minimalist Faro configuration supporting both formats
 type Config struct {
-	OutputDir       string            `yaml:"output_dir"`       // Directory for output files and logs
-	LogLevel        string            `yaml:"log_level"`        // Log level: debug, info, warning, error, fatal
-	AutoShutdownSec int               `yaml:"auto_shutdown_sec"` // Auto-shutdown timeout in seconds (0 = run indefinitely)
-	JsonExport      bool              `yaml:"json_export,omitempty"` // Enable JSON event export to separate file
+	OutputDir       string `yaml:"output_dir"`            // Directory for output files and logs
+	LogLevel        string `yaml:"log_level"`             // Log level: debug, info, warning, error, fatal
+	AutoShutdownSec int    `yaml:"auto_shutdown_sec"`     // Auto-shutdown timeout in seconds (0 = run indefinitely)
+	JsonExport      bool   `yaml:"json_export,omitempty"` // Enable JSON event export to separate file
 
 	// How often the capture file is fsynced: "interval" (the default, once a
 	// second) or "record" (after every record).
@@ -83,7 +83,7 @@ type Config struct {
 	// in memory, so a collector that is minutes behind loses minutes of events
 	// if its pod is rescheduled, where an interval sync that keeps up loses at
 	// most a second if the node is destroyed outright.
-	JsonSync        string            `yaml:"json_sync,omitempty"`   // "interval" (default) or "record"
+	JsonSync string `yaml:"json_sync,omitempty"` // "interval" (default) or "record"
 
 	// When to start a new capture file.
 	//
@@ -126,15 +126,33 @@ type Config struct {
 	// "off" disables it.
 	SqlitePath string `yaml:"sqlite_path,omitempty"`
 
+	// Where to read the Postgres connection string FROM. Not the connection
+	// string itself.
+	//
+	// A DSN carries a password, and this config file is baked into the kinc
+	// node image and published as a ConfigMap - so a literal here would put a
+	// password in a registry and in any namespace that can read ConfigMaps.
+	// Secrets stay out of band.
+	//
+	// A path covers both deployments with one mechanism, because they converge
+	// on a mounted file: a Kubernetes Secret volume for the operator, and a
+	// file on the node for the bootstrap static pod - which cannot read a
+	// Secret at all, since its whole purpose is running before the API server
+	// is usable.
+	//
+	// FARO_POSTGRES_DSN overrides it, for a shell. Postgres is attached only
+	// when one of the two is set; there is no default endpoint.
+	PostgresDSNFile string `yaml:"postgres_dsn_file,omitempty"`
+
 	// The JSON-lines capture, which is now OPTIONAL and off unless asked for.
 	// It remains because CI, the e2e suite and the drive-test harness read it,
 	// and because it is the format that has survived every failure thrown at
 	// it. json_export: true keeps writing it alongside the database.
-	Metrics         MetricsConfig     `yaml:"metrics,omitempty"`     // Prometheus metrics configuration
-	
+	Metrics MetricsConfig `yaml:"metrics,omitempty"` // Prometheus metrics configuration
+
 	// Simple configuration formats
-	Namespaces      []NamespaceConfig `yaml:"namespaces,omitempty"`  // Simple namespace format
-	Resources       []ResourceConfig  `yaml:"resources,omitempty"`   // Simple resource format
+	Namespaces []NamespaceConfig `yaml:"namespaces,omitempty"` // Simple namespace format
+	Resources  []ResourceConfig  `yaml:"resources,omitempty"`  // Simple resource format
 }
 
 // LoadConfig loads configuration from YAML file or command line arguments
@@ -145,24 +163,24 @@ func LoadConfig() (*Config, error) {
 // LoadConfigWithVersion loads configuration with version information for help/version display
 func LoadConfigWithVersion(version, commit, date, builtBy string) (*Config, error) {
 	config := &Config{}
-	
+
 	// Define command line flags
 	var configFile string
 	flag.StringVar(&configFile, "config", "", "Path to YAML configuration file")
 	flag.StringVar(&config.OutputDir, "output-dir", "./output", "Directory for output files and logs")
 	flag.StringVar(&config.LogLevel, "log-level", "info", "Log level (debug, info, warning, error, fatal)")
 	flag.IntVar(&config.AutoShutdownSec, "auto-shutdown", 0, "Auto-shutdown timeout in seconds (0 = run indefinitely)")
-	
+
 	// Add help and version flags
 	var showHelp bool
 	var showVersion bool
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 	flag.BoolVar(&showHelp, "h", false, "Show help (shorthand)")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
-	
+
 	// Parse flags
 	flag.Parse()
-	
+
 	// Show version if requested
 	if showVersion {
 		fmt.Printf("Faro %s\n", version)
@@ -171,30 +189,30 @@ func LoadConfigWithVersion(version, commit, date, builtBy string) (*Config, erro
 		fmt.Printf("  built by: %s\n", builtBy)
 		os.Exit(0)
 	}
-	
+
 	// Show help if requested
 	if showHelp {
 		printUsage()
 		os.Exit(0)
 	}
-	
+
 	// Load from YAML file if specified
 	if configFile != "" {
 		if err := config.LoadFromYAML(configFile); err != nil {
 			return nil, fmt.Errorf("failed to load config from YAML: %w", err)
 		}
 	}
-	
+
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("config validation failed: %w", err)
 	}
-	
+
 	// Ensure output directory exists
 	if err := os.MkdirAll(config.OutputDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create output directory: %w", err)
 	}
-	
+
 	return config, nil
 }
 
@@ -204,11 +222,11 @@ func (c *Config) LoadFromYAML(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
-	
+
 	if err := yaml.Unmarshal(data, c); err != nil {
 		return fmt.Errorf("failed to parse YAML config: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -222,16 +240,16 @@ func (c *Config) Validate() error {
 		"error":   true,
 		"fatal":   true,
 	}
-	
+
 	if !validLevels[c.LogLevel] {
 		return fmt.Errorf("invalid log level '%s', must be one of: debug, info, warning, error, fatal", c.LogLevel)
 	}
-	
+
 	// Validate output directory path
 	if c.OutputDir == "" {
 		return fmt.Errorf("output directory cannot be empty")
 	}
-	
+
 	// Convert to absolute path for consistency
 	absPath, err := filepath.Abs(c.OutputDir)
 	if err != nil {
@@ -305,7 +323,7 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 			Fields:         allowedFields(resConfig.GVR, resConfig.Fields),
 		})
 	}
-	
+
 	if len(normalizedMap) == 0 {
 		return nil, fmt.Errorf("no resources configured")
 	}
