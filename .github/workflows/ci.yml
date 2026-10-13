@@ -148,12 +148,24 @@ jobs:
           
           # Wait for all system pods to be ready
           echo "⏳ Waiting for system pods to be ready..."
+          # kubectl wait --all ERRORS IMMEDIATELY when the namespace holds no pods
+          # yet - "no matching resources found". That is not a timeout, so --timeout
+          # never applies and the step fails in seconds. The API answers /healthz
+          # before the static pod manifests have been read, so there is a window where
+          # the namespace is empty. Wait for a pod to EXIST before waiting for Ready.
+          timeout 120 bash -c 'until [ "$(kubectl get pods -n kube-system --no-headers 2>/dev/null | wc -l)" -gt 0 ]; do sleep 2; done'
           kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s
           
           # Wait for local-path-storage namespace and pods to exist (may take a moment to be created)
           echo "⏳ Waiting for storage provisioner..."
           timeout 60 bash -c 'until kubectl get namespace local-path-storage >/dev/null 2>&1; do sleep 2; done'
           timeout 60 bash -c 'until kubectl get pods -n local-path-storage 2>/dev/null | grep -q local-path-provisioner; do sleep 2; done'
+          # kubectl wait --all ERRORS IMMEDIATELY when the namespace holds no pods
+          # yet - "no matching resources found". That is not a timeout, so --timeout
+          # never applies and the step fails in seconds. The API answers /healthz
+          # before the static pod manifests have been read, so there is a window where
+          # the namespace is empty. Wait for a pod to EXIST before waiting for Ready.
+          timeout 120 bash -c 'until [ "$(kubectl get pods -n local-path-storage --no-headers 2>/dev/null | wc -l)" -gt 0 ]; do sleep 2; done'
           kubectl wait --for=condition=Ready pods --all -n local-path-storage --timeout=60s
           
           # Verify cluster
@@ -292,12 +304,24 @@ jobs:
           
           # Wait for all system pods to be ready
           echo "⏳ Waiting for system pods to be ready..."
+          # kubectl wait --all ERRORS IMMEDIATELY when the namespace holds no pods
+          # yet - "no matching resources found". That is not a timeout, so --timeout
+          # never applies and the step fails in seconds. The API answers /healthz
+          # before the static pod manifests have been read, so there is a window where
+          # the namespace is empty. Wait for a pod to EXIST before waiting for Ready.
+          timeout 120 bash -c 'until [ "$(kubectl get pods -n kube-system --no-headers 2>/dev/null | wc -l)" -gt 0 ]; do sleep 2; done'
           kubectl wait --for=condition=Ready pods --all -n kube-system --timeout=300s
           
           # Wait for local-path-storage namespace and pods to exist (may take a moment to be created)
           echo "⏳ Waiting for storage provisioner..."
           timeout 60 bash -c 'until kubectl get namespace local-path-storage >/dev/null 2>&1; do sleep 2; done'
           timeout 60 bash -c 'until kubectl get pods -n local-path-storage 2>/dev/null | grep -q local-path-provisioner; do sleep 2; done'
+          # kubectl wait --all ERRORS IMMEDIATELY when the namespace holds no pods
+          # yet - "no matching resources found". That is not a timeout, so --timeout
+          # never applies and the step fails in seconds. The API answers /healthz
+          # before the static pod manifests have been read, so there is a window where
+          # the namespace is empty. Wait for a pod to EXIST before waiting for Ready.
+          timeout 120 bash -c 'until [ "$(kubectl get pods -n local-path-storage --no-headers 2>/dev/null | wc -l)" -gt 0 ]; do sleep 2; done'
           kubectl wait --for=condition=Ready pods --all -n local-path-storage --timeout=60s
           
           # Verify cluster
