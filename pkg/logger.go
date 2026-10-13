@@ -24,6 +24,12 @@ import (
 const (
 	captureSyncInterval = time.Second
 	captureQueueSize    = 4096
+
+	// Default json_rotate_interval. An hour caps a capture file at ~3600
+	// fsyncs, and so ~3600 chunks on a chunked filesystem, which measured at
+	// about 80ms per sync - well inside the one-second interval. See
+	// Config.JsonRotateInterval for the curve this is derived from.
+	captureRotateInterval = time.Hour
 )
 
 // captureItem is one thing for the writer to do, and both kinds travel on the
@@ -38,6 +44,11 @@ type captureItem struct {
 	line string
 	ack  chan struct{} // non-nil: flush what is buffered, then close this
 }
+
+// sinkOpener starts the NEXT capture file. Rotation is the writer's, so it
+// happens between records: nothing is lost or duplicated across the boundary,
+// and FlushCapture keeps meaning "everything enqueued before me is on disk".
+type sinkOpener func() (captureSink, string, error)
 
 // captureSink is what the capture writer needs of its output. *os.File
 // satisfies it; a test can substitute something with a slow Sync, which is the
@@ -64,6 +75,12 @@ type Logger struct {
 	writerDone chan struct{}
 	syncEvery  bool // json_sync: "record"
 
+	// Rotation. openNext is nil when the capture cannot be rotated - a Logger
+	// built around a fixed sink, as the tests do - and the thresholds are then
+	// ignored rather than silently failing to act on them.
+	openNext      sinkOpener
+	rotateRecords int
+	rotateEvery   time.Duration
 }
 
 // startCaptureWriter wires up the writer. Split out of NewLogger so a test can
@@ -137,11 +154,49 @@ func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan captureItem) {
 		}
 	}
 
+	// Rotation state. Here rather than on the Logger because only this
+	// goroutine may touch it.
+	written := 0
+	lastRotate := time.Now()
+	rotate := func(why string) {
+		flush()
+		if c, ok := sink.(io.Closer); ok {
+			_ = c.Close()
+		}
+		next, name, err := l.openNext()
+		if err != nil {
+			// Keep writing to the file we have. A failed rotation must not end
+			// the capture: a file that keeps growing is bad, no file is worse.
+			klog.Errorf("[logger] could not start a new capture file, staying on the current one: %v", err)
+			written, lastRotate = 0, time.Now()
+			return
+		}
+		sink = next
+		bw.Reset(sink)
+		written, lastRotate = 0, time.Now()
+		klog.Infof("[logger] capture rotated (%s) -> %s", why, name)
+	}
+	due := func() string {
+		if l.openNext == nil || written == 0 {
+			return ""
+		}
+		if l.rotateRecords > 0 && written >= l.rotateRecords {
+			return fmt.Sprintf("%d records", written)
+		}
+		if l.rotateEvery > 0 && time.Since(lastRotate) >= l.rotateEvery {
+			return "interval"
+		}
+		return ""
+	}
+
 	for {
 		select {
 		case item, ok := <-lines:
 			if !ok {
 				flush()
+				if c, ok := sink.(io.Closer); ok {
+					_ = c.Close()
+				}
 				return
 			}
 			if item.ack != nil {
@@ -154,11 +209,21 @@ func (l *Logger) runCaptureWriter(sink captureSink, lines <-chan captureItem) {
 				continue
 			}
 			dirty = true
+			written++
 			if l.syncEvery {
 				flush()
 			}
+			if why := due(); why != "" {
+				rotate(why)
+			}
 		case <-t.C:
 			flush()
+			// due() returns "" when nothing has been written since the last
+			// rotation, so an idle collector does not leave a trail of empty
+			// files: with no writes there are no chunks to escape.
+			if why := due(); why != "" {
+				rotate(why)
+			}
 		}
 	}
 }
@@ -221,6 +286,41 @@ func NewLogger(config *Config) (*Logger, error) {
 			}
 
 			logger.jsonFile = jsonFile
+			// Each rotation opens a file named the way the first one is, so a
+			// reader concatenating events-*.json in name order gets them in
+			// order - which is what readers already do across a pod restart.
+			// The seconds-resolution timestamp can repeat, so a collision gets
+			// a suffix rather than overwriting a capture.
+			logger.openNext = func() (captureSink, string, error) {
+				base := fmt.Sprintf("%s/events-%s", logDir, time.Now().Format("20060102-150405"))
+				path := base + ".json"
+				for n := 2; ; n++ {
+					if _, err := os.Stat(path); os.IsNotExist(err) {
+						break
+					}
+					path = fmt.Sprintf("%s-%d.json", base, n)
+				}
+				f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+				if err != nil {
+					return nil, "", err
+				}
+				return f, path, nil
+			}
+			logger.rotateRecords = config.JsonRotateRecords
+			logger.rotateEvery = captureRotateInterval
+			if config.JsonRotateInterval != "" {
+				d, err := time.ParseDuration(config.JsonRotateInterval)
+				switch {
+				case err != nil:
+					klog.Errorf("[logger] json_rotate_interval %q is not a duration, using %v: %v",
+						config.JsonRotateInterval, captureRotateInterval, err)
+				case d < 0:
+					klog.Errorf("[logger] json_rotate_interval %q is negative, using %v",
+						config.JsonRotateInterval, captureRotateInterval)
+				default:
+					logger.rotateEvery = d // 0 disables it
+				}
+			}
 			logger.startCaptureWriter(jsonFile, config.JsonSync == "record")
 
 			// Log JSON file path to stdout for test identification
