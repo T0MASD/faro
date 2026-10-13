@@ -121,6 +121,28 @@ jobs:
         run: |
           # Enable IP forwarding (required for kinc networking)
           echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+          # Antrea's datapath is Open vSwitch, and a rootless nested container cannot
+          # load a kernel module - kinc's own tools say so and check for it
+          # (tools/deploy.sh and tools/join-host.sh), and kinc's CI host prep does
+          # exactly this (tools/ci-prepare-host.sh). Without them antrea-agent never
+          # starts, so /var/run/antrea/cni.sock is never created and EVERY pod sandbox
+          # fails with
+          #
+          #   plugin type="antrea" failed (add): dial unix /var/run/antrea/cni.sock:
+          #   connect: no such file or directory
+          #
+          # The control plane still comes up, which is what makes it confusing: the
+          # failure looks like a slow cluster rather than a missing module.
+          #
+          # A module compiled into the kernel never appears in /sys/module, so
+          # modules.builtin is consulted too.
+          sudo modprobe openvswitch || true
+          sudo modprobe geneve || true
+          for m in openvswitch geneve; do
+            if [ -d "/sys/module/$m" ]; then echo "  kernel module $m: loaded"
+            elif grep -qw "$m" "/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null; then echo "  kernel module $m: builtin"
+            else echo "::warning::kernel module $m is not available; Antrea will not start"; fi
+          done
           
           # Create volume for persistent data
           podman volume create kinc-var-data
@@ -311,6 +333,28 @@ jobs:
         run: |
           # Enable IP forwarding (required for kinc networking)
           echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+          # Antrea's datapath is Open vSwitch, and a rootless nested container cannot
+          # load a kernel module - kinc's own tools say so and check for it
+          # (tools/deploy.sh and tools/join-host.sh), and kinc's CI host prep does
+          # exactly this (tools/ci-prepare-host.sh). Without them antrea-agent never
+          # starts, so /var/run/antrea/cni.sock is never created and EVERY pod sandbox
+          # fails with
+          #
+          #   plugin type="antrea" failed (add): dial unix /var/run/antrea/cni.sock:
+          #   connect: no such file or directory
+          #
+          # The control plane still comes up, which is what makes it confusing: the
+          # failure looks like a slow cluster rather than a missing module.
+          #
+          # A module compiled into the kernel never appears in /sys/module, so
+          # modules.builtin is consulted too.
+          sudo modprobe openvswitch || true
+          sudo modprobe geneve || true
+          for m in openvswitch geneve; do
+            if [ -d "/sys/module/$m" ]; then echo "  kernel module $m: loaded"
+            elif grep -qw "$m" "/lib/modules/$(uname -r)/modules.builtin" 2>/dev/null; then echo "  kernel module $m: builtin"
+            else echo "::warning::kernel module $m is not available; Antrea will not start"; fi
+          done
           
           # Create volume for persistent data
           podman volume create kinc-var-data
