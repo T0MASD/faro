@@ -114,21 +114,27 @@ jobs:
           # Create volume for persistent data
           podman volume create kinc-var-data
           
+          # Antrea's datapath is Open vSwitch, and kinc v1.37 replaced kindnet with it.
+          # OVS needs more of the host than kindnet did. kinc's own quadlet
+          # (runtime/quadlet/kinc-control-plane.container) states the contract: the full
+          # capability set, /dev/fuse, /lib/modules, and a /run and /var that PROPAGATE
+          # mounts, so network namespaces created inside the cluster container are
+          # visible to the agent. A rootless nested container cannot load a kernel
+          # module itself, so /lib/modules has to come from the host.
+          #
+          # This block predates that change and met none of the last three, which is why
+          # every antrea-agent sat un-Ready until kubectl wait gave up.
           # Start kinc cluster with baked-in configuration (zero-config deployment)
           podman run -d --name kinc-cluster \
             --hostname kinc-control-plane \
             --cgroups=split \
-            --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \
-            --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \
-            --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \
-            --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \
-            --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \
-            --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \
+            --cap-add=all \
             --device /dev/fuse \
             --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \
-            --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run:rw,rshared,nosuid,nodev,tmpcopyup \
             --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \
-            --volume kinc-var-data:/var:rw \
+            --volume kinc-var-data:/var:rw,rshared \
+            --volume /lib/modules:/lib/modules:ro \
             --volume $HOME/.local/share/containers/storage:/root/.local/share/containers/storage:rw \
             --sysctl net.ipv6.conf.all.disable_ipv6=0 \
             --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \
@@ -270,21 +276,27 @@ jobs:
           # Create volume for persistent data
           podman volume create kinc-var-data
           
+          # Antrea's datapath is Open vSwitch, and kinc v1.37 replaced kindnet with it.
+          # OVS needs more of the host than kindnet did. kinc's own quadlet
+          # (runtime/quadlet/kinc-control-plane.container) states the contract: the full
+          # capability set, /dev/fuse, /lib/modules, and a /run and /var that PROPAGATE
+          # mounts, so network namespaces created inside the cluster container are
+          # visible to the agent. A rootless nested container cannot load a kernel
+          # module itself, so /lib/modules has to come from the host.
+          #
+          # This block predates that change and met none of the last three, which is why
+          # every antrea-agent sat un-Ready until kubectl wait gave up.
           # Start kinc cluster with baked-in configuration (zero-config deployment)
           podman run -d --name kinc-cluster \
             --hostname kinc-control-plane \
             --cgroups=split \
-            --cap-add=SYS_ADMIN --cap-add=SYS_RESOURCE --cap-add=NET_ADMIN \
-            --cap-add=SETPCAP --cap-add=NET_RAW --cap-add=SYS_PTRACE \
-            --cap-add=DAC_OVERRIDE --cap-add=CHOWN --cap-add=FOWNER \
-            --cap-add=FSETID --cap-add=KILL --cap-add=SETGID --cap-add=SETUID \
-            --cap-add=NET_BIND_SERVICE --cap-add=SYS_CHROOT --cap-add=SETFCAP \
-            --cap-add=DAC_READ_SEARCH --cap-add=AUDIT_WRITE \
+            --cap-add=all \
             --device /dev/fuse \
             --tmpfs /tmp:rw,rprivate,nosuid,nodev,tmpcopyup \
-            --tmpfs /run:rw,rprivate,nosuid,nodev,tmpcopyup \
+            --tmpfs /run:rw,rshared,nosuid,nodev,tmpcopyup \
             --tmpfs /run/lock:rw,rprivate,nosuid,nodev,tmpcopyup \
-            --volume kinc-var-data:/var:rw \
+            --volume kinc-var-data:/var:rw,rshared \
+            --volume /lib/modules:/lib/modules:ro \
             --volume $HOME/.local/share/containers/storage:/root/.local/share/containers/storage:rw \
             --sysctl net.ipv6.conf.all.disable_ipv6=0 \
             --sysctl net.ipv6.conf.all.keep_addr_on_down=1 \
