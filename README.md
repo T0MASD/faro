@@ -211,7 +211,14 @@ resources:
 ### Emitting object fields
 
 By default an event carries identity and metadata: `eventTime`, `eventType`,
-`gvr`, `namespace`, `name`, `uid`, and `labels`/`annotations` when present.
+`gvr`, `namespace`, `name`, `uid`, `resourceVersion`, and `labels`/`annotations`
+when present.
+
+`eventTime` is when *this collector* saw the change; `resourceVersion` is the
+version of *the change itself*. Two collectors watching one stream stamp one
+change with two different `eventTime`s and the same `resourceVersion`, which is
+what lets a capture be de-duplicated across collectors rather than guessed at
+from timestamps.
 That answers *what changed*, not *why* - a crash-looping pod produces Event
 objects whose `reason` and `message` explain it, and neither is metadata.
 
