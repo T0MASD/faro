@@ -90,7 +90,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version: '1.27'
           # Cache handled below. setup-go's own key is
           #   setup-go-${os}-${arch}-go-${version}-${hashFiles('**/go.mod')}
           # which is identical for every job in this workflow, so the parallel
@@ -302,7 +302,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: '1.24'
+          go-version: '1.27'
           # Cache handled below. setup-go's own key is
           #   setup-go-${os}-${arch}-go-${version}-${hashFiles('**/go.mod')}
           # which is identical for every job in this workflow, so the parallel
