@@ -664,15 +664,34 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 	// is in before it has set anything up, and reporting that as ready is how
 	// a rollout would stop the old collector before the new one watches
 	// anything.
-	controller.metrics.SetReadyCheck(func() (bool, string) {
-		want := controller.informersStarted.Load()
-		got := controller.informersSynced.Load()
-		detail := fmt.Sprintf("%d/%d informer caches synced", got, want)
-		return want > 0 && got >= want, detail
-	})
+	controller.metrics.SetReadyCheck(controller.readyForCapture)
 
 	logger.Debug("controller", "Created new controller instance")
 	return controller
+}
+
+// readyForCapture is what /ready answers with: whether this collector is
+// watching everything it was configured to watch.
+func (c *Controller) readyForCapture() (bool, string) {
+	want := c.informersStarted.Load()
+	got := c.informersSynced.Load()
+	detail := fmt.Sprintf("%d/%d informer caches synced", got, want)
+	// Both halves are needed, and the second one is not obvious.
+	//
+	// informersStarted is still CLIMBING while startConfigDrivenInformers
+	// works through the config, so "synced >= started" is true of every
+	// moment where the informers created so far happen to have caught up -
+	// 300/300 with 208 still to come reads exactly like 508/508. A probe
+	// answering Ready there would hand a rollout the green light against a
+	// collector watching a fraction of the cluster, which is the failure
+	// this probe exists to prevent, in a form that looks like success.
+	//
+	// IsReady is set once every informer has been CREATED, so it is what
+	// makes `want` final. Only then does comparing the two mean anything.
+	if !c.IsReady() {
+		return false, detail + " (still creating informers)"
+	}
+	return want > 0 && got >= want, detail
 }
 
 // AddEventHandler registers an event handler for matched events
