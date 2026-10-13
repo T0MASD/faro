@@ -11,14 +11,25 @@ permissions:
   packages: write
 
 env:
-  # Pinned kinc release. Bump deliberately; a floating tag makes a CI
-  # result depend on whichever kinc happened to be latest that day.
+  # The MINOR-level kinc tag, deliberately - not an exact build, and not
+  # :latest.
   #
-  # Keep this at the version the collector is actually DEPLOYED on. It sat at
-  # v1.36.4-0 while the estate ran v1.37.0-6, so faro was tested against an
-  # older Kubernetes minor than it shipped into - which is the one gap a
-  # pinned tag is supposed to close rather than create.
-  KINC_IMAGE: ghcr.io/t0masd/kinc:v1.37.0-6
+  # An exact pin rots. This sat at v1.36.4-0 while the estate ran v1.37.0-6,
+  # so faro was tested against an older Kubernetes minor than it shipped into,
+  # and nobody noticed until someone went looking - which is the one gap a pin
+  # is supposed to close rather than create.
+  #
+  # :latest is worse in the other direction: it crosses Kubernetes MINORS
+  # without warning. v1.36 -> v1.37 replaced kindnet with Antrea, whose OVS
+  # datapath needs a different host contract, and on :latest that lands in CI
+  # on an ordinary afternoon and turns every open pull request red for reasons
+  # that have nothing to do with any of them.
+  #
+  # v1.37-latest tracks every kinc patch and rebuild automatically - v1.37.1-0,
+  # v1.37.1-1, v1.37.2-0 all arrive with nothing to bump - while crossing a
+  # minor stays a one-line change somebody chooses to make. Which is right: a
+  # minor bump is a real event and deserves a pull request of its own.
+  KINC_IMAGE: ghcr.io/t0masd/kinc:v1.37-latest
 
 jobs:
   release:
