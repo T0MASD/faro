@@ -316,16 +316,17 @@ func eventFromJSON(je JSONEvent, raw []byte) Event {
 		t = time.Time{}
 	}
 	return Event{
-		EventTime:   t,
-		EventType:   je.EventType,
-		GVR:         je.GVR,
-		Namespace:   je.Namespace,
-		Name:        je.Name,
-		UID:         je.UID,
-		Labels:      je.Labels,
-		Annotations: je.Annotations,
-		Fields:      je.Fields,
-		JSON:        raw,
+		EventTime:       t,
+		EventType:       je.EventType,
+		GVR:             je.GVR,
+		Namespace:       je.Namespace,
+		Name:            je.Name,
+		UID:             je.UID,
+		ResourceVersion: je.ResourceVersion,
+		Labels:          je.Labels,
+		Annotations:     je.Annotations,
+		Fields:          je.Fields,
+		JSON:            raw,
 	}
 }
 
