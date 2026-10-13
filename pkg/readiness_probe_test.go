@@ -66,3 +66,46 @@ func TestReadyReportsSyncProgress(t *testing.T) {
 		t.Errorf("body = %q, want the sync progress - otherwise a stalled rollout says nothing about what it is waiting for", w.Body.String())
 	}
 }
+
+// Ready must not fire during the ramp-up, when the counters are briefly equal.
+//
+// informersStarted climbs while startConfigDrivenInformers works through the
+// config, so "synced >= started" is true at every moment the informers created
+// so far have caught up. 300/300 with 208 still to come is indistinguishable
+// from 508/508 by the counters alone - and answering Ready there retires a
+// working collector in favour of one watching a fraction of the cluster, which
+// is this probe's failure mode disguised as success.
+func TestReadyForCaptureWaitsForEveryInformerToBeCreated(t *testing.T) {
+	dir := t.TempDir()
+	logger, err := NewLogger(&Config{OutputDir: dir, LogLevel: "info"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Shutdown()
+	c := &Controller{logger: logger}
+
+	// Mid ramp-up: 300 created, all 300 synced, more still to come.
+	c.informersStarted.Store(300)
+	c.informersSynced.Store(300)
+	if ready, detail := c.readyForCapture(); ready {
+		t.Fatalf("ready during ramp-up (%s); the counters match but informers are still being created", detail)
+	}
+
+	// Creation finished. Now the counters mean something - but not all synced.
+	c.readyMu.Lock()
+	c.isReady = true
+	c.readyMu.Unlock()
+	c.informersStarted.Store(508)
+	if ready, _ := c.readyForCapture(); ready {
+		t.Fatal("ready with 300/508 caches synced")
+	}
+
+	c.informersSynced.Store(508)
+	ready, detail := c.readyForCapture()
+	if !ready {
+		t.Fatalf("not ready at 508/508: %s", detail)
+	}
+	if detail != "508/508 informer caches synced" {
+		t.Errorf("detail = %q, want the sync progress", detail)
+	}
+}
