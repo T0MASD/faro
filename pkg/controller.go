@@ -18,6 +18,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -364,6 +365,47 @@ func (c *Controller) emitWatchFailed(gvr, namespace string, werr error) {
 	b, err := json.Marshal(ev)
 	if err != nil {
 		c.logger.Warning("controller", fmt.Sprintf("Failed to marshal watch failure for %s: %v", gvr, err))
+		return
+	}
+	c.logger.Debug("controller", string(b))
+}
+
+// emitWatchRestarted records that an informer LOST its watch and had to re-list.
+//
+// This is the other half of emitWatchFailed, and the half that was missing.
+// SetWatchErrorHandler only fires when ESTABLISHING the list/watch fails; a
+// watch that is established and then dies mid-stream is handled inside
+// client-go's reflector, which logs "watch ended with error" and silently
+// re-lists. Nothing reaches faro, so the capture recorded failures during
+// bring-up and none at all once the informers were synced - measured at 400
+// broken watches logged and 0 recorded, across two control-plane kills.
+//
+// The re-list IS the evidence. The reflector calls ListFunc again only when it
+// has lost its watch and is recovering, so counting those calls needs no stream
+// wrapping and no extra goroutine per informer - and there are hundreds of
+// informers. It also records the right quantity: 400 log lines are retries of a
+// far smaller number of real breaks, while what a consumer needs is "this
+// informer lost continuity here", which is one event per re-list.
+//
+// Why this matters beyond tidiness: between the watch dying and the re-list
+// completing, changes are missed, and the re-list returns CURRENT STATE rather
+// than the history - so an object created and deleted inside that window is
+// never recorded at all. Without this event the capture is simply quiet there,
+// and quiet is indistinguishable from "nothing happened".
+func (c *Controller) emitWatchRestarted(gvr, namespace string, relist int64) {
+	ev := JSONEvent{
+		EventTime: time.Now().UTC().Format(time.RFC3339Nano),
+		EventType: "WATCH_RESTARTED",
+		GVR:       gvr,
+		Namespace: namespace,
+		Fields: map[string]interface{}{
+			"relist": relist,
+			"reason": "the watch was lost; the informer is re-listing and events in the gap are not recorded",
+		},
+	}
+	b, err := json.Marshal(ev)
+	if err != nil {
+		c.logger.Warning("controller", fmt.Sprintf("Failed to marshal watch restart for %s: %v", gvr, err))
 		return
 	}
 	c.logger.Debug("controller", string(b))
@@ -1483,18 +1525,47 @@ func (c *Controller) createNamespaceSpecificInformer(config InformerConfig, name
 		}
 	}
 
-	// Create dynamic informer factory with namespace-specific filtering - pure event-driven, no resync needed
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
-		c.client.Dynamic, 0, namespace, tweakListOptions)
+	// The ListerWatcher is BUILT HERE rather than taken from
+	// dynamicinformer.NewFilteredDynamicSharedInformerFactory, which is what
+	// this used. The factory's is client-go's own, and a watch that dies
+	// mid-stream is then entirely invisible to faro: the reflector logs
+	// "watch ended with error" and re-lists, and SetWatchErrorHandler is only
+	// called when ESTABLISHING the list/watch fails, never for a stream that
+	// was working and stopped.
+	//
+	// Owning it costs nothing - this is what the factory constructs anyway -
+	// and makes the re-list observable, which is the one signal that says the
+	// watch broke. See emitWatchRestarted.
+	var relists atomic.Int64
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			if tweakListOptions != nil {
+				tweakListOptions(&options)
+			}
+			// Every call after the first is a recovery, not a start: the
+			// reflector re-lists only when it has lost its watch.
+			if n := relists.Add(1); n > 1 {
+				c.emitWatchRestarted(config.GVRString, namespace, n-1)
+			}
+			return c.client.Dynamic.Resource(config.GVR).Namespace(namespace).List(c.ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			if tweakListOptions != nil {
+				tweakListOptions(&options)
+			}
+			return c.client.Dynamic.Resource(config.GVR).Namespace(namespace).Watch(c.ctx, options)
+		},
+	}
 
-	// Get informer
-	informer := factory.ForResource(config.GVR).Informer()
+	// Resync 0: purely event-driven, as before.
+	informer := cache.NewSharedIndexInformer(lw, &unstructured.Unstructured{}, 0,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	if informer == nil {
 		return nil, fmt.Errorf("failed to create namespace-specific informer for %s", config.GVRString)
 	}
 
 	// Store the lister for later retrieval by workers
-	lister := factory.ForResource(config.GVR).Lister()
+	lister := cache.NewGenericLister(informer.GetIndexer(), config.GVR.GroupResource())
 	// CRITICAL FIX: Use namespace-specific key to avoid overwriting listers from other namespaces
 	listerKey := config.GVRString + "@" + namespace
 	c.listers.Store(listerKey, lister)
