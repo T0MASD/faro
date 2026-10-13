@@ -49,6 +49,21 @@ CREATE INDEX IF NOT EXISTS ix_uid    ON events(uid, ts);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 `
 
+func init() {
+	RegisterSink("sqlite", func(config *Config, l *Logger) (Sink, error) {
+		path := sqliteTarget(config)
+		if path == "" {
+			return nil, nil
+		}
+		s, err := newSQLiteSink(path, os.Getenv("FARO_NODE"))
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("FARO_SQLITE_FILE: %s\n", path)
+		return s, nil
+	})
+}
+
 // sqliteSink writes the capture into a SQLite database.
 //
 // One database, reopened in place across restarts rather than a new file per
@@ -172,4 +187,20 @@ func jsonOrNull(v interface{}) interface{} {
 		return nil
 	}
 	return string(b)
+}
+
+// sqliteTarget resolves where the SQLite capture goes. "off" disables it;
+// empty means the default beside the other capture files.
+func sqliteTarget(config *Config) string {
+	switch config.SqlitePath {
+	case "off":
+		return ""
+	case "":
+		if d := config.GetLogDir(); d != "" {
+			return d + "/capture.db"
+		}
+		return ""
+	default:
+		return config.SqlitePath
+	}
 }
