@@ -54,6 +54,21 @@ const (
 	postgresInterval = time.Second
 )
 
+func init() {
+	RegisterSink("postgres", func(config *Config, l *Logger) (Sink, error) {
+		dsn := postgresDSN(config)
+		if dsn == "" {
+			return nil, nil
+		}
+		s, err := newPostgresSink(dsn, os.Getenv("FARO_NODE"))
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("FARO_POSTGRES: attached")
+		return s, nil
+	})
+}
+
 // postgresSink sends the capture to Postgres.
 //
 // Unlike the file and SQLite sinks it is ASYNCHRONOUS INTERNALLY, and that is
@@ -227,3 +242,26 @@ func (p *postgresSink) insert(batch []Event) error {
 
 // openForTest gives the tests a plain connection to verify what landed.
 func openForTest(dsn string) (*sql.DB, error) { return sql.Open("pgx", dsn) }
+
+// postgresDSN reads the connection string from where it is kept, never from
+// the config itself. See Config.PostgresDSNFile.
+//
+// The file's whole contents are the DSN, trimmed: that is what a Secret volume
+// and a file on a node both look like. An unreadable path is reported and
+// skipped rather than fatal - Postgres is the optional destination, and losing
+// it must not cost the capture.
+func postgresDSN(config *Config) string {
+	if v := strings.TrimSpace(os.Getenv("FARO_POSTGRES_DSN")); v != "" {
+		return v
+	}
+	if config.PostgresDSNFile == "" {
+		return ""
+	}
+	b, err := os.ReadFile(config.PostgresDSNFile)
+	if err != nil {
+		klog.Errorf("[logger] postgres_dsn_file %s could not be read, continuing without Postgres: %v",
+			config.PostgresDSNFile, err)
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}

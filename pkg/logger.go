@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -81,9 +80,6 @@ type Logger struct {
 	openNext      sinkOpener
 	rotateRecords int
 	rotateEvery   time.Duration
-
-	// Prepared by NewLogger before the destinations are started together.
-	pendingFileSink Sink
 }
 
 // startCaptureWriter wires up the writer around a single file sink. Split out
@@ -91,13 +87,6 @@ type Logger struct {
 func (l *Logger) startCaptureWriter(sink captureSink, syncEvery bool) {
 	l.syncEvery = syncEvery
 	l.startSinks(newFileSink(sink, syncEvery, l.openNext, l.rotateRecords, l.rotateEvery))
-}
-
-// fileSinkFor prepares the file sink without starting the writer, so NewLogger
-// can collect every destination first and start them together.
-func (l *Logger) fileSinkFor(sink captureSink, syncEvery bool) {
-	l.syncEvery = syncEvery
-	l.pendingFileSink = newFileSink(sink, syncEvery, l.openNext, l.rotateRecords, l.rotateEvery)
 }
 
 // startSinks runs the writer over the given destinations. The capture goes to
@@ -251,130 +240,15 @@ func NewLogger(config *Config) (*Logger, error) {
 		// Log file path to stdout for test identification
 		fmt.Printf("FARO_LOG_FILE: %s\n", logPath)
 
-		// Handle JSON export separately if requested
-		if config.JsonExport {
-			jsonPath := fmt.Sprintf("%s/events-%s.json", logDir, timestamp)
-			jsonFile, err := os.OpenFile(jsonPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create JSON log file: %v", err)
-			}
-
-			logger.jsonFile = jsonFile
-			// Each rotation opens a file named the way the first one is, so a
-			// reader concatenating events-*.json in name order gets them in
-			// order - which is what readers already do across a pod restart.
-			// The seconds-resolution timestamp can repeat, so a collision gets
-			// a suffix rather than overwriting a capture.
-			logger.openNext = func() (captureSink, string, error) {
-				base := fmt.Sprintf("%s/events-%s", logDir, time.Now().Format("20060102-150405"))
-				path := base + ".json"
-				for n := 2; ; n++ {
-					if _, err := os.Stat(path); os.IsNotExist(err) {
-						break
-					}
-					path = fmt.Sprintf("%s-%d.json", base, n)
-				}
-				f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-				if err != nil {
-					return nil, "", err
-				}
-				return f, path, nil
-			}
-			logger.rotateRecords = config.JsonRotateRecords
-			logger.rotateEvery = captureRotateInterval
-			if config.JsonRotateInterval != "" {
-				d, err := time.ParseDuration(config.JsonRotateInterval)
-				switch {
-				case err != nil:
-					klog.Errorf("[logger] json_rotate_interval %q is not a duration, using %v: %v",
-						config.JsonRotateInterval, captureRotateInterval, err)
-				case d < 0:
-					klog.Errorf("[logger] json_rotate_interval %q is negative, using %v",
-						config.JsonRotateInterval, captureRotateInterval)
-				default:
-					logger.rotateEvery = d // 0 disables it
-				}
-			}
-			logger.fileSinkFor(jsonFile, config.JsonSync == "record")
-
-			// Log JSON file path to stdout for test identification
-			fmt.Printf("FARO_JSON_FILE: %s\n", jsonPath)
-		}
 	}
 
-	// SQLite is the default destination; the JSON file is opt-in alongside it.
-	//
-	// There is always a queryable capture, which is what lets the analysis side
-	// open what faro wrote instead of parsing it back out of a text file.
-	var sinks []Sink
-	if logger.pendingFileSink != nil {
-		sinks = append(sinks, logger.pendingFileSink)
-	}
-	if p := sqliteTarget(config); p != "" {
-		s, err := newSQLiteSink(p, os.Getenv("FARO_NODE"))
-		if err != nil {
-			// A capture that cannot open its database is worth saying loudly,
-			// and worth continuing without: the other destinations still work,
-			// and no capture at all is the worse outcome.
-			klog.Errorf("[logger] SQLite capture at %s could not be opened, continuing without it: %v", p, err)
-		} else {
-			sinks = append(sinks, s)
-			fmt.Printf("FARO_SQLITE_FILE: %s\n", p)
-		}
-	}
-	if dsn := postgresDSN(config); dsn != "" {
-		ps, err := newPostgresSink(dsn, os.Getenv("FARO_NODE"))
-		if err != nil {
-			klog.Errorf("[logger] Postgres capture could not be set up, continuing without it: %v", err)
-		} else {
-			sinks = append(sinks, ps)
-			fmt.Println("FARO_POSTGRES: attached")
-		}
-	}
-	if len(sinks) > 0 {
+	// Every destination comes from the registry, so NewLogger names none of
+	// them and adding one does not touch this function. See RegisterSink.
+	if sinks := buildSinks(config, logger); len(sinks) > 0 {
 		logger.startSinks(sinks...)
 	}
 
 	return logger, nil
-}
-
-// postgresDSN reads the connection string from where it is kept, never from
-// the config itself. See Config.PostgresDSNFile.
-//
-// The file's whole contents are the DSN, trimmed: that is what a Secret volume
-// and a file on a node both look like. An unreadable path is reported and
-// skipped rather than fatal - Postgres is the optional destination, and losing
-// it must not cost the capture.
-func postgresDSN(config *Config) string {
-	if v := strings.TrimSpace(os.Getenv("FARO_POSTGRES_DSN")); v != "" {
-		return v
-	}
-	if config.PostgresDSNFile == "" {
-		return ""
-	}
-	b, err := os.ReadFile(config.PostgresDSNFile)
-	if err != nil {
-		klog.Errorf("[logger] postgres_dsn_file %s could not be read, continuing without Postgres: %v",
-			config.PostgresDSNFile, err)
-		return ""
-	}
-	return strings.TrimSpace(string(b))
-}
-
-// sqliteTarget resolves where the SQLite capture goes. "off" disables it;
-// empty means the default beside the other capture files.
-func sqliteTarget(config *Config) string {
-	switch config.SqlitePath {
-	case "off":
-		return ""
-	case "":
-		if d := config.GetLogDir(); d != "" {
-			return d + "/capture.db"
-		}
-		return ""
-	default:
-		return config.SqlitePath
-	}
 }
 
 // SetConsoleEnabled enables or disables console output
@@ -542,3 +416,7 @@ func (l *Logger) Shutdown() {
 
 	klog.Flush()
 }
+
+// klogErrorf is a seam so the registry can report without importing klog into
+// a file that otherwise needs nothing from it.
+func klogErrorf(format string, args ...interface{}) { klog.Errorf(format, args...) }
