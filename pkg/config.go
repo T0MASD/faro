@@ -114,8 +114,15 @@ type Config struct {
 	JsonRotateInterval string `yaml:"json_rotate_interval,omitempty"` // "" = 1h, "0" = never
 	JsonRotateRecords  int    `yaml:"json_rotate_records,omitempty"`  // 0 = never
 
-	// Where the SQLite capture goes. "" uses <output_dir>/logs/capture.db,
-	// which is the DEFAULT: there is always a queryable capture.
+	// Where the SQLite capture goes. "auto" uses <output_dir>/logs/capture.db,
+	// which is the DEFAULT for the faro binary: LoadConfig turns "" into
+	// "auto", so there is always a queryable capture.
+	//
+	// For a Config built in code - a library consumer - "" means no database.
+	// A program that embeds faro to react to changes asked for handlers, not
+	// for a capture, and it used to get one anyway the moment it set
+	// output_dir for its logs: a database growing by every event, written by
+	// a process that never reads it. It asks with "auto" or a path.
 	//
 	// One database, reopened in place across restarts rather than a new file
 	// per start. Safe because the Deployment runs Recreate so one collector
@@ -170,6 +177,14 @@ type Config struct {
 	Resources  []ResourceConfig  `yaml:"resources,omitempty"`  // Simple resource format
 }
 
+// applyBinaryDefaults sets what the faro binary has and a Config built in code
+// does not: the binary keeps a capture unless told otherwise. See SqlitePath.
+func applyBinaryDefaults(config *Config) {
+	if config.SqlitePath == "" {
+		config.SqlitePath = SqliteAuto
+	}
+}
+
 // LoadConfig loads configuration from YAML file or command line arguments
 func LoadConfig() (*Config, error) {
 	return LoadConfigWithVersion("dev", "none", "unknown", "unknown")
@@ -217,6 +232,8 @@ func LoadConfigWithVersion(version, commit, date, builtBy string) (*Config, erro
 			return nil, fmt.Errorf("failed to load config from YAML: %w", err)
 		}
 	}
+
+	applyBinaryDefaults(config)
 
 	// Validate configuration
 	if err := config.Validate(); err != nil {

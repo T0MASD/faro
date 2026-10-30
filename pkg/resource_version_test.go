@@ -297,7 +297,7 @@ func TestSQLiteSinkOpensACaptureFromBeforeThisColumn(t *testing.T) {
 // sharing an RWX volume. They get a file each, and the capture is reassembled
 // with ingest-capture.py's merge, which the unique index makes exact.
 func TestSQLitePathIsPerCollectorUnderTheDeployment(t *testing.T) {
-	cfg := &Config{OutputDir: t.TempDir()}
+	cfg := &Config{OutputDir: t.TempDir(), SqlitePath: SqliteAuto}
 
 	t.Setenv("FARO_POD_NAME", "")
 	if got := sqliteTarget(cfg); !strings.HasSuffix(got, "/capture.db") {
