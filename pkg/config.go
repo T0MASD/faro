@@ -156,6 +156,15 @@ type Config struct {
 	// the default, 3.
 	Workers int `yaml:"workers,omitempty"`
 
+	// How often every watched object is handed to the handlers again as a
+	// RESYNC, in seconds. 0, the default, never.
+	//
+	// For a consumer that reconciles: a change it failed to act on, or acted
+	// on somewhere that has since forgotten it, comes round again without the
+	// object having to change. A RESYNC is not a change, so it is never
+	// written to the capture.
+	ResyncSec int `yaml:"resync_sec,omitempty"`
+
 	// Simple configuration formats
 	Namespaces []NamespaceConfig `yaml:"namespaces,omitempty"` // Simple namespace format
 	Resources  []ResourceConfig  `yaml:"resources,omitempty"`  // Simple resource format

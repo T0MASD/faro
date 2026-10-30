@@ -28,11 +28,21 @@ var testConfigMaps = schema.GroupVersionResource{Version: "v1", Resource: "confi
 // cluster. Every handler given is registered before Start.
 func startWithFakeAPI(t *testing.T, cfg *Config, handlers ...EventHandler) (*fakedynamic.FakeDynamicClient, *Controller) {
 	t.Helper()
-	dyn := fakedynamic.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
+	return startOnFakeAPI(t, newFakeAPI(), cfg, handlers...)
+}
+
+// newFakeAPI is the fake API alone, for a test that installs reactors - a list
+// that hangs, a watch that expires - before the controller starts.
+func newFakeAPI() *fakedynamic.FakeDynamicClient {
+	return fakedynamic.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(), map[schema.GroupVersionResource]string{
 		testConfigMaps: "ConfigMapList",
 		{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}: "CustomResourceDefinitionList",
 		{Group: "apiregistration.k8s.io", Version: "v1", Resource: "apiservices"}:             "APIServiceList",
 	})
+}
+
+func startOnFakeAPI(t *testing.T, dyn *fakedynamic.FakeDynamicClient, cfg *Config, handlers ...EventHandler) (*fakedynamic.FakeDynamicClient, *Controller) {
+	t.Helper()
 	disc := &fakediscovery.FakeDiscovery{Fake: &clienttesting.Fake{}}
 	disc.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{
 		{Name: "configmaps", Namespaced: true, Kind: "ConfigMap", Verbs: []string{"list", "watch", "get"}}}}}

@@ -557,11 +557,16 @@ func (c *Controller) createStateTrackingEventHandlers(tracker *InformerStateTrac
 				uid := string(unstructured.GetUID())
 				tracker.UIDCache.Store(key, uid)
 
+				eventType := "UPDATED"
+				if isResync(oldObj, unstructured) {
+					eventType = "RESYNC"
+				}
+
 				// Update metrics
-				c.metrics.OnEventProcessed(config.GVRString, "UPDATED", unstructured.GetNamespace())
+				c.metrics.OnEventProcessed(config.GVRString, eventType, unstructured.GetNamespace())
 
 				// Call original handler
-				config.HandlerFunc("UPDATED", unstructured)
+				config.HandlerFunc(eventType, unstructured)
 			} else {
 				c.logger.Error("controller", fmt.Sprintf("Received unexpected object type in UpdateFunc for %s", config.GVRString))
 			}
@@ -616,6 +621,19 @@ func (c *Controller) createStateTrackingEventHandlers(tracker *InformerStateTrac
 	}
 }
 
+// isResync says whether an update is the informer handing over an object it
+// already had, unchanged: a periodic resync, or a re-list after a lost watch
+// finding the object as it was. Both carry the same resourceVersion as the
+// cached copy; a real change never does.
+func isResync(oldObj interface{}, newObj *unstructured.Unstructured) bool {
+	old, ok := oldObj.(*unstructured.Unstructured)
+	if !ok {
+		return false
+	}
+	rv := newObj.GetResourceVersion()
+	return rv != "" && rv == old.GetResourceVersion()
+}
+
 // InformerConfig holds configuration for creating a generic informer
 type InformerConfig struct {
 	GVR         schema.GroupVersionResource
@@ -661,6 +679,7 @@ type Controller struct {
 	cancellers      sync.Map // map[string]context.CancelFunc for informer shutdown
 	activeInformers sync.Map // map[string]bool for tracking active informers by GVR
 	listers         sync.Map // map[string]cache.GenericLister for object retrieval
+	synced          sync.Map // map[string]cache.InformerSynced, same keys as listers
 	// Informers created vs informers whose cache has actually synced. These are
 	// not the same number for minutes on a large config, and the difference is
 	// the part of the cluster Faro cannot yet see.
@@ -1580,8 +1599,11 @@ func (c *Controller) createNamespaceSpecificInformer(config InformerConfig, name
 		},
 	}
 
-	// Resync 0: purely event-driven, as before.
-	informer := cache.NewSharedIndexInformer(lw, &unstructured.Unstructured{}, 0,
+	// Resync 0 unless asked for: purely event-driven, as before. With
+	// resync_sec the informer hands every object over again on that period,
+	// as RESYNC.
+	informer := cache.NewSharedIndexInformer(lw, &unstructured.Unstructured{},
+		time.Duration(c.config.ResyncSec)*time.Second,
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc})
 	if informer == nil {
 		return nil, fmt.Errorf("failed to create namespace-specific informer for %s", config.GVRString)
@@ -1592,6 +1614,7 @@ func (c *Controller) createNamespaceSpecificInformer(config InformerConfig, name
 	// CRITICAL FIX: Use namespace-specific key to avoid overwriting listers from other namespaces
 	listerKey := config.GVRString + "@" + namespace
 	c.listers.Store(listerKey, lister)
+	c.synced.Store(listerKey, cache.InformerSynced(informer.HasSynced))
 
 	// Create state tracker
 	tracker := &InformerStateTracker{
@@ -1912,6 +1935,87 @@ func (c *Controller) handleCustomResourceEvent(eventType string, obj *unstructur
 	}
 
 	// Future: Add sophisticated event processing, correlation, file output, etc.
+}
+
+// ErrNotWatched is returned by Get and List for a GVR and namespace this
+// controller has no informer for.
+var ErrNotWatched = errors.New("not watched")
+
+// ErrNotSynced is returned by Get and List while the informer's first list is
+// still in progress - or before its informer exists at all, while it waits for
+// the type to be served: its cache holds part of the answer, or none, and
+// either would read exactly like the whole.
+var ErrNotSynced = errors.New("informer cache not synced yet")
+
+// List returns every object the informer for gvr in namespace holds now - the
+// current state, level-triggered, from the cache rather than the API. Use ""
+// for a cluster-scoped type. The objects are copies: changing them changes
+// nothing.
+func (c *Controller) List(gvr, namespace string) ([]*unstructured.Unstructured, error) {
+	lister, err := c.syncedLister(gvr, namespace)
+	if err != nil {
+		return nil, err
+	}
+	objs, err := lister.List(labels.Everything())
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*unstructured.Unstructured, 0, len(objs))
+	for _, o := range objs {
+		if u, ok := o.(*unstructured.Unstructured); ok {
+			out = append(out, u.DeepCopy())
+		}
+	}
+	return out, nil
+}
+
+// Get returns one object from the cache by its key, "namespace/name" or, for a
+// cluster-scoped type, "name". A missing object is (nil, nil): the cache is
+// synced and the object is not in it.
+func (c *Controller) Get(gvr, key string) (*unstructured.Unstructured, error) {
+	namespace, _, err := cache.SplitMetaNamespaceKey(key)
+	if err != nil {
+		return nil, err
+	}
+	lister, err := c.syncedLister(gvr, namespace)
+	if err != nil {
+		return nil, err
+	}
+	o, err := lister.Get(key)
+	if apierrors.IsNotFound(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	u, ok := o.(*unstructured.Unstructured)
+	if !ok {
+		return nil, fmt.Errorf("unexpected %T in cache for %s %s", o, gvr, key)
+	}
+	return u.DeepCopy(), nil
+}
+
+func (c *Controller) syncedLister(gvr, namespace string) (cache.GenericLister, error) {
+	k := gvr + "@" + namespace
+	l, ok := c.listers.Load(k)
+	if !ok {
+		// Configured, but its informer is not created yet: it waits for the
+		// type to be served (a CRD not installed yet, an aggregated API still
+		// starting), and only then exists to have a lister. That is "not
+		// known yet", not "not asked for" - a consumer must wait, not give up.
+		informerKey := k
+		if namespace == "" {
+			informerKey = gvr + "@cluster-scoped"
+		}
+		if _, configured := c.activeInformers.Load(informerKey); configured {
+			return nil, fmt.Errorf("%s in %q: %w", gvr, namespace, ErrNotSynced)
+		}
+		return nil, fmt.Errorf("%s in %q: %w", gvr, namespace, ErrNotWatched)
+	}
+	if hs, ok := c.synced.Load(k); ok && !hs.(cache.InformerSynced)() {
+		return nil, fmt.Errorf("%s in %q: %w", gvr, namespace, ErrNotSynced)
+	}
+	return l.(cache.GenericLister), nil
 }
 
 // GetActiveInformers returns the count of active informers
@@ -2287,8 +2391,9 @@ func (c *Controller) processObject(workItem *WorkItem, obj *unstructured.Unstruc
 
 		// The capture records the event once, before any handler sees it: a
 		// handler that fails and makes this event retry must not make the
-		// capture say it happened twice.
-		if workItem.captured {
+		// capture say it happened twice. A RESYNC is not a change and is
+		// never recorded at all.
+		if workItem.captured || eventType == "RESYNC" {
 			return c.deliver(workItem, matchedEvent)
 		}
 		workItem.captured = true
