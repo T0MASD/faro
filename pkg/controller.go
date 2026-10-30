@@ -101,6 +101,12 @@ type WorkItem struct {
 	// drained. The comment on logJSONEvent already claimed this was the
 	// observation rather than the processing; now it is.
 	ObservedAt time.Time
+
+	// Delivery state, kept across retries of this one event so a retry does
+	// neither of the things already done: the capture records the event once,
+	// and a handler that already accepted it is not called with it again.
+	captured bool
+	handled  int // handlers that have accepted this event, in registration order
 }
 
 // MatchedEvent represents a filtered event that matched configuration criteria
@@ -631,9 +637,17 @@ type Controller struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	// Work queue for processing events asynchronously
+	// Work queue for processing events asynchronously.
+	//
+	// The queue holds OBJECT keys (see queueKey), not events. client-go's
+	// queue never hands one key to two workers at once and collapses a key
+	// added while it waits, so keying it by object is what makes delivery
+	// for that object sequential. The events themselves wait in pending, in
+	// the order they were observed.
 	workQueue workqueue.RateLimitingInterface
 	workers   int // Number of worker goroutines
+	pendingMu sync.Mutex
+	pending   map[string][]*WorkItem
 
 	// API discovery results
 	discoveredResources   map[string]*ResourceInfo // map[GVR] -> ResourceInfo
@@ -690,7 +704,8 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 		ctx:                 ctx,
 		cancel:              cancel,
 		workQueue:           workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "faro-controller"),
-		workers:             3, // Start with 3 worker goroutines
+		workers:             workersOrDefault(config.Workers),
+		pending:             make(map[string][]*WorkItem),
 		discoveredResources: make(map[string]*ResourceInfo),
 		eventHandlers:       make([]EventHandler, 0),
 		statusHandlers:      make([]InformerStatusHandler, 0),
@@ -710,6 +725,14 @@ func NewController(client *KubernetesClient, logger *Logger, config *Config) *Co
 
 	logger.Debug("controller", "Created new controller instance")
 	return controller
+}
+
+// workersOrDefault is the configured worker count, or 3.
+func workersOrDefault(n int) int {
+	if n > 0 {
+		return n
+	}
+	return 3
 }
 
 // readyForCapture is what /ready answers with: whether this collector is
@@ -1958,36 +1981,125 @@ func (c *Controller) runWorker() {
 	}
 }
 
-// processNextWorkItem will read a single work item off the workqueue and process it
+// maxDeliveryRetries is how many times one event is retried for a handler
+// that keeps failing, before it is given up on with a Warning. Retries back off
+// through the queue's rate limiter (5ms doubling), so five cover well under a
+// second: long enough to ride out a blip, short enough that a handler that is
+// down for good does not hold every later event for its object behind it.
+const maxDeliveryRetries = 5
+
+// queueKey is the work queue key for an object: one per GVR and object, so
+// events for different objects run in parallel and events for one never do.
+func queueKey(gvr, key string) string {
+	return gvr + "@" + key
+}
+
+// enqueue appends an observed event to its object's pending events and makes
+// sure the object is queued.
+func (c *Controller) enqueue(item *WorkItem) {
+	k := queueKey(item.GVRString, item.Key)
+	c.pendingMu.Lock()
+	if c.pending == nil {
+		c.pending = make(map[string][]*WorkItem)
+	}
+	c.pending[k] = append(c.pending[k], item)
+	c.pendingMu.Unlock()
+	c.workQueue.Add(k)
+}
+
+// nextPending is the oldest undelivered event for an object, or nil.
+func (c *Controller) nextPending(k string) *WorkItem {
+	c.pendingMu.Lock()
+	defer c.pendingMu.Unlock()
+	if q := c.pending[k]; len(q) > 0 {
+		return q[0]
+	}
+	return nil
+}
+
+// donePending drops the oldest event for an object, once it is delivered or
+// given up on.
+func (c *Controller) donePending(k string) {
+	c.pendingMu.Lock()
+	defer c.pendingMu.Unlock()
+	if q := c.pending[k]; len(q) > 1 {
+		c.pending[k] = q[1:]
+	} else {
+		delete(c.pending, k)
+	}
+}
+
+// processNextWorkItem takes one object off the queue and delivers its pending
+// events, oldest first.
+//
+// Each event used to be queued as its own *WorkItem and every handler was then
+// called on a goroutine of its own, so nothing ordered two events for one
+// object: three workers could hold two of them at once, and even one worker
+// raced its own handler calls. Measured with a handler that takes 1-5ms (a
+// POST to a downstream service): 20 objects updated 30 times each reached the
+// handler with up to 22 pairs inverted per run, and an error from the handler
+// was logged and the event never delivered again. A consumer that reconciles
+// from these events ends up on a stale state, or misses one, with nothing to
+// say so.
+//
+// Now an object's events are delivered one at a time, in observation order,
+// with the handler called on the worker. An error stops that object's delivery
+// and requeues it with backoff; the next attempt resumes at the event and the
+// handler that failed. Other objects are not held up.
 func (c *Controller) processNextWorkItem() bool {
 	obj, shutdown := c.workQueue.Get()
 	if shutdown {
 		return false
 	}
-
-	// Always call Done to mark this item as processed
 	defer c.workQueue.Done(obj)
 
-	var workItem *WorkItem
-	var ok bool
-	if workItem, ok = obj.(*WorkItem); !ok {
-		// Invalid item, forget it
+	k, ok := obj.(string)
+	if !ok {
 		c.workQueue.Forget(obj)
-		c.logger.Warning("controller", fmt.Sprintf("Expected WorkItem but got %T", obj))
+		c.logger.Warning("controller", fmt.Sprintf("Expected an object key but got %T", obj))
 		return true
 	}
 
-	// Process the work item
-	if err := c.reconcile(workItem); err != nil {
-		// Re-queue the item on failure with exponential backoff
-		c.workQueue.AddRateLimited(workItem)
-		c.logger.Error("controller", fmt.Sprintf("Error processing %s: %v", workItem.Key, err))
-		return true
+	for item := c.nextPending(k); item != nil; item = c.nextPending(k) {
+		if err := c.reconcile(item); err != nil {
+			if c.workQueue.NumRequeues(k) < maxDeliveryRetries {
+				c.workQueue.AddRateLimited(k)
+				c.logger.Error("controller", fmt.Sprintf("Error processing %s %s %s, will retry: %v", item.EventType, item.GVRString, item.Key, err))
+				return true
+			}
+			c.logger.Warning("controller", fmt.Sprintf("Giving up on %s %s %s after %d retries: %v", item.EventType, item.GVRString, item.Key, maxDeliveryRetries, err))
+		}
+		c.workQueue.Forget(k)
+		c.donePending(k)
 	}
-
-	// Successfully processed, forget the item
-	c.workQueue.Forget(workItem)
 	return true
+}
+
+// deliver calls every handler with the event, in registration order, on the
+// calling worker. It resumes after the handlers that already accepted this
+// event, so a retry never hands a handler the same event twice.
+func (c *Controller) deliver(item *WorkItem, event MatchedEvent) error {
+	c.handlersMu.RLock()
+	handlers := c.eventHandlers
+	c.handlersMu.RUnlock()
+
+	for ; item.handled < len(handlers); item.handled++ {
+		if err := callHandler(handlers[item.handled], event); err != nil {
+			return fmt.Errorf("event handler %d: %w", item.handled, err)
+		}
+	}
+	return nil
+}
+
+// callHandler runs one handler, turning a panic into an error: on the worker,
+// a panicking handler would otherwise take the collector down with it.
+func callHandler(h EventHandler, event MatchedEvent) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panicked: %v", r)
+		}
+	}()
+	return h.OnMatched(event)
 }
 
 // reconcile contains the core business logic for processing a work item
@@ -2028,7 +2140,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				// exactly what it looked like.
 				if workItem.Object != nil {
 					c.logger.Debug("controller", fmt.Sprintf("Object %s %s is gone from the cache; recording %s from the snapshot taken when it was observed", workItem.GVRString, workItem.Key, workItem.EventType))
-					return c.processObject(workItem.EventType, workItem.Object, workItem.GVRString, workItem.Configs, workItem.ObservedAt)
+					return c.processObject(workItem, workItem.Object)
 				}
 				// No snapshot: the event IS lost, and that is worth saying out
 				// loud. It used to be dropped at Debug, which is why this cost
@@ -2073,11 +2185,15 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 				deletedObjForLogging.SetAnnotations(annotations)
 			}
 
-			// Log JSON event for DELETE with captured metadata
-			c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, workItem.DeletedResourceVersion, nil, deletedObjForLogging, workItem.ObservedAt)
+			// Log JSON event for DELETE with captured metadata - once, however
+			// many times a handler makes this event retry.
+			if !workItem.captured {
+				c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, workItem.DeletedResourceVersion, nil, deletedObjForLogging, workItem.ObservedAt)
+				workItem.captured = true
 
-			// Clean up UID from cache after processing
-			c.cleanupUIDFromInformerState(workItem.GVRString, namespace, name)
+				// Clean up UID from cache after processing
+				c.cleanupUIDFromInformerState(workItem.GVRString, namespace, name)
+			}
 
 			// Create a minimal unstructured object for DELETE events
 			// We can't get the full object since it's deleted, but we can extract key info
@@ -2089,10 +2205,9 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 
 			// Call OnMatched handlers for DELETE events
 			for _, config := range workItem.Configs {
-				// RACE CONDITION FIX: Create a deep copy for event handlers to avoid concurrent access
 				matchedEvent := MatchedEvent{
 					EventType: "DELETED",
-					Object:    deletedObj.DeepCopy(), // Deep copy to prevent concurrent access by event handlers
+					Object:    deletedObj.DeepCopy(),
 					GVR:       workItem.GVRString,
 					Key:       workItem.Key,
 					Config:    config,
@@ -2101,21 +2216,7 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 					Timestamp: time.Time{},
 					EventTime: observedAtOrNow(workItem.ObservedAt),
 				}
-
-				// Call event handlers (non-blocking)
-				c.handlersMu.RLock()
-				handlers := c.eventHandlers
-				c.handlersMu.RUnlock()
-
-				for _, handler := range handlers {
-					// Call handler in goroutine to avoid blocking Faro
-					go func(h EventHandler, event MatchedEvent) {
-						if err := h.OnMatched(event); err != nil {
-							c.logger.Warning("controller", fmt.Sprintf("Event handler failed for DELETE: %v", err))
-						}
-					}(handler, matchedEvent)
-				}
-				break // Only process once per object
+				return c.deliver(workItem, matchedEvent) // Only process once per object
 			}
 
 			return nil
@@ -2129,11 +2230,12 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 	}
 
 	// Apply detailed logging logic for ADD/UPDATE
-	return c.processObject(workItem.EventType, unstructuredObj, workItem.GVRString, workItem.Configs, workItem.ObservedAt)
+	return c.processObject(workItem, unstructuredObj)
 }
 
 // processObject contains the core filtering and logging logic
-func (c *Controller) processObject(eventType string, obj *unstructured.Unstructured, gvrString string, configs []NormalizedConfig, observedAt time.Time) error {
+func (c *Controller) processObject(workItem *WorkItem, obj *unstructured.Unstructured) error {
+	eventType, gvrString, configs, observedAt := workItem.EventType, workItem.GVRString, workItem.Configs, workItem.ObservedAt
 	resourceName := obj.GetName()
 	resourceNamespace := obj.GetNamespace()
 	resourceUID := obj.GetUID()
@@ -2165,11 +2267,12 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 			continue
 		}
 
-		// Create matched event for handlers
-		// RACE CONDITION FIX: Create a deep copy for event handlers to avoid concurrent access
+		// Create matched event for handlers. A deep copy still: the handler
+		// runs on the worker now, but the object is the informer's, and a
+		// handler that writes to it would be writing into the cache.
 		matchedEvent := MatchedEvent{
 			EventType: eventType,
-			Object:    obj.DeepCopy(), // Deep copy to prevent concurrent access by event handlers
+			Object:    obj.DeepCopy(),
 			GVR:       gvrString,
 			Key:       obj.GetNamespace() + "/" + obj.GetName(),
 			Config:    config,
@@ -2182,19 +2285,13 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 			matchedEvent.Key = resourceName
 		}
 
-		// Call event handlers (non-blocking)
-		c.handlersMu.RLock()
-		handlers := c.eventHandlers
-		c.handlersMu.RUnlock()
-
-		for _, handler := range handlers {
-			// Call handler in goroutine to avoid blocking Faro
-			go func(h EventHandler, event MatchedEvent) {
-				if err := h.OnMatched(event); err != nil {
-					c.logger.Warning("controller", fmt.Sprintf("Event handler failed: %v", err))
-				}
-			}(handler, matchedEvent)
+		// The capture records the event once, before any handler sees it: a
+		// handler that fails and makes this event retry must not make the
+		// capture say it happened twice.
+		if workItem.captured {
+			return c.deliver(workItem, matchedEvent)
 		}
+		workItem.captured = true
 
 		// Log the matched event (preserve existing behavior)
 		if resourceNamespace != "" {
@@ -2208,7 +2305,7 @@ func (c *Controller) processObject(eventType string, obj *unstructured.Unstructu
 		// Log JSON event for export
 		c.logJSONEvent(eventType, gvrString, resourceNamespace, resourceName, string(resourceUID), obj.GetResourceVersion(), obj.GetLabels(), obj, observedAt)
 
-		break // Only process once per object
+		return c.deliver(workItem, matchedEvent) // Only process once per object
 	}
 
 	return nil
@@ -2261,7 +2358,7 @@ func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstruc
 	}
 
 	c.logger.Debug("controller", fmt.Sprintf("Queueing %s event for %s %s", eventType, gvrString, key))
-	c.workQueue.Add(workItem)
+	c.enqueue(workItem)
 }
 
 // resourceInfoFromConfig builds resource info from a configured GVR string alone, for a type that
