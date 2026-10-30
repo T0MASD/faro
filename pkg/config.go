@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -20,6 +21,8 @@ const (
 // ResourceDetails defines what resources to watch within a namespace (legacy format)
 type ResourceDetails struct {
 	LabelSelector string `yaml:"label_selector,omitempty"` // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
+	FieldSelector string `yaml:"field_selector,omitempty"` // Kubernetes field selector, SERVER-SIDE (e.g. "status.phase=Running")
+	NameSelector  string `yaml:"name_selector,omitempty"`  // Exact object name, SERVER-SIDE
 	// Fields are object paths copied into the emitted event, e.g. "reason" or
 	// "status.phase". Per-GVR rather than global: see pkg/fields.go for why.
 	Fields []string `yaml:"fields,omitempty"`
@@ -38,6 +41,7 @@ type ResourceConfig struct {
 	NamespaceNames []string `yaml:"namespace_names,omitempty"` // Exact namespace names only (for server-side filtering)
 	NameSelector   string   `yaml:"name_selector,omitempty"`   // Exact name for resource name filtering (server-side)
 	LabelSelector  string   `yaml:"label_selector,omitempty"`  // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
+	FieldSelector  string   `yaml:"field_selector,omitempty"`  // Kubernetes field selector, SERVER-SIDE (e.g. "metadata.name=backup-job")
 	// Fields are object paths copied into the emitted event, e.g. "reason",
 	// "involvedObject.name" or "status.containerStatuses.restartCount". A path
 	// that is absent on an object is omitted rather than emitted empty.
@@ -52,7 +56,48 @@ type NormalizedConfig struct {
 	NamespaceNames  []string        // Literal namespace names only (for server-side filtering)
 	NameSelector    string          // Exact name for resource name filtering (server-side)
 	LabelSelector   string          // Kubernetes label selector for SERVER-SIDE filtering only (e.g. "app=faro-test")
+	FieldSelector   string          // Kubernetes field selector, SERVER-SIDE
 	Fields          []string        // Object paths copied into the emitted event
+}
+
+// informerSelectors is the one server-side selection an informer shared by
+// these entries can apply: a label selector, and a field selector combining
+// name_selector with field_selector.
+//
+// Entries that disagree on labels or fields are refused. Only the first
+// entry's label selector used to be applied, so a second entry asking for
+// other labels - or none, meaning all - silently saw only what the first asked
+// for. Neither can be unioned server-side, and filtering client-side is what
+// faro deliberately does not do.
+//
+// Entries that differ only in name_selector are the exception: several names
+// for one type is a natural config (three namespaces, by name), a field
+// selector cannot OR them, and before name_selector was applied at all those
+// configs watched every name. They keep doing that - widened is true, for a
+// Warning - rather than starting to fail.
+func informerSelectors(cfgs []NormalizedConfig) (label, field string, widened bool, err error) {
+	if len(cfgs) == 0 {
+		return "", "", false, nil
+	}
+	first := cfgs[0]
+	name := first.NameSelector
+	for _, c := range cfgs[1:] {
+		if c.LabelSelector != first.LabelSelector || c.FieldSelector != first.FieldSelector {
+			return "", "", false, fmt.Errorf("configuration entries ask for different selectors (labels %q and %q, fields %q and %q), and one informer per type and namespace can apply only one - merge them into one entry",
+				first.LabelSelector, c.LabelSelector, first.FieldSelector, c.FieldSelector)
+		}
+		if c.NameSelector != name {
+			name, widened = "", true
+		}
+	}
+	var fs []string
+	if name != "" {
+		fs = append(fs, "metadata.name="+name)
+	}
+	if first.FieldSelector != "" {
+		fs = append(fs, first.FieldSelector)
+	}
+	return first.LabelSelector, strings.Join(fs, ","), widened, nil
 }
 
 // MetricsConfig defines Prometheus metrics configuration
@@ -255,7 +300,11 @@ func (c *Config) LoadFromYAML(filename string) error {
 		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	if err := yaml.Unmarshal(data, c); err != nil {
+	// Strict: a key this version does not know is an error, not a no-op. A
+	// misspelt or unsupported key used to be dropped without a word - the
+	// README itself documented field_selector, which no version implemented,
+	// so a config using it silently watched every object of the type.
+	if err := yaml.UnmarshalStrict(data, c); err != nil {
 		return fmt.Errorf("failed to parse YAML config: %w", err)
 	}
 
@@ -340,6 +389,8 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 				GVR:            gvr,
 				NamespaceNames: []string{nsConfig.NameSelector},
 				LabelSelector:  details.LabelSelector,
+				FieldSelector:  details.FieldSelector,
+				NameSelector:   details.NameSelector,
 				Fields:         allowedFields(gvr, details.Fields),
 			})
 		}
@@ -352,6 +403,7 @@ func (c *Config) Normalize() (map[string][]NormalizedConfig, error) {
 			NamespaceNames: resConfig.NamespaceNames,
 			NameSelector:   resConfig.NameSelector,
 			LabelSelector:  resConfig.LabelSelector,
+			FieldSelector:  resConfig.FieldSelector,
 			Fields:         allowedFields(resConfig.GVR, resConfig.Fields),
 		})
 	}

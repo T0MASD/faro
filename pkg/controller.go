@@ -357,6 +357,36 @@ func (c *Controller) groupConfigsByNamespace(gvrString string, scope apiextensio
 	return namespaceGroups
 }
 
+// listOptionsFor is the server-side selection for one informer, or nil for
+// none. sameSelectors has already refused a config this cannot honour.
+func (c *Controller) listOptionsFor(cfgs []NormalizedConfig) func(*metav1.ListOptions) {
+	labelSelector, fieldSelector, _, err := informerSelectors(cfgs)
+	if err != nil || (labelSelector == "" && fieldSelector == "") {
+		return nil
+	}
+	return func(options *metav1.ListOptions) {
+		options.LabelSelector = labelSelector
+		options.FieldSelector = fieldSelector
+	}
+}
+
+// sameSelectors checks every informer's entries can share one selection (see
+// informerSelectors), and says so when differing names widen one to all names.
+func (c *Controller) sameSelectors(gvr string, groups map[string][]NormalizedConfig) error {
+	for ns, cfgs := range groups {
+		_, _, widened, err := informerSelectors(cfgs)
+		if err != nil {
+			return fmt.Errorf("%s in %s: %w", gvr, ns, err)
+		}
+		if widened {
+			c.logger.Warning("controller", fmt.Sprintf(
+				"%s in %s: entries name different objects, and one informer cannot select several names, so every %s there is watched - name_selector narrows the watch only when all entries for it agree",
+				gvr, ns, gvr))
+		}
+	}
+	return nil
+}
+
 // emitWatchFailed records a broken watch in the event capture, in the same
 // shape as every other record so existing consumers parse it without change.
 // The error text goes in Fields because the failure is the payload here.
@@ -1561,15 +1591,7 @@ func (c *Controller) selectCRDVersion(crd *apiextensionsv1.CustomResourceDefinit
 func (c *Controller) createNamespaceSpecificInformer(config InformerConfig, namespace string, normalizedConfigs []NormalizedConfig) (cache.SharedIndexInformer, error) {
 	c.logger.Info("controller", fmt.Sprintf("Starting namespace-specific informer for %s (namespace: %s)", config.GVRString, namespace))
 
-	// Simple selector application - complex interpretation removed
-	// Library users should implement their own selector logic via middleware
-	var tweakListOptions func(*metav1.ListOptions)
-	if len(normalizedConfigs) > 0 && normalizedConfigs[0].LabelSelector != "" {
-		labelSelector := normalizedConfigs[0].LabelSelector
-		tweakListOptions = func(options *metav1.ListOptions) {
-			options.LabelSelector = labelSelector
-		}
-	}
+	tweakListOptions := c.listOptionsFor(normalizedConfigs)
 
 	// The ListerWatcher is BUILT HERE rather than taken from
 	// dynamicinformer.NewFilteredDynamicSharedInformerFactory, which is what
@@ -1884,6 +1906,9 @@ func (c *Controller) startConfigDrivenInformers() error {
 
 		// Group configs by namespace to create separate informers
 		namespaceGroups := c.groupConfigsByNamespace(gvrString, scope, normalizedConfigs)
+		if err := c.sameSelectors(gvrString, namespaceGroups); err != nil {
+			return err
+		}
 
 		// Create separate informer for each namespace
 		for namespace, configs := range namespaceGroups {
