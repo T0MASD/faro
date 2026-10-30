@@ -304,3 +304,77 @@ func (a *alwaysFailsAdded) OnMatched(e MatchedEvent) error {
 	a.ok.Add(1)
 	return nil
 }
+
+// A handler that panics under a running controller is an error like any other:
+// the collector stays up, and the object's next event is still delivered.
+//
+// Every handler call ran on a goroutine of its own, outside any recover, so one
+// panicking handler took the whole process down - the capture with it.
+func TestPanickingHandlerDoesNotStopTheCollector(t *testing.T) {
+	h := &panicsOnFirstAdded{}
+	dyn, _ := startWithFakeAPI(t, &Config{}, h)
+	cms := dyn.Resource(testConfigMaps).Namespace("t")
+	ctx := context.Background()
+	if _, err := cms.Create(ctx, testConfigMap("p", 0), metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := cms.Update(ctx, testConfigMap("p", 1), metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if !waitFor(t, 10*time.Second, func() bool { return h.updated.Load() > 0 }) {
+		t.Fatalf("after a handler panicked (%d times) the object's next event was never delivered", h.panics.Load())
+	}
+}
+
+type panicsOnFirstAdded struct{ panics, updated atomic.Int64 }
+
+func (p *panicsOnFirstAdded) OnMatched(e MatchedEvent) error {
+	if e.EventType == "ADDED" && p.panics.Add(1) == 1 {
+		panic("boom")
+	}
+	if e.EventType == "UPDATED" {
+		p.updated.Add(1)
+	}
+	return nil
+}
+
+// A retry hands the event to the handler again, not to the capture: the record
+// of a change must not depend on whether some consumer's downstream blinked.
+func TestRetriedEventIsCapturedOnce(t *testing.T) {
+	cfg := &Config{JsonExport: true}
+	flaky := &failingOnce{}
+	dyn, c := startWithFakeAPI(t, cfg, flaky)
+	if _, err := dyn.Resource(testConfigMaps).Namespace("t").Create(context.Background(), testConfigMap("once", 3), metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if !waitFor(t, 10*time.Second, func() bool { return len(flaky.delivered()) > 0 }) {
+		t.Fatal("the event was never redelivered")
+	}
+	c.logger.FlushCapture()
+	n := 0
+	for _, e := range captured(t, cfg.OutputDir) {
+		if e.EventType == "ADDED" && e.Name == "once" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Errorf("the capture holds %d ADDED records for one change delivered twice, want 1", n)
+	}
+}
+
+// workers: in the config sets how many objects are worked on at once.
+func TestWorkersAreConfigurable(t *testing.T) {
+	cfg := &Config{OutputDir: t.TempDir(), LogLevel: "warning"}
+	logger, err := NewLogger(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Shutdown()
+	if n := NewController(&KubernetesClient{}, logger, cfg).workers; n != 3 {
+		t.Errorf("default workers = %d, want 3", n)
+	}
+	cfg.Workers = 8
+	if n := NewController(&KubernetesClient{}, logger, cfg).workers; n != 8 {
+		t.Errorf("workers: 8 gave %d", n)
+	}
+}
