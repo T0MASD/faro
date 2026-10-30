@@ -58,7 +58,7 @@ test-ci: test-pkg test-unit
 # exported API, while some behaviour is only reachable from inside pkg.
 test-pkg:
 	@echo "Running in-package tests..."
-	go test -v ./pkg/...
+	go test -race -v ./pkg/...
 
 # Run unit tests (tests/unit module, external package)
 test-unit:

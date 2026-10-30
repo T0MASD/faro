@@ -424,7 +424,8 @@ controller.StartInformers()
 configCount, dynamicCount := controller.GetActiveInformers()
 
 // Lifecycle management
-controller.Start()  // Blocks until shutdown
+controller.Start()  // Returns once informers are started; events arrive on handlers from then on
+// ...block on your own signal or context here...
 controller.Stop()   // Graceful shutdown
 ```
 
