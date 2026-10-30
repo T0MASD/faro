@@ -271,6 +271,7 @@ analysis - a typo must not be able to turn this into a credential leak.
 | `json_export` | bool | Enable structured JSON event export |
 | `metrics.enabled` | bool | Enable Prometheus metrics server |
 | `metrics.port` | int | Metrics server port (default: 8080) |
+| `workers` | int | Workers delivering events (default: 3). Never two at once for one object |
 
 ---
 
@@ -361,7 +362,11 @@ func (d *DynamicDiscovery) OnMatched(event faro.MatchedEvent) error {
 // Controller creation
 controller := faro.NewController(client, logger, config)
 
-// Event handlers (implement your business logic)
+// Event handlers (implement your business logic). Called on a worker, one
+// event at a time per object, in the order observed; different objects run in
+// parallel (`workers`, default 3). Return an error to be handed the same
+// event again, with backoff - up to 5 retries, then it is logged and skipped.
+// A slow handler slows its worker: that is backpressure, not loss.
 controller.AddEventHandler(handler EventHandler)
 
 // Informer status handlers (hear whether a watch listed, and what it holds)
