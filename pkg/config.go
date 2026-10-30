@@ -150,6 +150,12 @@ type Config struct {
 	// it. json_export: true keeps writing it alongside the database.
 	Metrics MetricsConfig `yaml:"metrics,omitempty"` // Prometheus metrics configuration
 
+	// How many workers process the queue. Events for one object are never
+	// processed by two workers at once, whatever this is set to, so more
+	// workers buys throughput across objects and never reorders one. 0 means
+	// the default, 3.
+	Workers int `yaml:"workers,omitempty"`
+
 	// Simple configuration formats
 	Namespaces []NamespaceConfig `yaml:"namespaces,omitempty"` // Simple namespace format
 	Resources  []ResourceConfig  `yaml:"resources,omitempty"`  // Simple resource format
