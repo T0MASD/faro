@@ -272,6 +272,7 @@ analysis - a typo must not be able to turn this into a credential leak.
 | `metrics.enabled` | bool | Enable Prometheus metrics server |
 | `metrics.port` | int | Metrics server port (default: 8080) |
 | `workers` | int | Workers delivering events (default: 3). Never two at once for one object |
+| `resync_sec` | int | Hand every watched object to the handlers again as `RESYNC` on this period (0 = never). Not written to the capture |
 
 ---
 
@@ -368,6 +369,11 @@ controller := faro.NewController(client, logger, config)
 // event again, with backoff - up to 5 retries, then it is logged and skipped.
 // A slow handler slows its worker: that is backpressure, not loss.
 controller.AddEventHandler(handler EventHandler)
+
+// Current state, from the informer cache (no API calls). Copies; "" namespace
+// for a cluster-scoped type. ErrNotSynced until the first list completes.
+objs, err := controller.List("v1/configmaps", "default")
+obj, err := controller.Get("v1/configmaps", "default/my-config") // nil, nil if absent
 
 // Informer status handlers (hear whether a watch listed, and what it holds)
 // An empty result, a refusal, and a type the endpoint does not serve all
