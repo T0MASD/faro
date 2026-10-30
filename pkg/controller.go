@@ -102,6 +102,13 @@ type WorkItem struct {
 	// observation rather than the processing; now it is.
 	ObservedAt time.Time
 
+	// The namespace of the informer that observed this - "" for one watching
+	// every namespace - which is whose cache the worker reads it back from.
+	// Not the object's own namespace: an informer for every namespace keeps
+	// one cache, under "", and the object's namespace names a cache that does
+	// not exist, so every event from it failed with "no lister found".
+	informerNamespace string
+
 	// Delivery state, kept across retries of this one event so a retry does
 	// neither of the things already done: the capture records the event once,
 	// and a handler that already accepted it is not called with it again.
@@ -331,10 +338,13 @@ func (c *Controller) groupConfigsByNamespace(gvrString string, scope apiextensio
 			// invisible. Worth saying plainly because scope comes from discovery,
 			// so an author who believed the type was namespaced gets no other
 			// signal that it is not.
-			if len(config.NamespaceNames) > 0 {
+			// "" is not a namespace: it is how a config asks for the whole
+			// cluster when it cannot know the scope yet (a CRD not installed),
+			// so it is not one of the names being discarded.
+			if named := nonEmpty(config.NamespaceNames); len(named) > 0 {
 				c.logger.Warning("controller", fmt.Sprintf(
 					"%s is cluster-scoped, so the %d namespace(s) named for it are ignored and every object of this type is captured - remove them, or check whether you meant a namespaced type",
-					gvrString, len(config.NamespaceNames)))
+					gvrString, len(named)))
 			}
 			// For cluster-scoped resources, ignore NamespaceNames and use cluster-scoped grouping
 			namespaceGroups["cluster-scoped"] = append(namespaceGroups["cluster-scoped"], config)
@@ -342,19 +352,35 @@ func (c *Controller) groupConfigsByNamespace(gvrString string, scope apiextensio
 		}
 		if len(config.NamespaceNames) == 0 {
 			c.logger.Warning("controller", fmt.Sprintf(
-				"%s is namespaced but names no namespaces, so no informer is created and nothing will be captured for it - list the namespaces to watch",
+				"%s is namespaced but names no namespaces, so no informer is created and nothing will be captured for it - list the namespaces to watch, or \"\" for every namespace",
 				gvrString))
 			continue
 		}
 		// For namespace-scoped resources, group by specified namespaces
 		for _, ns := range config.NamespaceNames {
 			if ns == "" {
-				ns = "cluster-scoped" // Fallback for empty namespace
+				// Every namespace, with one informer and one cache under "".
+				// Said once, because "" also reads as "cluster-scoped" - for a
+				// type that is in fact namespaced, this is the whole cluster.
+				c.logger.Info("controller", fmt.Sprintf(
+					"%s is namespaced and namespace_names has \"\", so it is watched in every namespace", gvrString))
+				ns = "cluster-scoped"
 			}
 			namespaceGroups[ns] = append(namespaceGroups[ns], config)
 		}
 	}
 	return namespaceGroups
+}
+
+// nonEmpty is the names that are namespaces, without "".
+func nonEmpty(names []string) []string {
+	var out []string
+	for _, n := range names {
+		if n != "" {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // listOptionsFor is the server-side selection for one informer, or nil for
@@ -1936,7 +1962,7 @@ func (c *Controller) startConfigDrivenInformers() error {
 				Namespace:         actualNamespace,
 				NormalizedConfigs: configs,
 				HandlerFunc: func(eventType string, obj *unstructured.Unstructured) {
-					c.handleNamespaceSpecificEvent(eventType, obj, gvrString, configs)
+					c.handleNamespaceSpecificEvent(eventType, obj, gvrString, actualNamespace, configs)
 				},
 				Description: fmt.Sprintf("namespace-specific informer for %s (namespace: %s)", gvrString, actualNamespace),
 			})
@@ -2007,6 +2033,13 @@ func (c *Controller) Get(gvr, key string) (*unstructured.Unstructured, error) {
 		return nil, err
 	}
 	lister, err := c.syncedLister(gvr, namespace)
+	if errors.Is(err, ErrNotWatched) && namespace != "" {
+		// Not watched in its own namespace, but maybe in every namespace,
+		// whose one cache is kept under "".
+		if all, allErr := c.syncedLister(gvr, ""); !errors.Is(allErr, ErrNotWatched) {
+			lister, err = all, allErr
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -2242,14 +2275,8 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 
 	// At this point, we know the object is one we are configured to watch.
 
-	// Get lister for this GVR - namespace-specific key only, no fallbacks
-	namespace, _, keyErr := cache.SplitMetaNamespaceKey(workItem.Key)
-	if keyErr != nil {
-		c.logger.Error("controller", "Failed to parse workItem key: "+workItem.Key)
-		return errors.New("failed to parse workItem key: " + workItem.Key)
-	}
-
-	namespaceListerKey := workItem.GVRString + "@" + namespace
+	// The lister of the informer that observed this - see WorkItem.informerNamespace.
+	namespaceListerKey := workItem.GVRString + "@" + workItem.informerNamespace
 	listerInterface, exists := c.listers.Load(namespaceListerKey)
 	if !exists {
 		c.logger.Error("controller", "No lister found for key: "+namespaceListerKey)
@@ -2468,14 +2495,14 @@ func (c *Controller) processObject(workItem *WorkItem, obj *unstructured.Unstruc
 // Old event handler functions removed - replaced by handleUnifiedNormalizedEvent()
 
 // handleNamespaceSpecificEvent processes events from namespace-specific informers
-func (c *Controller) handleNamespaceSpecificEvent(eventType string, obj *unstructured.Unstructured, gvrString string, configs []NormalizedConfig) {
+func (c *Controller) handleNamespaceSpecificEvent(eventType string, obj *unstructured.Unstructured, gvrString, informerNamespace string, configs []NormalizedConfig) {
 	// Use the same event handling as the unified informer
-	c.handleUnifiedNormalizedEvent(eventType, obj, gvrString, configs)
+	c.handleUnifiedNormalizedEvent(eventType, obj, gvrString, informerNamespace, configs)
 }
 
 // handleUnifiedNormalizedEvent processes events with multiple normalized config-based filtering
 // handleUnifiedNormalizedEvent is a lightweight event handler that only enqueues work items
-func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstructured.Unstructured, gvrString string, normalizedConfigs []NormalizedConfig) {
+func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstructured.Unstructured, gvrString, informerNamespace string, normalizedConfigs []NormalizedConfig) {
 	// Extract the object key - this is the only work done in the event handler
 	key, err := cache.MetaNamespaceKeyFunc(obj)
 	if err != nil {
@@ -2490,7 +2517,8 @@ func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstruc
 		Configs:   normalizedConfigs,
 		EventType: eventType,
 		// Here, not on the worker. See WorkItem.ObservedAt.
-		ObservedAt: time.Now().UTC(),
+		ObservedAt:        time.Now().UTC(),
+		informerNamespace: informerNamespace,
 	}
 
 	// For DELETED events, capture UID and annotations before they're lost

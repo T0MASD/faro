@@ -206,7 +206,20 @@ resources:
   - gvr: "batch/v1/cronjobs"
     namespace_names: ["production"]
     field_selector: "metadata.name=backup-job"
+  - gvr: "v1/events"
+    namespace_names: [""]          # "" is every namespace: one watch, one cache
+    field_selector: "type=Warning"
 ```
+
+A namespaced type that names no namespaces is not watched at all (Faro warns).
+`namespace_names: [""]` means the whole cluster, with one informer:
+
+- for a **namespaced** type, every namespace (Faro says so once at start);
+- for a **cluster-scoped** type, all of it - which is also how to ask for a
+  CRD that is not installed yet, whose scope Faro cannot know until it is.
+
+`List(gvr, "")` reads that cache, and `Get` finds an object in it by
+`namespace/name` (or `name`).
 
 ### Emitting object fields
 

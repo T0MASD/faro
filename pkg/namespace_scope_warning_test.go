@@ -12,7 +12,8 @@ import (
 
 // A namespaced type that names no namespaces builds no informer.
 //
-// That is the contract - "all namespaces" is not expressible in this config,
+// That is the contract - every namespace is asked for with namespace_names
+// [""] (all_namespaces_test.go), never by leaving the names out -
 // and tests/e2e asserts such an entry matches no namespaced object. The defect
 // was that it happened in silence: the grouping loop below simply does not
 // execute, so the config loads, Faro starts and reports healthy, and that
@@ -120,5 +121,44 @@ func TestClusterScopedConfigWithNamespacesWarns(t *testing.T) {
 	}
 	if got := buf.String(); !strings.Contains(got, "are ignored") {
 		t.Fatalf("namespaces named for a cluster-scoped type were discarded with no warning.\nklog output was:\n%s", got)
+	}
+}
+
+// namespace_names [""] means the whole cluster: for a cluster-scoped type it
+// is the usual way to ask for one when the scope cannot be known yet, and is
+// not a namespace being discarded; for a namespaced type it is every
+// namespace, said once, since "" also reads as "cluster-scoped".
+func TestEmptyNamespaceNameIsSaidNotWarned(t *testing.T) {
+	l, _ := newJSONLogger(t)
+	c := &Controller{logger: l}
+
+	var buf syncBuffer
+	klogInitOnce.Do(func() { klog.InitFlags(nil) })
+	flag.Set("logtostderr", "false")
+	klog.SetOutput(&buf)
+	t.Cleanup(func() {
+		klog.Flush()
+		flag.Set("logtostderr", "true")
+		klog.SetOutput(os.Stderr)
+	})
+
+	cl := c.groupConfigsByNamespace("v1/nodes", apiextensionsv1.ClusterScoped,
+		[]NormalizedConfig{{GVR: "v1/nodes", NamespaceNames: []string{""}}})
+	if len(cl) != 1 || len(cl["cluster-scoped"]) != 1 {
+		t.Errorf("cluster-scoped grouping = %v, want one 'cluster-scoped' group", cl)
+	}
+	klog.Flush()
+	if got := buf.String(); strings.Contains(got, "are ignored") {
+		t.Errorf("[\"\"] for a cluster-scoped type warned that namespaces are ignored.\nklog output was:\n%s", got)
+	}
+
+	ns := c.groupConfigsByNamespace("v1/configmaps", apiextensionsv1.NamespaceScoped,
+		[]NormalizedConfig{{GVR: "v1/configmaps", NamespaceNames: []string{""}}})
+	if len(ns) != 1 || len(ns["cluster-scoped"]) != 1 {
+		t.Errorf("namespaced grouping = %v, want one group over every namespace", ns)
+	}
+	klog.Flush()
+	if got := buf.String(); !strings.Contains(got, "watched in every namespace") {
+		t.Fatalf("a namespaced type watched in every namespace was not said.\nklog output was:\n%s", got)
 	}
 }

@@ -104,7 +104,7 @@ func TestDeletedIsNotConfusedWithARecreation(t *testing.T) {
 	old := testConfigMap("reused", 2)
 	old.SetUID("uid-older")
 	if err := c.reconcile(&WorkItem{
-		Key: "t/reused", GVRString: "v1/configmaps", EventType: "DELETED",
+		Key: "t/reused", informerNamespace: "t", GVRString: "v1/configmaps", EventType: "DELETED",
 		Configs:    []NormalizedConfig{{GVR: "v1/configmaps"}},
 		DeletedUID: "uid-older", DeletedResourceVersion: "3", Object: old,
 	}); err != nil {

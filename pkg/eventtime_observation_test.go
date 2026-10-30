@@ -49,7 +49,7 @@ func TestEventTimeIsObservationNotProcessing(t *testing.T) {
 
 	observed := time.Now().UTC().Add(-4 * time.Minute)
 	if err := c.reconcile(&WorkItem{
-		Key:        "test-ns/late-1",
+		Key: "test-ns/late-1", informerNamespace: "test-ns",
 		GVRString:  "v1/configmaps",
 		EventType:  "ADDED",
 		Configs:    []NormalizedConfig{{GVR: "v1/configmaps"}},

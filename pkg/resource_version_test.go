@@ -74,13 +74,13 @@ func TestResourceVersionReachesTheCaptureOnBothPaths(t *testing.T) {
 	obj.SetResourceVersion("182734")
 
 	if err := c.reconcile(&WorkItem{
-		Key: "test-ns/cm-1", GVRString: "v1/configmaps", EventType: "ADDED",
+		Key: "test-ns/cm-1", informerNamespace: "test-ns", GVRString: "v1/configmaps", EventType: "ADDED",
 		Configs: []NormalizedConfig{{GVR: "v1/configmaps"}}, Object: obj,
 	}); err != nil {
 		t.Fatalf("reconcile ADDED: %v", err)
 	}
 	if err := c.reconcile(&WorkItem{
-		Key: "test-ns/cm-1", GVRString: "v1/configmaps", EventType: "DELETED",
+		Key: "test-ns/cm-1", informerNamespace: "test-ns", GVRString: "v1/configmaps", EventType: "DELETED",
 		Configs:    []NormalizedConfig{{GVR: "v1/configmaps"}},
 		DeletedUID: "uid-cm-1", DeletedResourceVersion: "182999",
 	}); err != nil {
