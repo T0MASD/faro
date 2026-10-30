@@ -593,13 +593,17 @@ func (c *Controller) createStateTrackingEventHandlers(tracker *InformerStateTrac
 			if ok {
 				key := c.makeResourceKey(config.GVRString, unstructuredObj.GetNamespace(), unstructuredObj.GetName())
 
-				// Get UID from cache before deletion (for logging) - no fallbacks
-				cachedUID, exists := tracker.UIDCache.Load(key)
-				if !exists {
-					c.logger.Error("controller", "No cached UID for DELETED event: "+key)
+				// Get UID from cache before deletion (for logging), else from
+				// the deleted object itself. This used to drop the deletion
+				// when the cache had no entry - losing an event that carries
+				// its own UID.
+				uid := string(unstructuredObj.GetUID())
+				if cachedUID, exists := tracker.UIDCache.Load(key); exists {
+					uid = cachedUID.(string)
+				} else if uid == "" {
+					c.logger.Error("controller", "No UID for DELETED event: "+key)
 					return
 				}
-				uid := cachedUID.(string)
 
 				// Update metrics
 				c.metrics.OnEventProcessed(config.GVRString, "DELETED", unstructuredObj.GetNamespace())
@@ -2234,6 +2238,13 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 	}
 
 	obj, err := lister.Get(workItem.Key)
+	// A DELETED is about the object that was deleted. If its name is in the
+	// cache again by now, that is a NEW object - another UID, whose own ADDED
+	// is queued behind this - and reading it here would record the deletion
+	// with the newcomer's UID and labels.
+	if workItem.EventType == "DELETED" && err == nil {
+		err = apierrors.NewNotFound(schema.GroupResource{}, workItem.Key)
+	}
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			// Only process as DELETED if the workItem.EventType is actually DELETED
@@ -2275,9 +2286,17 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 			annotations := workItem.DeletedAnnotations
 			c.logger.Debug("controller", fmt.Sprintf("Using captured DELETED metadata: UID=%s, annotations=%d", uid, len(annotations)))
 
-			// Create a minimal object with captured annotations for DELETED events
+			// The object as it was last seen, from the delete itself (or its
+			// tombstone). Without it a deletion reached handlers as a name and
+			// a namespace, and the capture with no labels: the one moment a
+			// consumer most needs to know what went away - its labels, its
+			// final status - was the one moment faro had thrown that away.
 			var deletedObjForLogging *unstructured.Unstructured
-			if annotations != nil {
+			var labels map[string]string
+			if workItem.Object != nil {
+				deletedObjForLogging = workItem.Object
+				labels = workItem.Object.GetLabels()
+			} else if annotations != nil {
 				deletedObjForLogging = &unstructured.Unstructured{}
 				deletedObjForLogging.SetName(name)
 				if namespace != "" {
@@ -2292,19 +2311,24 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 			// Log JSON event for DELETE with captured metadata - once, however
 			// many times a handler makes this event retry.
 			if !workItem.captured {
-				c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, workItem.DeletedResourceVersion, nil, deletedObjForLogging, workItem.ObservedAt)
+				c.logJSONEvent("DELETED", workItem.GVRString, namespace, name, uid, workItem.DeletedResourceVersion, labels, deletedObjForLogging, workItem.ObservedAt)
 				workItem.captured = true
 
 				// Clean up UID from cache after processing
 				c.cleanupUIDFromInformerState(workItem.GVRString, namespace, name)
 			}
 
-			// Create a minimal unstructured object for DELETE events
-			// We can't get the full object since it's deleted, but we can extract key info
+			// The last state if there is one; a stub with the key only when
+			// the delete carried no object at all.
 			deletedObj := &unstructured.Unstructured{}
-			deletedObj.SetName(name)
-			if namespace != "" {
-				deletedObj.SetNamespace(namespace)
+			if workItem.Object != nil {
+				deletedObj = workItem.Object
+			} else {
+				deletedObj.SetName(name)
+				if namespace != "" {
+					deletedObj.SetNamespace(namespace)
+				}
+				deletedObj.SetUID(types.UID(uid))
 			}
 
 			// Call OnMatched handlers for DELETE events
@@ -2315,9 +2339,8 @@ func (c *Controller) reconcile(workItem *WorkItem) error {
 					GVR:       workItem.GVRString,
 					Key:       workItem.Key,
 					Config:    config,
-					// A deleted object carries no creationTimestamp, so there is
-					// no object age to report - only when this was observed.
-					Timestamp: time.Time{},
+					// Zero for a stub, which has no creationTimestamp.
+					Timestamp: deletedObj.GetCreationTimestamp().Time,
 					EventTime: observedAtOrNow(workItem.ObservedAt),
 				}
 				return c.deliver(workItem, matchedEvent) // Only process once per object
@@ -2456,11 +2479,10 @@ func (c *Controller) handleUnifiedNormalizedEvent(eventType string, obj *unstruc
 		c.logger.Debug("controller", fmt.Sprintf("Captured DELETED metadata: UID=%s, annotations=%d", workItem.DeletedUID, len(workItem.DeletedAnnotations)))
 	}
 
-	// And for everything else, the object itself - so an ADDED survives the
-	// object being deleted before the worker reaches it. See WorkItem.Object.
-	if eventType != "DELETED" {
-		workItem.Object = obj
-	}
+	// And the object itself - so an ADDED survives the object being deleted
+	// before the worker reaches it, and a DELETED says what was deleted. See
+	// WorkItem.Object.
+	workItem.Object = obj
 
 	c.logger.Debug("controller", fmt.Sprintf("Queueing %s event for %s %s", eventType, gvrString, key))
 	c.enqueue(workItem)
