@@ -49,7 +49,7 @@ func TestAddedSurvivesObjectDeletedBeforeReconcile(t *testing.T) {
 		obj.SetUID("uid-churn-1")
 
 		item := &WorkItem{
-			Key:       "test-ns/churn-1",
+			Key: "test-ns/churn-1", informerNamespace: "test-ns",
 			GVRString: "v1/configmaps",
 			EventType: "ADDED",
 			Configs:   []NormalizedConfig{{GVR: "v1/configmaps"}},

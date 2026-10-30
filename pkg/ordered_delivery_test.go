@@ -43,9 +43,19 @@ func newFakeAPI() *fakedynamic.FakeDynamicClient {
 
 func startOnFakeAPI(t *testing.T, dyn *fakedynamic.FakeDynamicClient, cfg *Config, handlers ...EventHandler) (*fakedynamic.FakeDynamicClient, *Controller) {
 	t.Helper()
+	return startOnFakeAPIWithDiscovery(t, dyn, newFakeDiscovery(), cfg, handlers...)
+}
+
+// newFakeDiscovery serves configmaps in v1, and nothing else.
+func newFakeDiscovery() *fakediscovery.FakeDiscovery {
 	disc := &fakediscovery.FakeDiscovery{Fake: &clienttesting.Fake{}}
 	disc.Resources = []*metav1.APIResourceList{{GroupVersion: "v1", APIResources: []metav1.APIResource{
 		{Name: "configmaps", Namespaced: true, Kind: "ConfigMap", Verbs: []string{"list", "watch", "get"}}}}}
+	return disc
+}
+
+func startOnFakeAPIWithDiscovery(t *testing.T, dyn *fakedynamic.FakeDynamicClient, disc *fakediscovery.FakeDiscovery, cfg *Config, handlers ...EventHandler) (*fakedynamic.FakeDynamicClient, *Controller) {
+	t.Helper()
 	if cfg.OutputDir == "" {
 		cfg.OutputDir = t.TempDir()
 	}
