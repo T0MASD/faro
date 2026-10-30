@@ -1942,8 +1942,9 @@ func (c *Controller) handleCustomResourceEvent(eventType string, obj *unstructur
 var ErrNotWatched = errors.New("not watched")
 
 // ErrNotSynced is returned by Get and List while the informer's first list is
-// still in progress: its cache holds part of the answer, and a part would read
-// exactly like the whole.
+// still in progress - or before its informer exists at all, while it waits for
+// the type to be served: its cache holds part of the answer, or none, and
+// either would read exactly like the whole.
 var ErrNotSynced = errors.New("informer cache not synced yet")
 
 // List returns every object the informer for gvr in namespace holds now - the
@@ -1998,6 +1999,17 @@ func (c *Controller) syncedLister(gvr, namespace string) (cache.GenericLister, e
 	k := gvr + "@" + namespace
 	l, ok := c.listers.Load(k)
 	if !ok {
+		// Configured, but its informer is not created yet: it waits for the
+		// type to be served (a CRD not installed yet, an aggregated API still
+		// starting), and only then exists to have a lister. That is "not
+		// known yet", not "not asked for" - a consumer must wait, not give up.
+		informerKey := k
+		if namespace == "" {
+			informerKey = gvr + "@cluster-scoped"
+		}
+		if _, configured := c.activeInformers.Load(informerKey); configured {
+			return nil, fmt.Errorf("%s in %q: %w", gvr, namespace, ErrNotSynced)
+		}
 		return nil, fmt.Errorf("%s in %q: %w", gvr, namespace, ErrNotWatched)
 	}
 	if hs, ok := c.synced.Load(k); ok && !hs.(cache.InformerSynced)() {
