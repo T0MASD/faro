@@ -273,6 +273,7 @@ analysis - a typo must not be able to turn this into a credential leak.
 | `metrics.port` | int | Metrics server port (default: 8080) |
 | `workers` | int | Workers delivering events (default: 3). Never two at once for one object |
 | `resync_sec` | int | Hand every watched object to the handlers again as `RESYNC` on this period (0 = never). Not written to the capture |
+| `sqlite_path` | string | SQLite capture: `auto` (default for the binary), a path, or `off`. Unset in a `Config` built in code means none |
 
 ---
 
@@ -333,6 +334,23 @@ func (h *MyEventHandler) OnMatched(event faro.MatchedEvent) error {
     return nil
 }
 ```
+
+### Capture is opt-in for a library
+
+A `Config` built in code writes no capture: a program that embeds faro to react
+to changes gets its handlers and nothing on disk, even with `OutputDir` set for
+its logs. Ask for one explicitly:
+
+```go
+config := &faro.Config{
+    OutputDir:  "./logs",
+    SqlitePath: faro.SqliteAuto, // <output_dir>/logs/capture.db, or a path
+    JsonExport: true,            // events-*.json alongside it
+}
+```
+
+The faro binary (and `LoadConfig`) keeps today's default, a SQLite capture
+under `output_dir`; `sqlite_path: "off"` turns it off.
 
 ### Advanced Usage: Dynamic Resource Discovery
 

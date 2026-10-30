@@ -97,6 +97,11 @@ func init() {
 	})
 }
 
+// SqliteAuto puts the SQLite capture in the default place under output_dir.
+// It is what the faro binary uses unless configured otherwise; a Config built
+// in code has no database unless it sets this or a path.
+const SqliteAuto = "auto"
+
 // sqliteSink writes the capture into a SQLite database.
 //
 // One database, reopened in place across restarts rather than a new file per
@@ -297,9 +302,9 @@ func jsonOrNull(v interface{}) interface{} {
 // a restart reopens the capture it was already writing.
 func sqliteTarget(config *Config) string {
 	switch config.SqlitePath {
-	case "off":
+	case "off", "":
 		return ""
-	case "":
+	case SqliteAuto:
 		d := config.GetLogDir()
 		if d == "" {
 			return ""
