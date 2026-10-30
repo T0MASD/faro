@@ -1310,10 +1310,23 @@ func TestFaroTest10ConfigurableFields(t *testing.T) {
 		t.Fatalf("SECRET: fields = %#v, want exactly {type: Opaque}", sec)
 	}
 
-	// Stated rather than assumed: a DELETED event is built from a minimal
-	// object, so it carries no fields. Anyone reading a capture needs to know
-	// the reason is absent there by construction, not because nothing failed.
-	if del, ok := fieldsOf(events, "v1/configmaps", "DELETED", "test-config-10"); ok && len(del) != 0 {
-		t.Errorf("DELETED carries fields %#v; expected none (minimal object)", del)
+	// DELETED carries the object's last state - the updated value, not the
+	// created one and not nothing - so a consumer can tell what went away.
+	del, ok := fieldsOf(events, "v1/configmaps", "DELETED", "test-config-10")
+	if !ok {
+		t.Fatal("no DELETED configmap event")
+	}
+	if !same(del, map[string]string{"data.key1": "value1-updated"}) {
+		t.Errorf("DELETED configmap fields = %#v, want exactly {data.key1: value1-updated}", del)
+	}
+
+	// The Secret's last state goes through the same denylist on delete: a
+	// DELETED event that carries state must not be where data.password leaks.
+	secDel, ok := fieldsOf(events, "v1/secrets", "DELETED", "test-secret-10")
+	if !ok {
+		t.Fatal("no DELETED secret event - the denylist-on-delete assertion never ran")
+	}
+	if !same(secDel, map[string]string{"type": "Opaque"}) {
+		t.Fatalf("SECRET DELETED: fields = %#v, want exactly {type: Opaque}", secDel)
 	}
 }
