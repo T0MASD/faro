@@ -6,3 +6,11 @@ metadata:
     test-label: "faro-namespace"
     workload-type: "e2e-test"
     updated: "true"  # Added label to trigger update event
+---
+# Decoy: a namespace the name selector does not select
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-5-decoy
+  annotations:
+    faro-e2e/decoy: "true"

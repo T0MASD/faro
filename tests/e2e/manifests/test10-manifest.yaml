@@ -21,3 +21,14 @@ metadata:
 type: Opaque
 stringData:
   password: "hunter2"
+---
+# Decoy: the right namespace, not the name the config selects
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: decoy-wrong-name
+  namespace: faro-test-10
+  annotations:
+    faro-e2e/decoy: "true"
+data:
+  decoy: "true"

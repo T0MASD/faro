@@ -266,6 +266,11 @@ analysis - a typo must not be able to turn this into a credential leak.
 |-------|------|-------------|
 | `output_dir` | string | Directory for logs and JSON exports |
 | `fields` | []string | Per-GVR object paths copied into the emitted event (see above) |
+| `label_selector` | string | Server-side label selector, per resource |
+| `field_selector` | string | Server-side field selector, per resource (e.g. `metadata.name=backup-job`) |
+| `name_selector` | string | On a resource: exact object name, sent as `metadata.name=` |
+
+Unknown keys are an error. Entries for one type and namespace share one informer, so they must ask for the same label and field selectors; entries that only name different objects watch all names, with a warning.
 | `log_level` | string | `debug`, `info`, `warning`, `error`, `fatal` |
 | `auto_shutdown_sec` | int | Auto-shutdown after N seconds (0 = disabled) |
 | `json_export` | bool | Enable structured JSON event export |
@@ -419,7 +424,8 @@ controller.StartInformers()
 configCount, dynamicCount := controller.GetActiveInformers()
 
 // Lifecycle management
-controller.Start()  // Blocks until shutdown
+controller.Start()  // Returns once informers are started; events arrive on handlers from then on
+// ...block on your own signal or context here...
 controller.Stop()   // Graceful shutdown
 ```
 

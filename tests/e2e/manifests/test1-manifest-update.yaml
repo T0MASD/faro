@@ -42,3 +42,16 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
+---
+# Decoy: the right label, not the name the config selects
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: decoy-wrong-name
+  namespace: faro-test-1
+  annotations:
+    faro-e2e/decoy: "true"
+  labels:
+    app: "faro-test"
+data:
+  decoy: "true"

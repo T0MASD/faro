@@ -5,3 +5,14 @@ metadata:
   namespace: faro-test-10
 data:
   key1: "value1-updated"
+---
+# Decoy: the right namespace, not the name the config selects
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: decoy-wrong-name
+  namespace: faro-test-10
+  annotations:
+    faro-e2e/decoy: "true"
+data:
+  decoy: "true"

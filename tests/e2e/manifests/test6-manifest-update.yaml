@@ -17,3 +17,24 @@ data:
   key1: "updated-value1"
   config: "updated-test-data"
   new-key: "new-value"
+---
+# Decoy: the right namespace, not the name the config selects
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: decoy-wrong-name
+  namespace: faro-test-6
+  annotations:
+    faro-e2e/decoy: "true"
+  labels:
+    app: "faro-test"
+data:
+  decoy: "true"
+---
+# Decoy: a namespace the name selector does not select
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-6-decoy
+  annotations:
+    faro-e2e/decoy: "true"

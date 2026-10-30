@@ -1,0 +1,10 @@
+# A "decoy" the test-2 config selects: the oracle must refuse it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config-1
+  namespace: faro-test-2
+  annotations:
+    faro-e2e/decoy: "true"
+data:
+  decoy: "true"

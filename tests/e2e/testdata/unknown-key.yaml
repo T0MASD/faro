@@ -1,0 +1,6 @@
+# lable_selector is not a key Faro defines: the oracle must refuse the config.
+output_dir: "./logs/unknown"
+resources:
+  - gvr: "v1/configmaps"
+    namespace_names: ["faro-test-2"]
+    lable_selector: "app=faro-test"

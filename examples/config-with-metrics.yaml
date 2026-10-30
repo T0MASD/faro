@@ -20,7 +20,7 @@ resources:
   # Monitor all ConfigMaps in specific namespaces
   - gvr: "v1/configmaps"
     scope: "Namespaced"
-    namespace_patterns: ["default", "kube-system"]
+    namespace_names: ["default", "kube-system"]
     
   # Monitor Jobs with specific labels
   - gvr: "batch/v1/jobs"
@@ -34,4 +34,4 @@ resources:
   # Monitor Events in specific namespaces
   - gvr: "v1/events"
     scope: "Namespaced"
-    namespace_patterns: ["default", "monitoring"]
+    namespace_names: ["default", "monitoring"]
