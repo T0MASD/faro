@@ -1,8 +1,11 @@
 package faro
 
 import (
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,5 +52,38 @@ func TestCaptureWhenAskedAndForTheBinary(t *testing.T) {
 	applyBinaryDefaults(off)
 	if off.SqlitePath != "off" {
 		t.Errorf("the binary overrode an explicit off: %q", off.SqlitePath)
+	}
+}
+
+// The binary goes through LoadConfig, and must keep capturing to SQLite by
+// default - only a Config built in code changed. LoadConfig parses the
+// process's flags, which a test can do once, so each case runs in a child
+// copy of this test binary.
+func TestLoadConfigKeepsTheBinaryCapturing(t *testing.T) {
+	if f := os.Getenv("FARO_LOADCONFIG_FILE"); f != "" {
+		os.Args = []string{os.Args[0], "-config", f} // the binary's command line
+		cfg, err := LoadConfig()
+		if err != nil {
+			fmt.Println("ERR", err)
+			os.Exit(1)
+		}
+		fmt.Printf("SQLITE=%q\n", cfg.SqlitePath)
+		os.Exit(0)
+	}
+	dir := t.TempDir()
+	for _, tc := range []struct{ yaml, want string }{
+		{"output_dir: " + dir + "\n", SqliteAuto},
+		{"output_dir: " + dir + "\nsqlite_path: \"off\"\n", "off"},
+	} {
+		f := filepath.Join(dir, "c.yaml")
+		if err := os.WriteFile(f, []byte(tc.yaml), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(os.Args[0], "-test.run=^TestLoadConfigKeepsTheBinaryCapturing$")
+		cmd.Env = append(os.Environ(), "FARO_LOADCONFIG_FILE="+f)
+		out, err := cmd.CombinedOutput()
+		if want := fmt.Sprintf("SQLITE=%q", tc.want); err != nil || !strings.Contains(string(out), want) {
+			t.Errorf("LoadConfig with %q: %s (err %v), want %s", tc.yaml, strings.TrimSpace(string(out)), err, want)
+		}
 	}
 }
