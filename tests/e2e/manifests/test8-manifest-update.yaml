@@ -24,3 +24,13 @@ metadata:
   labels:
     test-label: "faro-namespace"
     workload-type: "e2e-test"
+---
+# Decoy: the label key the config selects on, another value
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: faro-test-8-decoy
+  annotations:
+    faro-e2e/decoy: "true"
+  labels:
+    test-label: "not-faro-namespace"

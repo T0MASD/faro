@@ -160,3 +160,28 @@ data:
     db:
       enabled: true
       namespace: faro-multi-db
+---
+# Decoy: a configured namespace, a type the config does not watch
+apiVersion: v1
+kind: Secret
+metadata:
+  name: decoy-wrong-type
+  namespace: faro-multi-main
+  annotations:
+    faro-e2e/decoy: "true"
+type: Opaque
+stringData:
+  decoy: "true"
+---
+# Decoy: a watched type in a namespace the config does not name
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: decoy-other-namespace
+  namespace: default
+  annotations:
+    faro-e2e/decoy: "true"
+  labels:
+    app: "multi-namespace-test"
+data:
+  decoy: "true"

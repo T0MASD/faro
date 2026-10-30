@@ -12,3 +12,9 @@ resources:
       - "faro-test-4"
     name_selector: "test-config-1"
     label_selector: "app=faro-test"
+# /ready is how the test knows every informer has listed before it applies
+# manifests; a port per test, since tests run in parallel
+metrics:
+  enabled: true
+  port: 19184
+  bind_addr: "127.0.0.1"

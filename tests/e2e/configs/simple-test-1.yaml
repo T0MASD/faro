@@ -9,3 +9,9 @@ namespaces:
     resources:
       "v1/configmaps":
         name_selector: "test-config-1"
+# /ready is how the test knows every informer has listed before it applies
+# manifests; a port per test, since tests run in parallel
+metrics:
+  enabled: true
+  port: 19181
+  bind_addr: "127.0.0.1"

@@ -2,22 +2,18 @@ package e2e
 
 import (
 	"github.com/T0MASD/faro/tests/testutils"
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v2"
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
@@ -115,29 +111,9 @@ func extractLogDirFromConfig(configFile string) string {
 // Shared with every other suite, so the contract has one definition.
 type FaroJSONEvent = testutils.FaroJSONEvent
 
-// Config structures for parsing Faro config
-type FaroConfig struct {
-	Namespaces []NamespaceConfig `yaml:"namespaces"`
-	Resources  []ResourceConfig  `yaml:"resources"`
-}
 
-type NamespaceConfig struct {
-	NameSelector string                      `yaml:"name_pattern"`
-	Resources   map[string]ResourceSelector  `yaml:"resources"`
-}
 
-type ResourceConfig struct {
-	GVR               string   `yaml:"gvr"`
-	Scope             string   `yaml:"scope"`
-	NamespaceNames []string `yaml:"namespace_patterns"`
-	NameSelector   string   `yaml:"name_pattern"`
-	LabelSelector     string   `yaml:"label_selector"`
-}
 
-type ResourceSelector struct {
-	NameSelector string `yaml:"name_pattern"`
-	LabelSelector string `yaml:"label_selector"`
-}
 
 // Manifest resource representation
 type ManifestResource struct {
@@ -149,7 +125,8 @@ type ManifestResource struct {
 type ResourceMetadata struct {
 	Name      string            `yaml:"name"`
 	Namespace string            `yaml:"namespace"`
-	Labels    map[string]string `yaml:"labels"`
+	Labels      map[string]string `yaml:"labels"`
+	Annotations map[string]string `yaml:"annotations"`
 }
 
 func TestMain(m *testing.M) {
@@ -164,49 +141,6 @@ func TestMain(m *testing.M) {
 	os.Exit(testenv.Run(m))
 }
 
-// generateExpectedEvents dynamically generates expected events based on config and manifests
-func generateExpectedEvents(configFile, createManifest, updateManifest string) ([]FaroJSONEvent, error) {
-	// Parse Faro config
-	config, err := parseConfig(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config: %v", err)
-	}
-
-	// Parse create manifest to get initial resources
-	createResources, err := parseManifest(createManifest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse create manifest: %v", err)
-	}
-
-	var expectedEvents []FaroJSONEvent
-
-	// Generate events for each resource that should be monitored
-	for _, resource := range createResources {
-		if shouldMonitorResource(config, resource) {
-			gvr := convertToGVR(resource.APIVersion, resource.Kind)
-			
-			// Each monitored resource should have ADDED, UPDATED, DELETED events
-			expectedEvents = append(expectedEvents,
-				FaroJSONEvent{EventType: "ADDED", GVR: gvr, Namespace: resource.Metadata.Namespace, Name: resource.Metadata.Name},
-				FaroJSONEvent{EventType: "UPDATED", GVR: gvr, Namespace: resource.Metadata.Namespace, Name: resource.Metadata.Name},
-				FaroJSONEvent{EventType: "DELETED", GVR: gvr, Namespace: resource.Metadata.Namespace, Name: resource.Metadata.Name},
-			)
-		}
-	}
-
-	// A config that matches nothing produces no expectations, and validateEvents
-	// iterates only over expectations -- so an empty set passes unconditionally.
-	// Treat it as a broken test rather than a green one.
-	if len(expectedEvents) == 0 {
-		return nil, fmt.Errorf("config %s and manifest %s produced 0 expected events: "+
-			"the config matches none of the manifest's resources, so any Faro behaviour "+
-			"would pass. Check that every top-level `resources` entry is a key Faro's "+
-			"schema defines and that each namespaced entry names its namespaces",
-			configFile, createManifest)
-	}
-
-	return expectedEvents, nil
-}
 
 // countLogLines returns how many lines in Faro's own log for this run contain needle.
 func countLogLines(logDir, needle string) (int, error) {
@@ -248,151 +182,11 @@ func assertNoDroppedEvents(t *testing.T, logDir string) {
 	t.Logf("✓ no dropped events in %s/logs/", logDir)
 }
 
-// parseConfig parses a Faro YAML config file
-func parseConfig(configFile string) (*FaroConfig, error) {
-	data, err := os.ReadFile(configFile)
-	if err != nil {
-		return nil, err
-	}
 
-	var config FaroConfig
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, err
-	}
 
-	return &config, nil
-}
 
-// parseManifest parses a Kubernetes manifest file and returns all resources
-func parseManifest(manifestFile string) ([]ManifestResource, error) {
-	data, err := os.ReadFile(manifestFile)
-	if err != nil {
-		return nil, err
-	}
 
-	// Split YAML documents by "---"
-	documents := strings.Split(string(data), "---")
-	var resources []ManifestResource
 
-	for _, doc := range documents {
-		doc = strings.TrimSpace(doc)
-		if doc == "" {
-			continue
-		}
-
-		var resource ManifestResource
-		if err := yaml.Unmarshal([]byte(doc), &resource); err != nil {
-			continue // Skip invalid documents
-		}
-
-		// Only include actual resources (not empty documents)
-		if resource.Kind != "" && resource.Metadata.Name != "" {
-			resources = append(resources, resource)
-		}
-	}
-
-	return resources, nil
-}
-
-// shouldMonitorResource determines if a resource should be monitored based on Faro config
-func shouldMonitorResource(config *FaroConfig, resource ManifestResource) bool {
-	gvr := convertToGVR(resource.APIVersion, resource.Kind)
-
-	// Check namespace-based configs
-	for _, nsConfig := range config.Namespaces {
-		if matchesName(nsConfig.NameSelector, resource.Metadata.Namespace) {
-			if resourceSelector, exists := nsConfig.Resources[gvr]; exists {
-				if matchesResourceSelector(resourceSelector, resource) {
-					return true
-				}
-			}
-		}
-	}
-
-	// Check resource-based configs
-	for _, resConfig := range config.Resources {
-		if resConfig.GVR == gvr {
-			// Check namespace names.
-			//
-			// An entry with no namespace_names carries no namespace constraint.
-			// Faro derives scope from API discovery: for a cluster-scoped type it
-			// ignores namespace fields and watches cluster-wide, so such an entry
-			// matches a cluster-scoped object. For a namespaced type it iterates
-			// namespace_names and so builds no informer at all, which means it
-			// must not match a namespaced object here either.
-			namespaceMatches := false
-			if len(resConfig.NamespaceNames) == 0 {
-				namespaceMatches = resource.Metadata.Namespace == ""
-			}
-			for _, nsName := range resConfig.NamespaceNames {
-				if matchesName(nsName, resource.Metadata.Namespace) {
-					namespaceMatches = true
-					break
-				}
-			}
-			
-			if namespaceMatches {
-				// Check name selector
-				if resConfig.NameSelector == "" || matchesName(resConfig.NameSelector, resource.Metadata.Name) {
-					// Check label selector
-					if resConfig.LabelSelector == "" || matchesLabelSelector(resConfig.LabelSelector, resource.Metadata.Labels) {
-						return true
-					}
-				}
-			}
-		}
-	}
-
-	return false
-}
-
-// matchesResourceSelector checks if a resource matches the resource selector criteria
-func matchesResourceSelector(selector ResourceSelector, resource ManifestResource) bool {
-	// Check name selector
-	if selector.NameSelector != "" && !matchesName(selector.NameSelector, resource.Metadata.Name) {
-		return false
-	}
-
-	// Check label selector
-	if selector.LabelSelector != "" && !matchesLabelSelector(selector.LabelSelector, resource.Metadata.Labels) {
-		return false
-	}
-
-	return true
-}
-
-// matchesName checks if a string matches a name (supports wildcards for backward compatibility)
-func matchesName(nameSelector, value string) bool {
-	if nameSelector == "" {
-		return true
-	}
-	
-	// Convert shell-style wildcards to regex for backward compatibility
-	regexPattern := strings.ReplaceAll(nameSelector, "*", ".*")
-	regexPattern = "^" + regexPattern + "$"
-	
-	matched, _ := regexp.MatchString(regexPattern, value)
-	return matched
-}
-
-// matchesLabelSelector checks if labels match a simple label selector (key=value format)
-func matchesLabelSelector(selector string, labels map[string]string) bool {
-	if selector == "" {
-		return true
-	}
-
-	// Simple implementation for key=value selectors
-	parts := strings.Split(selector, "=")
-	if len(parts) != 2 {
-		return false
-	}
-
-	key := strings.TrimSpace(parts[0])
-	expectedValue := strings.TrimSpace(parts[1])
-	
-	actualValue, exists := labels[key]
-	return exists && actualValue == expectedValue
-}
 
 // convertToGVR converts apiVersion and kind to GVR format
 func convertToGVR(apiVersion, kind string) string {
@@ -419,7 +213,7 @@ func convertToGVR(apiVersion, kind string) string {
 }
 
 // runParallelE2ETest runs an e2e test using existing configs/manifests for parallel execution
-func runParallelE2ETest(t *testing.T, testName, configFile, manifestFile, updateManifestFile string, expectedEvents []FaroJSONEvent) {
+func runParallelE2ETest(t *testing.T, testName, configFile, manifestFile, updateManifestFile string, expected expectation) {
 	// Build binary (only once across all tests)
 	t.Log("Ensuring binary is available...")
 	if err := buildBinary(); err != nil {
@@ -432,7 +226,7 @@ func runParallelE2ETest(t *testing.T, testName, configFile, manifestFile, update
 	
 	feature := features.New(fmt.Sprintf("Parallel Test %s", testName)).
 		Assess("should capture events in parallel", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			runE2ETestWithManifestParallel(t, ctx, cfg, configFile, manifestFile, updateManifestFile, expectedEvents)
+			runE2ETestWithManifestParallel(t, ctx, cfg, configFile, manifestFile, updateManifestFile, expected)
 			return ctx
 		}).Feature()
 	
@@ -440,7 +234,7 @@ func runParallelE2ETest(t *testing.T, testName, configFile, manifestFile, update
 }
 
 // runE2ETestWithManifestParallel is the parallel version of runE2ETestWithManifest
-func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envconf.Config, configFile, manifestFile, updateManifestFile string, expectedEvents []FaroJSONEvent) {
+func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envconf.Config, configFile, manifestFile, updateManifestFile string, expected expectation) {
 	// ========================================
 	// PHASE 1: START MONITORING
 	// ========================================
@@ -474,7 +268,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 	}()
 
 	// Wait for Faro to be ready
-	if err := waitForFaroReady(t, stdout, stderr); err != nil {
+	if err := waitForFaroReady(t, configFile, cmd, stdout, stderr); err != nil {
 		t.Fatalf("Faro failed to start: %v", err)
 	}
 
@@ -565,7 +359,7 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 	t.Log("🔍 PHASE 5: Comparing and validating data...")
 
 	assertNoDroppedEvents(t, logDir)
-	validateEvents(t, expectedEvents, events)
+	validateExpectation(t, expected, events)
 
 	t.Log("✅ PHASE 5 COMPLETE: Data validation finished!")
 	t.Log("")
@@ -582,32 +376,29 @@ func runE2ETestWithManifestParallel(t *testing.T, ctx context.Context, cfg *envc
 
 func TestFaroTest1NamespaceCentric(t *testing.T) {
 	t.Parallel() // Enable parallel execution
-	
-	expectedEvents := []FaroJSONEvent{
-		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "kube-root-ca.crt"},
-		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "test-config-1"},
-		{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "test-config-1"},
-		{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "test-config-1"},
-		{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-1", Name: "kube-root-ca.crt"},
-	}
-	
-	runParallelE2ETest(t, "test1", "configs/simple-test-1.yaml", "manifests/test1-manifest.yaml", "manifests/test1-manifest-update.yaml", expectedEvents)
+
+	// The config names one ConfigMap, test-config-1. The namespace also holds
+	// the cluster's kube-root-ca.crt and the update's Secret, and a decoy
+	// ConfigMap with another name: none of them may be captured.
+	const cfg, create, update = "configs/simple-test-1.yaml", "manifests/test1-manifest.yaml", "manifests/test1-manifest-update.yaml"
+	runParallelE2ETest(t, "test1", cfg, create, update, mustExpect(t, cfg, create, update))
 }
 
 func TestFaroTest2ResourceCentric(t *testing.T) {
 	t.Parallel() // Enable parallel execution
-	
+
 	// Test 2 config specifies name_selector: "test-config-1", so only test-config-1 should be captured
-	expectedEvents := []FaroJSONEvent{
+	const cfg, create, update = "configs/simple-test-2.yaml", "manifests/test2-manifest.yaml", "manifests/test2-manifest-update.yaml"
+	expected := handWritten(t, []FaroJSONEvent{
 		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-2", Name: "test-config-1"},
 		{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-2", Name: "test-config-1"},
 		{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-2", Name: "test-config-1"},
-	}
-	
-	runParallelE2ETest(t, "test2", "configs/simple-test-2.yaml", "manifests/test2-manifest.yaml", "manifests/test2-manifest-update.yaml", expectedEvents)
+	}, cfg, create, update)
+
+	runParallelE2ETest(t, "test2", cfg, create, update, expected)
 }
 
-func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Config, configFile string, manifestFile string, logDir string, expectedEvents []FaroJSONEvent) {
+func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Config, configFile string, manifestFile string, logDir string, expected expectation) {
 	// ========================================
 	// PHASE 1: START MONITORING
 	// ========================================
@@ -638,7 +429,7 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	}()
 
 	// Wait for Faro to be ready by monitoring its logs
-	if err := waitForFaroReady(t, stdout, stderr); err != nil {
+	if err := waitForFaroReady(t, configFile, faroCmd, stdout, stderr); err != nil {
 		t.Fatalf("Faro failed to initialize: %v", err)
 	}
 	
@@ -731,9 +522,8 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	t.Log("")
 	t.Log("🔍 PHASE 5: Comparing and validating data...")
 	
-	displayFaroQueries(t, configFile)
 	assertNoDroppedEvents(t, logDir)
-	validateEvents(t, expectedEvents, events)
+	validateExpectation(t, expected, events)
 	
 	t.Log("✅ PHASE 5 COMPLETE: Data validation finished!")
 	t.Log("")
@@ -748,28 +538,6 @@ func runE2ETestWithManifest(t *testing.T, ctx context.Context, cfg *envconf.Conf
 	t.Log("========================================")
 }
 
-func getNamespaceFromManifest(manifestFile string) string {
-	// Simple function to extract namespace from manifest file
-	// For now, return a default based on the test number
-	if strings.Contains(manifestFile, "test1") {
-		return "faro-test-1"
-	} else if strings.Contains(manifestFile, "test2") {
-		return "faro-test-2"
-	} else if strings.Contains(manifestFile, "test3") {
-		return "faro-test-3"
-	} else if strings.Contains(manifestFile, "test4") {
-		return "faro-test-4"
-	} else if strings.Contains(manifestFile, "test5") {
-		return "faro-test-5"
-	} else if strings.Contains(manifestFile, "test6") {
-		return "faro-test-6"
-	} else if strings.Contains(manifestFile, "test7") {
-		return "faro-test-7"
-	} else if strings.Contains(manifestFile, "test8") {
-		return "faro-test-8a"
-	}
-	return "default"
-}
 
 func readJSONEvents(logDir string) ([]FaroJSONEvent, error) {
 	// Read from dedicated JSON export file only - no fallbacks
@@ -815,17 +583,12 @@ func parseJSONEvents(content string) ([]FaroJSONEvent, error) {
 func TestFaroTest3LabelBased(t *testing.T) {
 	feature := features.New("Faro Test 3 - Label-Based ConfigMap").
 		Assess("should capture ConfigMap events with label selector", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-
 			configFile := "configs/simple-test-3.yaml"
 			manifestFile := "manifests/test3-manifest.yaml"
+			updateManifestFile := "manifests/test3-manifest-update.yaml"
 			logDir := "logs/test3"
-			expectedEvents := []FaroJSONEvent{
-				{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-3", Name: "test-config-1"},
-				{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-3", Name: "test-config-1"},
-				{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-3", Name: "test-config-1"},
-			}
 
-			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, mustExpect(t, configFile, manifestFile, updateManifestFile))
 			return ctx
 		}).Feature()
 
@@ -835,17 +598,12 @@ func TestFaroTest3LabelBased(t *testing.T) {
 func TestFaroTest4ResourceLabelBased(t *testing.T) {
 	feature := features.New("Faro Test 4 - Resource Label-Based ConfigMap").
 		Assess("should capture ConfigMap events with resource label pattern", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			configFile := "configs/simple-test-4.yaml"
+			manifestFile := "manifests/test4-manifest.yaml"
+			updateManifestFile := "manifests/test4-manifest-update.yaml"
+			logDir := "logs/test4"
 
-		configFile := "configs/simple-test-4.yaml"
-		manifestFile := "manifests/test4-manifest.yaml"
-		logDir := "logs/test4"
-		expectedEvents := []FaroJSONEvent{
-			{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-4", Name: "test-config-1"},
-			{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-4", Name: "test-config-1"},
-			{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-4", Name: "test-config-1"},
-		}
-
-		runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, mustExpect(t, configFile, manifestFile, updateManifestFile))
 			return ctx
 		}).Feature()
 
@@ -855,19 +613,12 @@ func TestFaroTest4ResourceLabelBased(t *testing.T) {
 func TestFaroTest5NamespaceOnly(t *testing.T) {
 	feature := features.New("Faro Test 5 - Namespace Only").
 		Assess("should capture namespace events only", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-
 			configFile := "configs/simple-test-5.yaml"
 			manifestFile := "manifests/test5-manifest.yaml"
 			updateManifestFile := "manifests/test5-manifest-update.yaml"
 			logDir := "logs/test5"
-			
-			// Generate expected events dynamically based on config and manifests
-			expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
-			if err != nil {
-				t.Fatalf("Failed to generate expected events: %v", err)
-			}
 
-			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, mustExpect(t, configFile, manifestFile, updateManifestFile))
 			return ctx
 		}).Feature()
 
@@ -877,20 +628,12 @@ func TestFaroTest5NamespaceOnly(t *testing.T) {
 func TestFaroTest6Combined(t *testing.T) {
 	feature := features.New("Faro Test 6 - Combined Namespace and ConfigMap").
 		Assess("should capture both namespace and ConfigMap events", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			configFile := "configs/simple-test-6.yaml"
+			manifestFile := "manifests/test6-manifest.yaml"
+			updateManifestFile := "manifests/test6-manifest-update.yaml"
+			logDir := "logs/test6"
 
-		configFile := "configs/simple-test-6.yaml"
-		manifestFile := "manifests/test6-manifest.yaml"
-		logDir := "logs/test6"
-				// Test 6 monitors both namespaces and configmaps - both should be captured correctly
-				expectedEvents := []FaroJSONEvent{
-					{EventType: "ADDED", GVR: "v1/namespaces", Name: "faro-test-6"},
-					{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
-					{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
-					{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-6", Name: "test-config-1"},
-					{EventType: "DELETED", GVR: "v1/namespaces", Name: "faro-test-6"},
-				}
-
-		runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, mustExpect(t, configFile, manifestFile, updateManifestFile))
 			return ctx
 		}).Feature()
 
@@ -900,19 +643,12 @@ func TestFaroTest6Combined(t *testing.T) {
 func TestFaroTest7DualConfigMap(t *testing.T) {
 	feature := features.New("Faro Test 7 - Dual ConfigMap Monitoring").
 		Assess("should capture ConfigMap events from both namespace and resource configs", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			configFile := "configs/simple-test-7.yaml"
+			manifestFile := "manifests/test7-manifest.yaml"
+			updateManifestFile := "manifests/test7-manifest-update.yaml"
+			logDir := "logs/test7"
 
-		configFile := "configs/simple-test-7.yaml"
-		manifestFile := "manifests/test7-manifest.yaml"
-		updateManifestFile := "manifests/test7-manifest-update.yaml"
-		logDir := "logs/test7"
-		
-		// Generate expected events dynamically based on config and manifests
-		expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
-		if err != nil {
-			t.Fatalf("Failed to generate expected events: %v", err)
-		}
-
-		runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, mustExpect(t, configFile, manifestFile, updateManifestFile))
 			return ctx
 		}).Feature()
 
@@ -922,19 +658,12 @@ func TestFaroTest7DualConfigMap(t *testing.T) {
 func TestFaroTest8MultipleNamespaces(t *testing.T) {
 	feature := features.New("Faro Test 8 - Multiple Namespaces with Label Selector").
 		Assess("should capture namespace events with label selector", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-
 			configFile := "configs/simple-test-8.yaml"
 			manifestFile := "manifests/test8-manifest.yaml"
 			updateManifestFile := "manifests/test8-manifest-update.yaml"
 			logDir := "logs/test8"
-			
-			// Generate expected events dynamically based on config and manifests
-			expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
-			if err != nil {
-				t.Fatalf("Failed to generate expected events: %v", err)
-			}
 
-			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, mustExpect(t, configFile, manifestFile, updateManifestFile))
 			return ctx
 		}).Feature()
 
@@ -944,182 +673,18 @@ func TestFaroTest8MultipleNamespaces(t *testing.T) {
 func TestFaroTest9MultiNamespaceControllerBug(t *testing.T) {
 	feature := features.New("Faro Test 9 - Multi-Namespace Controller Configuration Bug").
 		Assess("should monitor resources in ALL configured namespaces, not just the first one", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-
 			configFile := "configs/simple-test-9.yaml"
 			manifestFile := "manifests/test9-manifest.yaml"
 			updateManifestFile := "manifests/test9-manifest-update.yaml"
 			logDir := "logs/test9"
-			
-			// Generate expected events dynamically based on config and manifests
-			expectedEvents, err := generateExpectedEvents(configFile, manifestFile, updateManifestFile)
-			if err != nil {
-				t.Fatalf("Failed to generate expected events: %v", err)
-			}
 
-			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, expectedEvents)
+			runE2ETestWithManifest(t, ctx, cfg, configFile, manifestFile, logDir, mustExpect(t, configFile, manifestFile, updateManifestFile))
 			return ctx
 		}).Feature()
 
 	testenv.Test(t, feature)
 }
 
-
-
-func waitForFaroReady(t *testing.T, stdout, stderr io.ReadCloser) error {
-	// Create channels to monitor both stdout and stderr
-	readyChan := make(chan bool, 1)
-	errorChan := make(chan error, 1)
-	
-	// Monitor stdout
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			
-			// Log file path identification for test validation
-			if strings.Contains(line, "FARO_LOG_FILE:") || strings.Contains(line, "FARO_JSON_FILE:") {
-				t.Logf("📁 %s", line)
-			}
-			
-			// Look for initialization complete indicators
-			if strings.Contains(line, "Multi-layered informer architecture started successfully") || 
-			   strings.Contains(line, "Controller started with") ||
-			   strings.Contains(line, "Waiting for shutdown signal") {
-				select {
-				case readyChan <- true:
-				default:
-				}
-			}
-		}
-	}()
-	
-	// Monitor stderr
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			// Just consume stderr, don't log it
-			// Look for initialization complete indicators in stderr
-			if strings.Contains(line, "Multi-layered informer architecture started successfully") || 
-			   strings.Contains(line, "Controller started with") ||
-			   strings.Contains(line, "Waiting for shutdown signal") {
-				select {
-				case readyChan <- true:
-				default:
-				}
-			}
-			// Look for fatal errors
-			if strings.Contains(line, "FATAL") || strings.Contains(line, "failed to start") {
-				select {
-				case errorChan <- fmt.Errorf("faro startup error: %s", line):
-				default:
-				}
-			}
-		}
-	}()
-	
-	// Wait for ready signal or timeout
-	select {
-	case <-readyChan:
-		t.Log("Faro is ready!")
-		time.Sleep(2 * time.Second) // Give it a moment to fully initialize
-		return nil
-	case err := <-errorChan:
-		return err
-	case <-time.After(30 * time.Second):
-		return fmt.Errorf("timeout waiting for Faro to be ready")
-	}
-}
-
-func displayFaroQueries(t *testing.T, configFile string) {
-	config, err := parseConfig(configFile)
-	if err != nil {
-		t.Logf("Failed to parse config for display: %v", err)
-		return
-	}
-
-	queries := []string{}
-	
-	// Add namespace-based queries (convert to unified format)
-	for _, ns := range config.Namespaces {
-		for gvr := range ns.Resources {
-			queries = append(queries, formatQuery(QueryInfo{
-				Type:      "namespace",
-				GVR:       gvr,
-			Namespace: ns.NameSelector,
-			Name:      ns.Resources[gvr].NameSelector,
-				Labels:    ns.Resources[gvr].LabelSelector,
-			}))
-		}
-	}
-	
-	// Add resource-based queries (convert to unified format)
-	for _, res := range config.Resources {
-		queries = append(queries, formatQuery(QueryInfo{
-			Type:       "resource",
-			GVR:        res.GVR,
-			Namespaces: res.NamespaceNames,
-			Name:       res.NameSelector,
-			Labels:     res.LabelSelector,
-		}))
-	}
-
-	t.Logf("=== FARO QUERIES (%d) ===", len(queries))
-	for i, query := range queries {
-		t.Logf("  %d. %s", i+1, query)
-	}
-}
-
-// QueryInfo represents a unified query structure
-type QueryInfo struct {
-	Type       string   // "namespace" or "resource"
-	GVR        string   // Group/Version/Resource
-	Namespace  string   // Single namespace (for namespace-centric)
-	Namespaces []string // Multiple namespaces (for resource-centric)
-	Name       string   // Name selector
-	Labels     string   // Label selector
-}
-
-// formatQuery creates a consistent query string format
-func formatQuery(q QueryInfo) string {
-	var query string
-	
-	// Build base query with consistent format
-	if q.Type == "namespace" && q.Namespace != "" {
-		query = fmt.Sprintf("Monitor %s in namespace '%s'", q.GVR, q.Namespace)
-	} else if q.Type == "resource" {
-		query = fmt.Sprintf("Monitor %s", q.GVR)
-		if len(q.Namespaces) > 0 {
-			query += fmt.Sprintf(" in namespaces %v", q.Namespaces)
-		}
-	} else {
-		query = fmt.Sprintf("Monitor %s", q.GVR)
-	}
-	
-	// Add filters consistently
-	filters := []string{}
-	if q.Name != "" {
-		filters = append(filters, fmt.Sprintf("name: %s", q.Name))
-	}
-	if q.Labels != "" {
-		filters = append(filters, fmt.Sprintf("labels: %s", q.Labels))
-	}
-	
-	if len(filters) > 0 {
-		query += fmt.Sprintf(" [%s]", strings.Join(filters, ", "))
-	}
-	
-	return query
-}
-
-// A matched event is not enough: a capture has to be orderable, and DELETED is
-// where that broke. A DELETED event is reconstructed from a stub with no
-// creationTimestamp, and formatting the zero value put "0001-01-01T00:00:00Z"
-// on 17% of deletes in a measured capture - they sort to the beginning of time
-// and one is enough to ruin a T+0 baseline.
-//
-// This harness matched on type, GVR, namespace and name only, so it passed
-// throughout. Every matched event now has to carry a usable time.
 func assertEventIsOrderable(t *testing.T, act FaroJSONEvent, resourcePath string) {
 	t.Helper()
 	if act.EventTime == "" {
@@ -1199,17 +764,16 @@ func validateEvents(t *testing.T, expected []FaroJSONEvent, actual []FaroJSONEve
 func TestFaroTest10ConfigurableFields(t *testing.T) {
 	t.Parallel()
 
-	expectedEvents := []FaroJSONEvent{
+	const cfg, create, update = "configs/simple-test-10.yaml", "manifests/test10-manifest.yaml", "manifests/test10-manifest-update.yaml"
+	expected := handWritten(t, []FaroJSONEvent{
 		{EventType: "ADDED", GVR: "v1/configmaps", Namespace: "faro-test-10", Name: "test-config-10"},
 		{EventType: "UPDATED", GVR: "v1/configmaps", Namespace: "faro-test-10", Name: "test-config-10"},
 		{EventType: "DELETED", GVR: "v1/configmaps", Namespace: "faro-test-10", Name: "test-config-10"},
 		{EventType: "ADDED", GVR: "v1/secrets", Namespace: "faro-test-10", Name: "test-secret-10"},
 		{EventType: "DELETED", GVR: "v1/secrets", Namespace: "faro-test-10", Name: "test-secret-10"},
-	}
+	}, cfg, create, update)
 
-	runParallelE2ETest(t, "test10", "configs/simple-test-10.yaml",
-		"manifests/test10-manifest.yaml", "manifests/test10-manifest-update.yaml",
-		expectedEvents)
+	runParallelE2ETest(t, "test10", cfg, create, update, expected)
 
 	events, err := readJSONEvents("logs/test10")
 	if err != nil {
