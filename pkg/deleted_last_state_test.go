@@ -122,3 +122,47 @@ func TestDeletedIsNotConfusedWithARecreation(t *testing.T) {
 		}
 	}
 }
+
+// A delete whose object faro never cached a UID for was dropped: the handler
+// logged "No cached UID" and returned, so neither handlers nor the capture
+// heard of it. The object carries its own UID - in a plain delete and in the
+// tombstone client-go hands over when the delete itself was missed - and that
+// is the one to use.
+func TestDeleteWithoutACachedUIDIsDelivered(t *testing.T) {
+	cfg := &Config{OutputDir: t.TempDir(), LogLevel: "warning"}
+	logger, err := NewLogger(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logger.Shutdown()
+	c := &Controller{logger: logger, config: cfg, metrics: NewMetricsCollector(MetricsConfig{}, *logger)}
+
+	for _, tc := range []struct {
+		name string
+		wrap func(*unstructured.Unstructured) interface{}
+	}{
+		{"delete", func(o *unstructured.Unstructured) interface{} { return o }},
+		{"tombstone", func(o *unstructured.Unstructured) interface{} {
+			return cache.DeletedFinalStateUnknown{Key: "t/" + o.GetName(), Obj: o}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []*unstructured.Unstructured
+			tracker := &InformerStateTracker{GVR: "v1/configmaps@t"} // no UID cached for it
+			h := c.createStateTrackingEventHandlers(tracker, InformerConfig{GVRString: "v1/configmaps",
+				HandlerFunc: func(ev string, o *unstructured.Unstructured) {
+					if ev == "DELETED" {
+						got = append(got, o)
+					}
+				}})
+			o := testConfigMap("uncached-"+tc.name, 4)
+			h.OnDelete(tc.wrap(o))
+			if len(got) != 1 {
+				t.Fatalf("a %s with no cached UID was delivered %d times, want 1", tc.name, len(got))
+			}
+			if string(got[0].GetUID()) != "uid-uncached-"+tc.name || got[0].GetLabels()["app"] != "inbox" {
+				t.Errorf("delivered uid %q labels %v, want the object's own", got[0].GetUID(), got[0].GetLabels())
+			}
+		})
+	}
+}
